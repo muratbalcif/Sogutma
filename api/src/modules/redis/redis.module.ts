@@ -1,4 +1,10 @@
-import { Global, Module } from '@nestjs/common';
+import {
+  Global,
+  Inject,
+  Injectable,
+  Module,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { EnvironmentVariables } from '../../config/env.validation';
@@ -6,6 +12,21 @@ import { REDIS_CLIENT } from './redis.constants';
 import { RedisThrottlerStorage } from './redis-throttler.storage';
 
 export { REDIS_CLIENT } from './redis.constants';
+
+@Injectable()
+class RedisLifecycleService implements OnModuleDestroy {
+  constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
+
+  async onModuleDestroy(): Promise<void> {
+    try {
+      if (this.redis.status !== 'end') {
+        await this.redis.quit();
+      }
+    } catch {
+      this.redis.disconnect();
+    }
+  }
+}
 
 @Global()
 @Module({
@@ -37,6 +58,7 @@ export { REDIS_CLIENT } from './redis.constants';
       },
     },
     RedisThrottlerStorage,
+    RedisLifecycleService,
   ],
   exports: [REDIS_CLIENT, RedisThrottlerStorage],
 })

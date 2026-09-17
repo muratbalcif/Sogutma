@@ -19,20 +19,40 @@ import {
   ApiConsumes,
   ApiOkResponse,
   ApiOperation,
+  ApiPropertyOptional,
   ApiTags,
 } from '@nestjs/swagger';
 import { ImportJobType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, Min } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Request } from 'express';
 import { memoryStorage } from 'multer';
-import { buildPaginatedResponse } from '../../common/dto/pagination.dto';
+import {
+  buildPaginatedResponse,
+  PaginationQueryDto,
+} from '../../common/dto/pagination.dto';
 import { Permissions } from '../admin/decorators/permissions.decorator';
 import { PermissionsGuard } from '../admin/guards/permissions.guard';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { ImportsService } from './imports.service';
+
+function spreadsheetFileFilter(
+  _req: Request,
+  file: Express.Multer.File,
+  cb: (error: Error | null, acceptFile: boolean) => void,
+) {
+  const name = (file.originalname || '').toLowerCase();
+  const ok =
+    name.endsWith('.csv') || name.endsWith('.xlsx') || name.endsWith('.xls');
+  if (!ok) {
+    return cb(
+      new BadRequestException('Only CSV and XLSX files are supported'),
+      false,
+    );
+  }
+  return cb(null, true);
+}
 
 class ImportListQueryDto {
   @ApiPropertyOptional({ default: 1 })
@@ -103,6 +123,7 @@ export class AdminImportsController {
     FileInterceptor('file', {
       storage: memoryStorage(),
       limits: { fileSize: 15 * 1024 * 1024 },
+      fileFilter: spreadsheetFileFilter,
     }),
   )
   @ApiOperation({
@@ -139,6 +160,7 @@ export class AdminImportsController {
     FileInterceptor('file', {
       storage: memoryStorage(),
       limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: spreadsheetFileFilter,
     }),
   )
   previewPrices(
@@ -171,6 +193,7 @@ export class AdminImportsController {
     FileInterceptor('file', {
       storage: memoryStorage(),
       limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: spreadsheetFileFilter,
     }),
   )
   previewStock(

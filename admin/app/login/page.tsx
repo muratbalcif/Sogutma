@@ -74,10 +74,14 @@ export default function LoginPage() {
 
         <form className="mt-8 space-y-4" onSubmit={onSubmit} noValidate>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label
+              htmlFor="admin-email"
+              className="mb-1 block text-sm font-medium text-slate-700"
+            >
               E-posta
             </label>
             <input
+              id="admin-email"
               type="email"
               autoComplete="username"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none ring-cyan-600 focus:ring-2"
@@ -88,10 +92,14 @@ export default function LoginPage() {
             ) : null}
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label
+              htmlFor="admin-password"
+              className="mb-1 block text-sm font-medium text-slate-700"
+            >
               Şifre
             </label>
             <input
+              id="admin-password"
               type="password"
               autoComplete="current-password"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none ring-cyan-600 focus:ring-2"

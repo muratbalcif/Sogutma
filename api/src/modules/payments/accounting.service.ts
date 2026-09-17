@@ -422,16 +422,16 @@ export class AccountingService {
       credit: string | null;
     }>
   > {
+    const page = query.page && query.page > 0 ? query.page : 1;
+    const limit = query.limit && query.limit > 0 ? query.limit : 20;
     const where = query.userId ? { userId: query.userId } : {};
-    const [total, items] = await this.prisma.$transaction([
-      this.prisma.accountTransaction.count({ where }),
-      this.prisma.accountTransaction.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (query.page - 1) * query.limit,
-        take: query.limit,
-      }),
-    ]);
+    const total = await this.prisma.accountTransaction.count({ where });
+    const items = await this.prisma.accountTransaction.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
 
     return buildPaginatedResponse(
       items.map((item) => {
@@ -460,8 +460,8 @@ export class AccountingService {
         };
       }),
       total,
-      query.page,
-      query.limit,
+      page,
+      limit,
     );
   }
 

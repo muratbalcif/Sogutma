@@ -46,6 +46,13 @@ Use this before every production release. Mark items after verification.
 - [ ] Presigned uploads only; credentials never on frontend
 - [ ] MIME allowlist (JPEG/PNG/WEBP); controlled object keys
 - [ ] Import size / row limits enforced
+- [x] **XLSX mitigation (SheetJS `xlsx` has no patched release on npm):**
+  - Prefer CSV imports in production when possible
+  - Enforce `MAX_IMPORT_ROWS` (default 5000)
+  - Enforce filename extension allowlist (`.csv` / `.xlsx` / `.xls` only)
+  - Admin-only import endpoints + RBAC
+  - Do not parse untrusted XLSX outside ImportsService
+  - Track replacement (`exceljs` / CSV-only) as follow-up — not applied here to avoid breaking catalog import
 
 ## Data & ops
 

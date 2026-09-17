@@ -6,6 +6,7 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
+import { flushTestRedis } from './flush-redis';
 
 interface AuthResponseBody {
   user: {
@@ -33,6 +34,7 @@ describe('Auth (e2e)', () => {
   const email = `auth.e2e.${Date.now()}@example.com`;
 
   beforeAll(async () => {
+    await flushTestRedis();
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
