@@ -340,6 +340,34 @@ describe('Security hardening (e2e)', () => {
       .expect(403);
   });
 
+  it('RBAC role assignment is SUPER_ADMIN only; PATCH /auth/me updates profile', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/rbac/roles')
+      .set('Authorization', `Bearer ${productManagerToken}`)
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/admin/rbac/assign')
+      .set('Authorization', `Bearer ${productManagerToken}`)
+      .send({ email: `sec.a.${suffix}@example.com`, roleCode: 'ORDER_MANAGER' })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/rbac/roles')
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .expect(200);
+
+    const patched = await request(app.getHttpServer())
+      .patch('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({ firstName: 'SecA', phone: '+905551110000' })
+      .expect(200);
+
+    expect(patched.body.firstName).toBe('SecA');
+    expect(patched.body.phone).toBe('+905551110000');
+    expect(patched.body.email).toContain(`sec.a.${suffix}`);
+  });
+
   it('ACCOUNTING can read financial admin endpoints', async () => {
     await request(app.getHttpServer())
       .get('/api/v1/admin/bank-transfers')

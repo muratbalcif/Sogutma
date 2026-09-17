@@ -217,4 +217,137 @@ export class AdminService {
       },
     });
   }
+
+  async removeRoleFromUser(
+    userId: string,
+    roleCode: AdminRoleCode,
+  ): Promise<void> {
+    const adminUser = await this.prisma.adminUser.findUnique({
+      where: { userId },
+    });
+    if (!adminUser) {
+      return;
+    }
+
+    const role = await this.prisma.adminRole.findUnique({
+      where: { code: roleCode },
+    });
+    if (!role) {
+      return;
+    }
+
+    await this.prisma.adminUserRole.deleteMany({
+      where: {
+        adminUserId: adminUser.id,
+        roleId: role.id,
+      },
+    });
+  }
+
+  async listRoles(): Promise<Array<{ code: AdminRoleCode; id: string }>> {
+    const roles = await this.prisma.adminRole.findMany({
+      orderBy: { code: 'asc' },
+      select: { id: true, code: true },
+    });
+    return roles;
+  }
+
+  async listAdminUsers(): Promise<
+    Array<{
+      userId: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      roles: AdminRoleCode[];
+    }>
+  > {
+    const rows = await this.prisma.adminUser.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        roles: { include: { role: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return rows.map((row) => ({
+      userId: row.user.id,
+      email: row.user.email,
+      firstName: row.user.firstName,
+      lastName: row.user.lastName,
+      roles: row.roles.map((r) => r.role.code),
+    }));
+  }
+
+  async lookupUserByEmail(email: string): Promise<{
+    userId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    roles: string[];
+  } | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
+    if (!user) {
+      return null;
+    }
+    return this.toUserSummary(user);
+  }
+
+  async getUserSummary(userId: string): Promise<{
+    userId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    roles: string[];
+  } | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
+    if (!user) {
+      return null;
+    }
+    return this.toUserSummary(user);
+  }
+
+  private async toUserSummary(user: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  }): Promise<{
+    userId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    roles: string[];
+  }> {
+    const access = await this.getAccessForUser(user.id);
+    return {
+      userId: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      roles: access.roles,
+    };
+  }
 }

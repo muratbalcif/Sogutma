@@ -10,6 +10,7 @@ import com.furkansogutma.core.network.dto.CartValidationDto
 import com.furkansogutma.core.network.dto.CheckoutValidateRequestDto
 import com.furkansogutma.core.network.dto.CheckoutValidationDto
 import com.furkansogutma.core.network.dto.CompanyBankAccountDto
+import com.furkansogutma.core.network.dto.CouponValidationDto
 import com.furkansogutma.core.network.dto.CreateAddressRequestDto
 import com.furkansogutma.core.network.dto.CreateBankTransferRequestDto
 import com.furkansogutma.core.network.dto.CreateOrderRequestDto
@@ -25,6 +26,7 @@ import com.furkansogutma.core.network.dto.ProductAlertDto
 import com.furkansogutma.core.network.dto.RegisterDeviceRequestDto
 import com.furkansogutma.core.network.dto.UnreadCountDto
 import com.furkansogutma.core.network.dto.UpdateCartItemRequestDto
+import com.furkansogutma.core.network.dto.ValidateCouponRequestDto
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -78,6 +80,9 @@ interface CommerceApi {
 
     @POST("checkout/validate")
     suspend fun validateCheckout(@Body body: CheckoutValidateRequestDto): CheckoutValidationDto
+
+    @POST("checkout/coupon/validate")
+    suspend fun validateCoupon(@Body body: ValidateCouponRequestDto): CouponValidationDto
 
     @GET("orders")
     suspend fun orders(@Query("page") page: Int = 1, @Query("limit") limit: Int = 20): PaginatedDto<OrderDto>

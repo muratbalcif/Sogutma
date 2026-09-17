@@ -158,4 +158,50 @@ describe('PaymentsService', () => {
     expect(result.id).toBe('pay-existing');
     expect(prisma.payment.create).not.toHaveBeenCalled();
   });
+
+  it('listAdmin applies status and method filters', async () => {
+    prisma.$transaction.mockResolvedValue([0, []]);
+    await service.listAdmin({
+      page: 1,
+      limit: 20,
+      status: PaymentStatus.PAID,
+      method: PaymentMethod.BANK_TRANSFER,
+      orderNumber: 'FS-1',
+    });
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(prisma.payment.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        status: PaymentStatus.PAID,
+        method: PaymentMethod.BANK_TRANSFER,
+        order: { orderNumber: 'FS-1' },
+      }),
+    });
+  });
+
+  it('refundPayment is idempotent for already refunded payments', async () => {
+    const refunded = {
+      id: 'pay1',
+      orderId: 'ord1',
+      method: PaymentMethod.BANK_TRANSFER,
+      status: PaymentStatus.REFUNDED,
+      amount: new Prisma.Decimal('100.00'),
+      currency: 'TRY',
+      provider: null,
+      providerPaymentId: null,
+      idempotencyKey: null,
+      failureCode: null,
+      failureMessage: null,
+      paidAt: new Date(),
+      expiresAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      order: { userId: 'u1' },
+    };
+    prisma.payment.findUnique.mockResolvedValue(refunded);
+
+    const result = await service.refundPayment('pay1');
+    expect(result.status).toBe(PaymentStatus.REFUNDED);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(paymentStatusService.assertTransition).not.toHaveBeenCalled();
+  });
 });

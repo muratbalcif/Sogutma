@@ -8,12 +8,14 @@ import com.furkansogutma.core.network.dto.LoginRequestDto
 import com.furkansogutma.core.network.dto.LogoutRequestDto
 import com.furkansogutma.core.network.dto.RefreshTokenRequestDto
 import com.furkansogutma.core.network.dto.RegisterRequestDto
+import com.furkansogutma.core.network.dto.UpdateProfileRequestDto
 import com.furkansogutma.data.mapper.toDomain
 import com.furkansogutma.data.remote.SafeApiCall
 import com.furkansogutma.domain.auth.AuthRepository
 import com.furkansogutma.domain.auth.AuthState
 import com.furkansogutma.domain.auth.AuthUser
 import com.furkansogutma.domain.auth.RegisterInput
+import com.furkansogutma.domain.auth.UpdateProfileInput
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,6 +106,22 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun me(): Result<AuthUser> {
         val result = safeApiCall { api.me().toDomain() }
+        if (result is Result.Success) {
+            _authState.value = AuthState.Authenticated(result.data)
+        }
+        return result
+    }
+
+    override suspend fun updateProfile(input: UpdateProfileInput): Result<AuthUser> {
+        val result = safeApiCall {
+            api.updateProfile(
+                UpdateProfileRequestDto(
+                    firstName = input.firstName,
+                    lastName = input.lastName,
+                    phone = input.phone,
+                ),
+            ).toDomain()
+        }
         if (result is Result.Success) {
             _authState.value = AuthState.Authenticated(result.data)
         }

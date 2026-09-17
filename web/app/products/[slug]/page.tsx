@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Price } from "@/components/ui/price";
 import { ProductActions } from "@/components/product/product-actions";
+import { RelatedProductsSection } from "@/components/product/related-products";
 import { catalogService } from "@/services/catalog.service";
 import type { ProductDetail } from "@/types/api";
 
@@ -197,6 +198,7 @@ export default async function ProductDetailPage({ params }: Props) {
           </div>
         </div>
       </div>
+      <RelatedProductsSection slug={product.slug} />
     </div>
   );
 }

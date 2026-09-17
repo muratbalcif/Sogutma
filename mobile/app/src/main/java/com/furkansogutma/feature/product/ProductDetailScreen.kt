@@ -1,13 +1,17 @@
 package com.furkansogutma.feature.product
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furkansogutma.core.designsystem.components.FurkanBadge
@@ -36,7 +42,9 @@ import com.furkansogutma.core.designsystem.components.FurkanError
 import com.furkansogutma.core.designsystem.components.FurkanFavoriteIcon
 import com.furkansogutma.core.designsystem.components.FurkanLoading
 import com.furkansogutma.core.designsystem.components.FurkanNetworkImage
+import com.furkansogutma.core.designsystem.components.FurkanOutlinedButton
 import com.furkansogutma.core.designsystem.components.FurkanPrice
+import com.furkansogutma.core.designsystem.components.FurkanProductCard
 import com.furkansogutma.core.designsystem.components.FurkanQtyStepper
 import com.furkansogutma.core.designsystem.components.FurkanStickyBottomBar
 import com.furkansogutma.core.designsystem.components.FurkanTopBar
@@ -45,9 +53,11 @@ import com.furkansogutma.core.designsystem.theme.FurkanSpacing
 @Composable
 fun ProductDetailRoute(
     onBack: () -> Unit = {},
+    onRelatedProductClick: (String) -> Unit = {},
     viewModel: ProductDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val related by viewModel.relatedState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
     Scaffold(
@@ -89,7 +99,13 @@ fun ProductDetailRoute(
             is ProductDetailUiState.Error -> FurkanError(s.message, Modifier.padding(padding)) {
                 viewModel.onEvent(ProductDetailEvent.Retry)
             }
-            is ProductDetailUiState.Success -> ProductDetailScreen(s, viewModel::onEvent, Modifier.padding(padding))
+            is ProductDetailUiState.Success -> ProductDetailScreen(
+                state = s,
+                related = related,
+                onEvent = viewModel::onEvent,
+                onRelatedProductClick = onRelatedProductClick,
+                modifier = Modifier.padding(padding),
+            )
         }
     }
 }
@@ -97,7 +113,9 @@ fun ProductDetailRoute(
 @Composable
 fun ProductDetailScreen(
     state: ProductDetailUiState.Success,
+    related: RelatedProductsUiState = RelatedProductsUiState.Loading,
     onEvent: (ProductDetailEvent) -> Unit,
+    onRelatedProductClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val product = state.product
@@ -156,6 +174,44 @@ fun ProductDetailScreen(
                 2 -> if (product.compatibility.isEmpty()) Text("Uyumluluk bilgisi yok.")
                 else product.compatibility.forEach { Text("${it.manufacturer} ${it.model}") }
                 else -> Text("Henüz yorum bulunmuyor.")
+            }
+            Spacer(Modifier.height(FurkanSpacing.lg))
+            Text(
+                "İlgili ürünler",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(FurkanSpacing.sm))
+            when (related) {
+                RelatedProductsUiState.Loading -> FurkanLoading(Modifier.height(120.dp))
+                RelatedProductsUiState.Empty -> Text(
+                    "İlgili ürün bulunmuyor.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                is RelatedProductsUiState.Error -> Column {
+                    Text(related.message, color = MaterialTheme.colorScheme.error)
+                    FurkanOutlinedButton("Tekrar dene") {
+                        onEvent(ProductDetailEvent.RetryRelated)
+                    }
+                }
+                is RelatedProductsUiState.Success -> LazyRow(
+                    contentPadding = PaddingValues(vertical = FurkanSpacing.xs),
+                    horizontalArrangement = Arrangement.spacedBy(FurkanSpacing.sm),
+                ) {
+                    items(related.products, key = { it.id }) { item ->
+                        FurkanProductCard(
+                            name = item.name,
+                            brand = item.brandName,
+                            imageUrl = item.images.firstOrNull()?.url,
+                            price = item.price?.amount,
+                            compareAt = item.compareAtPrice?.amount,
+                            onCampaign = item.onCampaign,
+                            sku = item.sku,
+                            onClick = { onRelatedProductClick(item.slug) },
+                            modifier = Modifier.width(188.dp),
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(FurkanSpacing.xxl))
         }

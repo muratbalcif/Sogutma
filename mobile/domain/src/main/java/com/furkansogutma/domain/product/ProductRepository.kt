@@ -12,6 +12,7 @@ interface ProductRepository {
     suspend fun getCampaigns(): Result<List<Campaign>>
     suspend fun getCampaignBySlug(slug: String): Result<Campaign>
     suspend fun getCampaignProductsBySlug(slug: String): Result<List<CampaignProduct>>
+    suspend fun getRelatedProducts(slug: String): Result<List<Product>>
     suspend fun getBanners(): Result<List<Banner>>
     suspend fun getBrands(): Result<List<Brand>>
 }

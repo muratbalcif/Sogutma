@@ -63,3 +63,16 @@ class CreateOrderUseCaseTest {
         assertThat((result as Result.Success).data.orderNumber).isEqualTo("FS-1")
     }
 }
+
+class ValidateCouponUseCaseTest {
+    @Test
+    fun `returns coupon validation from repository`() = runTest {
+        val repo = mockk<OrderRepository>()
+        coEvery { repo.validateCoupon("SAVE10") } returns Result.Success(
+            CouponValidation(valid = true, discountAmount = "10.00", message = "ok"),
+        )
+        val result = ValidateCouponUseCase(repo)(" SAVE10 ")
+        assertThat((result as Result.Success).data.valid).isTrue()
+        coVerify { repo.validateCoupon("SAVE10") }
+    }
+}

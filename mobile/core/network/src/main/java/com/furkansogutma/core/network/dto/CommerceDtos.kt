@@ -95,6 +95,19 @@ data class CheckoutValidateRequestDto(
     val couponCode: String? = null,
 )
 
+data class ValidateCouponRequestDto(
+    val code: String,
+    val orderAmount: String? = null,
+)
+
+data class CouponValidationDto(
+    val valid: Boolean,
+    val code: String? = null,
+    val message: String? = null,
+    val discountAmount: String? = null,
+    val couponId: String? = null,
+)
+
 data class CheckoutValidationDto(
     val valid: Boolean,
     val items: List<CheckoutValidationItemDto> = emptyList(),

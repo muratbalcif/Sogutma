@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -26,6 +27,7 @@ import { LogoutDto } from './dto/logout.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { JwtAccessGuard } from './guards/jwt-access.guard';
 import { AuthenticatedUser } from './types/authenticated-user.type';
 
@@ -91,5 +93,18 @@ export class AuthController {
     @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<UserResponseDto> {
     return this.authService.me(request.user.id);
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAccessGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Update the authenticated user profile' })
+  @ApiOkResponse({ type: UserResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  updateMe(
+    @Req() request: Request & { user: AuthenticatedUser },
+    @Body() dto: UpdateProfileDto,
+  ): Promise<UserResponseDto> {
+    return this.authService.updateProfile(request.user.id, dto);
   }
 }

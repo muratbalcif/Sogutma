@@ -64,3 +64,10 @@ data class CheckoutIssue(
     val message: String,
     val productId: String? = null,
 )
+
+data class CouponValidation(
+    val valid: Boolean,
+    val code: String? = null,
+    val message: String? = null,
+    val discountAmount: String? = null,
+)

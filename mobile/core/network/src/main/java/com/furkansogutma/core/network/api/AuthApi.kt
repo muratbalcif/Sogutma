@@ -7,9 +7,11 @@ import com.furkansogutma.core.network.dto.LogoutRequestDto
 import com.furkansogutma.core.network.dto.MessageResponseDto
 import com.furkansogutma.core.network.dto.RefreshTokenRequestDto
 import com.furkansogutma.core.network.dto.RegisterRequestDto
+import com.furkansogutma.core.network.dto.UpdateProfileRequestDto
 import com.furkansogutma.core.network.dto.UserDto
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 
 interface AuthApi {
@@ -27,6 +29,9 @@ interface AuthApi {
 
     @GET("auth/me")
     suspend fun me(): UserDto
+
+    @PATCH("auth/me")
+    suspend fun updateProfile(@Body body: UpdateProfileRequestDto): UserDto
 
     @POST("auth/forgot-password")
     suspend fun forgotPassword(@Body body: ForgotPasswordRequestDto): MessageResponseDto

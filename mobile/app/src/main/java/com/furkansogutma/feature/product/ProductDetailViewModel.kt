@@ -11,6 +11,7 @@ import com.furkansogutma.domain.cart.CartBadgeStore
 import com.furkansogutma.domain.favorite.FavoriteRepository
 import com.furkansogutma.domain.product.GetProductUseCase
 import com.furkansogutma.domain.product.Product
+import com.furkansogutma.domain.product.ProductRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -30,8 +31,16 @@ sealed interface ProductDetailUiState {
     data class Error(val message: String) : ProductDetailUiState
 }
 
+sealed interface RelatedProductsUiState {
+    data object Loading : RelatedProductsUiState
+    data object Empty : RelatedProductsUiState
+    data class Success(val products: List<Product>) : RelatedProductsUiState
+    data class Error(val message: String) : RelatedProductsUiState
+}
+
 sealed interface ProductDetailEvent {
     data object Retry : ProductDetailEvent
+    data object RetryRelated : ProductDetailEvent
     data object Increment : ProductDetailEvent
     data object Decrement : ProductDetailEvent
     data object AddToCart : ProductDetailEvent
@@ -42,6 +51,7 @@ sealed interface ProductDetailEvent {
 @HiltViewModel
 class ProductDetailViewModel @Inject constructor(
     private val getProduct: GetProductUseCase,
+    private val products: ProductRepository,
     private val addToCart: AddToCartUseCase,
     private val favorites: FavoriteRepository,
     private val accountRepository: AccountRepository,
@@ -51,19 +61,30 @@ class ProductDetailViewModel @Inject constructor(
     private val slug = checkNotNull(savedStateHandle.get<String>("slug"))
     private val _uiState = MutableStateFlow<ProductDetailUiState>(ProductDetailUiState.Loading)
     val uiState = _uiState.asStateFlow()
+    private val _relatedState =
+        MutableStateFlow<RelatedProductsUiState>(RelatedProductsUiState.Loading)
+    val relatedState = _relatedState.asStateFlow()
     private val _messages = MutableSharedFlow<String>()
     val messages = _messages.asSharedFlow()
 
-    init { load() }
+    init {
+        load()
+        loadRelated()
+    }
 
     fun onEvent(event: ProductDetailEvent) {
         when (event) {
             ProductDetailEvent.Retry -> load()
+            ProductDetailEvent.RetryRelated -> loadRelated()
             ProductDetailEvent.Increment -> _uiState.update {
                 if (it is ProductDetailUiState.Success) it.copy(quantity = it.quantity + 1) else it
             }
             ProductDetailEvent.Decrement -> _uiState.update {
-                if (it is ProductDetailUiState.Success) it.copy(quantity = (it.quantity - 1).coerceAtLeast(1)) else it
+                if (it is ProductDetailUiState.Success) {
+                    it.copy(quantity = (it.quantity - 1).coerceAtLeast(1))
+                } else {
+                    it
+                }
             }
             ProductDetailEvent.AddToCart -> addCart()
             ProductDetailEvent.ToggleFavorite -> favorite()
@@ -81,6 +102,21 @@ class ProductDetailViewModel @Inject constructor(
         }
     }
 
+    private fun loadRelated() {
+        viewModelScope.launch {
+            _relatedState.value = RelatedProductsUiState.Loading
+            _relatedState.value = when (val result = products.getRelatedProducts(slug)) {
+                is Result.Success ->
+                    if (result.data.isEmpty()) {
+                        RelatedProductsUiState.Empty
+                    } else {
+                        RelatedProductsUiState.Success(result.data)
+                    }
+                is Result.Error -> RelatedProductsUiState.Error(result.error.message)
+            }
+        }
+    }
+
     private fun addCart() {
         val state = _uiState.value as? ProductDetailUiState.Success ?: return
         viewModelScope.launch {
@@ -91,7 +127,8 @@ class ProductDetailViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     val msg = when (result.error) {
-                        is AppError.Validation -> result.error.message.ifBlank { "Yeterli stok bulunmuyor." }
+                        is AppError.Validation ->
+                            result.error.message.ifBlank { "Yeterli stok bulunmuyor." }
                         else -> result.error.message
                     }
                     _messages.emit(msg)
@@ -105,9 +142,15 @@ class ProductDetailViewModel @Inject constructor(
         val previous = state.isFavorite
         _uiState.value = state.copy(isFavorite = !previous)
         viewModelScope.launch {
-            val result = if (!previous) favorites.addFavorite(state.product.id) else favorites.removeFavorite(state.product.id)
+            val result =
+                if (!previous) {
+                    favorites.addFavorite(state.product.id)
+                } else {
+                    favorites.removeFavorite(state.product.id)
+                }
             when (result) {
-                is Result.Success -> _messages.emit(if (!previous) "Favorilere eklendi" else "Favorilerden çıkarıldı")
+                is Result.Success ->
+                    _messages.emit(if (!previous) "Favorilere eklendi" else "Favorilerden çıkarıldı")
                 is Result.Error -> {
                     _uiState.value = state.copy(isFavorite = previous)
                     _messages.emit(result.error.message)

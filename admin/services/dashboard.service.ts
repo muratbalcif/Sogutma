@@ -74,6 +74,7 @@ export async function fetchDashboardTotals(): Promise<DashboardTotals> {
     criticalStock,
     activeCampaigns,
     activeCoupons,
+    featuredProducts,
   ] = await Promise.all([
     safeTotal("/admin/products?page=1&limit=1"),
     safeTotal("/admin/orders?page=1&limit=1"),
@@ -115,6 +116,7 @@ export async function fetchDashboardTotals(): Promise<DashboardTotals> {
       .list()
       .then((rows) => rows.filter((c) => c.active).length)
       .catch(() => null),
+    safeLength("/products/featured"),
   ]);
 
   return {
@@ -135,6 +137,6 @@ export async function fetchDashboardTotals(): Promise<DashboardTotals> {
     criticalStock,
     activeCampaigns,
     activeCoupons,
-    featuredProducts: null,
+    featuredProducts,
   };
 }

@@ -69,4 +69,24 @@ export class UsersService {
       data: { status },
     });
   }
+
+  async updateProfile(
+    id: string,
+    input: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string | null;
+    },
+  ): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        ...(input.firstName !== undefined
+          ? { firstName: input.firstName }
+          : {}),
+        ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
+        ...(input.phone !== undefined ? { phone: input.phone } : {}),
+      },
+    });
+  }
 }

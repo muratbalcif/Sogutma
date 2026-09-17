@@ -57,6 +57,9 @@ interface CatalogApi {
     @GET("products/{slug}")
     suspend fun product(@Path("slug") slug: String): ProductDto
 
+    @GET("products/{slug}/related")
+    suspend fun related(@Path("slug") slug: String): List<ProductDto>
+
     @GET("site/config")
     suspend fun siteConfig(): SiteConfigDto
 }

@@ -62,6 +62,7 @@ import com.furkansogutma.domain.auth.AuthRepository
 import com.furkansogutma.domain.auth.AuthState
 import com.furkansogutma.domain.auth.AuthUser
 import com.furkansogutma.domain.auth.LogoutUseCase
+import com.furkansogutma.domain.auth.UpdateProfileInput
 import com.furkansogutma.domain.cart.CartBadgeStore
 import com.furkansogutma.domain.favorite.FavoriteRepository
 import com.furkansogutma.domain.notification.NotificationPreferences
@@ -208,26 +209,80 @@ class AccountDataViewModel @Inject constructor(
 }
 @Composable
 fun ProfileRoute(onBack: () -> Unit, vm: AccountDataViewModel = hiltViewModel()) {
-    var user by remember { mutableStateOf<AuthUser?>(null) }
+    var firstName by remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var loaded by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
     LaunchedEffect(Unit) {
         when (val result = vm.authRepository.me()) {
-            is Result.Success -> user = result.data
-            is Result.Error -> Unit
+            is Result.Success -> {
+                firstName = result.data.firstName
+                lastName = result.data.lastName
+                email = result.data.email
+                phone = result.data.phone.orEmpty()
+                loaded = true
+            }
+            is Result.Error -> {
+                error = result.error.message
+                loaded = true
+            }
         }
     }
     Column(Modifier.fillMaxSize()) {
         FurkanTopBar("Profil", onBack = onBack)
         Column(Modifier.padding(FurkanSpacing.md)) {
-            if (user == null) FurkanLoading(Modifier.height(FurkanSpacing.xxl))
-            else {
-                FurkanTextField(user!!.firstName, {}, "Ad", enabled = false)
-                FurkanTextField(user!!.lastName, {}, "Soyad", enabled = false)
-                FurkanTextField(user!!.email, {}, "E-posta", enabled = false)
-                FurkanTextField(user!!.phone.orEmpty(), {}, "Telefon", enabled = false)
-                Text(
-                    "Profil güncelleme API'si henüz yok. Bilgiler salt okunur gösterilir.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            when {
+                !loaded -> FurkanLoading(Modifier.height(FurkanSpacing.xxl))
+                error != null && firstName.isEmpty() && lastName.isEmpty() -> FurkanError(error!!)
+                else -> {
+                    FurkanTextField(firstName, { firstName = it }, "Ad")
+                    FurkanTextField(lastName, { lastName = it }, "Soyad")
+                    FurkanTextField(email, {}, "E-posta", enabled = false)
+                    FurkanTextField(phone, { phone = it }, "Telefon")
+                    Spacer(Modifier.height(FurkanSpacing.md))
+                    FurkanButton(
+                        "Kaydet",
+                        Modifier.fillMaxWidth(),
+                        enabled = firstName.isNotBlank() && lastName.isNotBlank(),
+                        loading = saving,
+                    ) {
+                        scope.launch {
+                            saving = true
+                            message = null
+                            error = null
+                            when (
+                                val result = vm.authRepository.updateProfile(
+                                    UpdateProfileInput(
+                                        firstName = firstName.trim(),
+                                        lastName = lastName.trim(),
+                                        phone = phone.trim().ifBlank { null },
+                                    ),
+                                )
+                            ) {
+                                is Result.Success -> {
+                                    firstName = result.data.firstName
+                                    lastName = result.data.lastName
+                                    phone = result.data.phone.orEmpty()
+                                    message = "Profil güncellendi."
+                                }
+                                is Result.Error -> error = result.error.message
+                            }
+                            saving = false
+                        }
+                    }
+                    message?.let {
+                        Text(it, color = MaterialTheme.colorScheme.primary)
+                    }
+                    error?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                    }
+                }
             }
         }
     }
@@ -417,46 +472,81 @@ fun CommentsRoute(onBack: () -> Unit = {}) {
 fun CurrentAccountRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewModel()) {
     var current by remember { mutableStateOf<CurrentAccount?>(null) }
     var txs by remember { mutableStateOf<List<AccountTransaction>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     suspend fun load() {
-        when (val result = vm.accountRepository.getCurrentAccount()) {
-            is Result.Success -> current = result.data
-            is Result.Error -> Unit
+        error = null
+        val accountResult = vm.accountRepository.getCurrentAccount()
+        val txResult = vm.accountRepository.getTransactions()
+        when (accountResult) {
+            is Result.Success -> current = accountResult.data
+            is Result.Error -> {
+                current = null
+                error = accountResult.error.message
+            }
         }
-        when (val result = vm.accountRepository.getTransactions()) {
-            is Result.Success -> txs = result.data
-            is Result.Error -> Unit
+        when (txResult) {
+            is Result.Success -> txs = txResult.data
+            is Result.Error -> {
+                if (error == null) error = txResult.error.message
+                if (accountResult is Result.Error) txs = emptyList()
+            }
         }
+        loading = false
+        refreshing = false
     }
 
     LaunchedEffect(Unit) { load() }
 
     Column(Modifier.fillMaxSize()) {
         FurkanTopBar("Cari hesabım", onBack = onBack)
-        Column(Modifier.padding(FurkanSpacing.md)) {
-            FurkanButton(
-                if (refreshing) "Yenileniyor…" else "Yenile",
-                Modifier.fillMaxWidth(),
-            ) {
+        when {
+            loading -> FurkanLoading()
+            error != null && current == null -> FurkanError(error!!) {
                 scope.launch {
-                    refreshing = true
+                    loading = true
                     load()
-                    refreshing = false
                 }
             }
-            Spacer(Modifier.height(FurkanSpacing.md))
-            current?.let {
-                Text("Güncel bakiye: ${it.balance} ${it.currency}", style = MaterialTheme.typography.headlineLarge)
-                Text("Borç: ${it.debit.orEmpty()}")
-                Text("Alacak: ${it.credit.orEmpty()}")
-            } ?: FurkanLoading(Modifier.height(FurkanSpacing.xxl))
-            Spacer(Modifier.height(FurkanSpacing.lg))
-            txs.forEach {
-                Text("${it.createdAt}")
-                Text("${it.description.orEmpty()} · ${it.type} ${it.amount}")
-                Spacer(Modifier.height(FurkanSpacing.sm))
+            else -> Column(Modifier.padding(FurkanSpacing.md)) {
+                FurkanButton(
+                    if (refreshing) "Yenileniyor…" else "Yenile",
+                    Modifier.fillMaxWidth(),
+                ) {
+                    scope.launch {
+                        refreshing = true
+                        load()
+                    }
+                }
+                Spacer(Modifier.height(FurkanSpacing.md))
+                error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.height(FurkanSpacing.sm))
+                }
+                current?.let {
+                    Text(
+                        "Güncel bakiye: ${it.balance} ${it.currency}",
+                        style = MaterialTheme.typography.headlineLarge,
+                    )
+                    Text("Borç: ${it.debit.orEmpty()}")
+                    Text("Alacak: ${it.credit.orEmpty()}")
+                }
+                Spacer(Modifier.height(FurkanSpacing.lg))
+                if (txs.isEmpty()) {
+                    FurkanEmptyState(
+                        title = "Hareket yok",
+                        message = "Cari hesap hareketleriniz burada listelenir.",
+                    )
+                } else {
+                    txs.forEach {
+                        Text("${it.createdAt}")
+                        Text("${it.description.orEmpty()} · ${it.type} ${it.amount}")
+                        Spacer(Modifier.height(FurkanSpacing.sm))
+                    }
+                }
             }
         }
     }

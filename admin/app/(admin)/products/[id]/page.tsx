@@ -645,7 +645,7 @@ export default function ProductDetailPage() {
                         {(pricesQuery.data ?? []).map((p) => (
                           <tr key={p.id} className="border-t">
                             <td className="py-2">{p.type}</td>
-                            <td>{p.amount}</td>
+                            <td>{p.price ?? p.amount}</td>
                             <td>{p.validFrom ?? "—"}</td>
                             <td>{p.validTo ?? "—"}</td>
                             <td>{p.active ? "Evet" : "Hayır"}</td>

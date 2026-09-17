@@ -113,6 +113,37 @@ export type AdminOrderPayment = {
   expiresAt: string | null;
 };
 
+export type AdminPayment = {
+  id: string;
+  orderId: string;
+  method: string;
+  status: AdminPaymentStatus | string;
+  amount: string;
+  currency: string;
+  provider: string | null;
+  providerPaymentId: string | null;
+  idempotencyKey: string | null;
+  failureCode: string | null;
+  failureMessage: string | null;
+  paidAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminBankAccount = {
+  id: string;
+  bankName: string;
+  accountName: string;
+  iban: string;
+  branch: string | null;
+  accountNumber?: string | null;
+  currency: string;
+  description: string | null;
+  sortOrder: number;
+  active: boolean;
+};
+
 export type AdminOrderShipping = {
   id: string;
   orderId: string;
@@ -276,8 +307,11 @@ export const catalogService = {
     return apiRequest<
       Array<{
         id: string;
+        productId: string;
         type: string;
-        amount: string;
+        price: string;
+        amount?: string;
+        currency: string;
         validFrom: string | null;
         validTo: string | null;
         active: boolean;
@@ -288,16 +322,48 @@ export const catalogService = {
     productId: string,
     body: {
       type: string;
-      amount: number;
+      price?: string;
+      amount?: number | string;
+      currency?: string;
       validFrom?: string;
       validTo?: string;
       active?: boolean;
     },
   ) {
+    const price =
+      body.price ??
+      (body.amount !== undefined && body.amount !== ""
+        ? String(body.amount)
+        : undefined);
     return apiRequest(`/admin/pricing/products/${productId}`, {
       method: "POST",
+      body: {
+        type: body.type,
+        price,
+        currency: body.currency ?? "TRY",
+        validFrom: body.validFrom || undefined,
+        validTo: body.validTo || undefined,
+        active: body.active ?? true,
+      },
+    });
+  },
+  updateProductPrice(
+    priceId: string,
+    body: {
+      price?: string;
+      currency?: string;
+      validFrom?: string | null;
+      validTo?: string | null;
+      active?: boolean;
+    },
+  ) {
+    return apiRequest(`/admin/pricing/${priceId}`, {
+      method: "PATCH",
       body,
     });
+  },
+  deactivateProductPrice(priceId: string) {
+    return apiRequest(`/admin/pricing/${priceId}`, { method: "DELETE" });
   },
   setFeatured(id: string, body: { isFeatured: boolean; featuredSortOrder?: number }) {
     return apiRequest(`/admin/products/${id}/featured`, {
@@ -509,20 +575,52 @@ export const inventoryService = {
 };
 
 export const paymentsService = {
-  list(page = 1, limit = 20, params?: { status?: string }) {
+  list(
+    page = 1,
+    limit = 20,
+    params?: {
+      status?: string;
+      method?: string;
+      orderNumber?: string;
+      from?: string;
+      to?: string;
+    },
+  ) {
     const query = new URLSearchParams({
       page: String(page),
       limit: String(limit),
     });
     if (params?.status) query.set("status", params.status);
-    return apiRequest<PaginatedResponse<{
-      id: string;
-      status: string;
-      amount: string;
-      currency: string;
-      provider: string | null;
-      method: string;
-    }>>(`/admin/payments?${query.toString()}`);
+    if (params?.method) query.set("method", params.method);
+    if (params?.orderNumber) query.set("orderNumber", params.orderNumber);
+    if (params?.from) query.set("from", params.from);
+    if (params?.to) query.set("to", params.to);
+    return apiRequest<PaginatedResponse<AdminPayment>>(
+      `/admin/payments?${query.toString()}`,
+    );
+  },
+  get(id: string) {
+    return apiRequest<AdminPayment>(`/admin/payments/${id}`);
+  },
+  refund(id: string) {
+    return apiRequest<AdminPayment>(`/admin/payments/${id}/refund`, {
+      method: "POST",
+    });
+  },
+  listBankAccounts() {
+    return apiRequest<AdminBankAccount[]>("/admin/bank-accounts");
+  },
+  createBankAccount(body: Record<string, unknown>) {
+    return apiRequest<AdminBankAccount>("/admin/bank-accounts", {
+      method: "POST",
+      body,
+    });
+  },
+  updateBankAccount(id: string, body: Record<string, unknown>) {
+    return apiRequest<AdminBankAccount>(`/admin/bank-accounts/${id}`, {
+      method: "POST",
+      body,
+    });
   },
   listBankTransfers(
     page = 1,
@@ -571,7 +669,7 @@ export const paymentsService = {
   approveBankTransfer(id: string, body: { adminNote?: string }) {
     return apiRequest(`/admin/bank-transfers/${id}/approve`, {
       method: "POST",
-      body: JSON.stringify(body),
+      body,
     });
   },
   rejectBankTransfer(
@@ -580,7 +678,7 @@ export const paymentsService = {
   ) {
     return apiRequest(`/admin/bank-transfers/${id}/reject`, {
       method: "POST",
-      body: JSON.stringify(body),
+      body,
     });
   },
 };
@@ -603,6 +701,8 @@ export const accountingService = {
         description: string;
         createdAt: string;
         userId: string;
+        reference: string;
+        referenceType: string | null;
       }>
     >(`/admin/accounting/transactions?${q}`);
   },
@@ -644,7 +744,28 @@ export const accountingService = {
   }) {
     return apiRequest("/admin/accounting/manual", {
       method: "POST",
-      body: JSON.stringify(body),
+      body,
+    });
+  },
+  createAdjustment(body: {
+    customerId: string;
+    direction: "DEBIT" | "CREDIT";
+    amount: string;
+    note: string;
+  }) {
+    return apiRequest("/admin/accounting/adjustment", {
+      method: "POST",
+      body,
+    });
+  },
+  createReversal(body: {
+    customerId: string;
+    originalReference: string;
+    note: string;
+  }) {
+    return apiRequest("/admin/accounting/reversal", {
+      method: "POST",
+      body,
     });
   },
   collections(
@@ -773,9 +894,36 @@ export const customersAdminService = {
     });
   },
   invite(body: Record<string, unknown>) {
-    return apiRequest("/admin/customers/invite", {
+    return apiRequest<{ id: string; email: string }>(
+      "/admin/customers/invite",
+      {
+        method: "POST",
+        body,
+      },
+    );
+  },
+  importRows(
+    rows: Array<{
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone?: string;
+      userType?: string;
+      companyName?: string;
+      taxNumber?: string;
+      taxOffice?: string;
+    }>,
+  ) {
+    return apiRequest<{
+      results: Array<{
+        row: number;
+        email: string;
+        status: "created" | "skipped" | "error";
+        error?: string;
+      }>;
+    }>("/admin/customers/import", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: { rows },
     });
   },
   exportUrl(opts?: { search?: string; filter?: string }) {
@@ -907,6 +1055,7 @@ export const customerPricingService = {
     return apiRequest<
       Array<{
         id: string;
+        customerId?: string;
         productId: string;
         price: string;
         currency: string;
@@ -922,8 +1071,16 @@ export const customerPricingService = {
       body,
     });
   },
+  update(priceId: string, body: Record<string, unknown>) {
+    return apiRequest(`/admin/pricing/customer-prices/${priceId}`, {
+      method: "PATCH",
+      body,
+    });
+  },
   deactivate(priceId: string) {
-    return apiRequest(`/admin/pricing/${priceId}`, { method: "DELETE" });
+    return apiRequest(`/admin/pricing/customer-prices/${priceId}`, {
+      method: "DELETE",
+    });
   },
 };
 
@@ -935,5 +1092,50 @@ export const notificationsService = {
       title: string;
       createdAt: string;
     }>>(`/admin/notifications?page=${page}&limit=${limit}`);
+  },
+};
+
+export type AdminRbacUser = {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  roles: string[];
+};
+
+export type AdminRoleItem = {
+  id: string;
+  code: string;
+};
+
+export const rbacService = {
+  listRoles() {
+    return apiRequest<AdminRoleItem[]>("/admin/rbac/roles");
+  },
+  listUsers() {
+    return apiRequest<AdminRbacUser[]>("/admin/rbac/users");
+  },
+  lookup(email: string) {
+    return apiRequest<AdminRbacUser>(
+      `/admin/rbac/users/lookup?email=${encodeURIComponent(email)}`,
+    );
+  },
+  assignByEmail(email: string, roleCode: string) {
+    return apiRequest<AdminRbacUser>("/admin/rbac/assign", {
+      method: "POST",
+      body: { email, roleCode },
+    });
+  },
+  assignRole(userId: string, roleCode: string) {
+    return apiRequest<AdminRbacUser>(`/admin/rbac/users/${userId}/roles`, {
+      method: "POST",
+      body: { roleCode },
+    });
+  },
+  removeRole(userId: string, roleCode: string) {
+    return apiRequest<AdminRbacUser>(
+      `/admin/rbac/users/${userId}/roles/${roleCode}`,
+      { method: "DELETE" },
+    );
   },
 };

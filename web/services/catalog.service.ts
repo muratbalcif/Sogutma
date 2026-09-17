@@ -30,6 +30,10 @@ export const catalogService = {
     serverApiFetch<ProductListItem[]>("/products/campaigns"),
   product: (slug: string) =>
     serverApiFetch(`/products/${encodeURIComponent(slug)}`),
+  related: (slug: string) =>
+    serverApiFetch<ProductListItem[]>(
+      `/products/${encodeURIComponent(slug)}/related`,
+    ),
   search: (q: string, page = 1) =>
     serverApiFetch<Paginated<ProductListItem>>(
       `/products/search?q=${encodeURIComponent(q)}&page=${page}&limit=20`,

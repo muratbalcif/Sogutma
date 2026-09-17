@@ -9,6 +9,7 @@ describe('AuthService', () => {
     toResponse: jest.fn(),
     findById: jest.fn(),
     findByIdOrThrow: jest.fn(),
+    updateProfile: jest.fn(),
   };
 
   const passwordService = {
@@ -37,6 +38,10 @@ describe('AuthService', () => {
     getAccessForUser: jest.fn(),
   };
 
+  const customersService = {
+    createCorporateProfile: jest.fn(),
+  };
+
   let service: AuthService;
 
   const user = {
@@ -61,6 +66,7 @@ describe('AuthService', () => {
       jwtService as never,
       configService as never,
       adminService as never,
+      customersService as never,
     );
 
     usersService.toResponse.mockImplementation((value: typeof user) => ({
@@ -244,5 +250,33 @@ describe('AuthService', () => {
     const result = await service.forgotPassword('user@example.com');
     expect(result.message).toContain('yapılandırılmadığı');
     expect(result.message.toLowerCase()).not.toContain('gönderildi');
+  });
+
+  it('updateProfile updates allowed fields and returns user', async () => {
+    const updated = { ...user, firstName: 'Ali', phone: '+905551112233' };
+    usersService.updateProfile.mockResolvedValue(updated);
+    adminService.getAccessForUser.mockResolvedValue({
+      roles: [],
+      permissions: [],
+    });
+
+    const result = await service.updateProfile(user.id, {
+      firstName: 'Ali',
+      phone: '+905551112233',
+    });
+
+    expect(usersService.updateProfile).toHaveBeenCalledWith(user.id, {
+      firstName: 'Ali',
+      lastName: undefined,
+      phone: '+905551112233',
+    });
+    expect(result.firstName).toBe('Ali');
+  });
+
+  it('updateProfile rejects empty body', async () => {
+    await expect(service.updateProfile(user.id, {})).rejects.toMatchObject({
+      status: 400,
+    });
+    expect(usersService.updateProfile).not.toHaveBeenCalled();
   });
 });

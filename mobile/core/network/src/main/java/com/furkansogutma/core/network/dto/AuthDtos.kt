@@ -44,3 +44,9 @@ data class UserDto(
     val roles: List<String> = emptyList(),
     val permissions: List<String> = emptyList(),
 )
+
+data class UpdateProfileRequestDto(
+    val firstName: String? = null,
+    val lastName: String? = null,
+    val phone: String? = null,
+)

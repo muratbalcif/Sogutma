@@ -51,6 +51,7 @@ import com.furkansogutma.domain.cart.GetCartUseCase
 import com.furkansogutma.domain.order.CreateOrderInput
 import com.furkansogutma.domain.order.CreateOrderUseCase
 import com.furkansogutma.domain.order.ValidateCheckoutUseCase
+import com.furkansogutma.domain.order.ValidateCouponUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -64,6 +65,10 @@ data class CheckoutUiModel(
     val total: String? = null,
     val bankAccounts: List<CompanyBankAccount> = emptyList(),
     val couponCode: String = "",
+    val couponMessage: String? = null,
+    val couponDiscount: String? = null,
+    val couponValid: Boolean? = null,
+    val couponValidating: Boolean = false,
     val loading: Boolean = true,
     val submitting: Boolean = false,
     val error: String? = null,
@@ -79,6 +84,7 @@ class CheckoutViewModel @Inject constructor(
     private val accountRepository: AccountRepository,
     private val getCart: GetCartUseCase,
     private val validateCheckout: ValidateCheckoutUseCase,
+    private val validateCoupon: ValidateCouponUseCase,
     private val createOrder: CreateOrderUseCase,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(CheckoutUiModel())
@@ -119,18 +125,98 @@ class CheckoutViewModel @Inject constructor(
     }
 
     fun updateCouponCode(code: String) {
-        _ui.value = _ui.value.copy(couponCode = code)
+        _ui.value = _ui.value.copy(
+            couponCode = code,
+            couponMessage = null,
+            couponDiscount = null,
+            couponValid = null,
+        )
+    }
+
+    fun applyCoupon() {
+        val code = _ui.value.couponCode.trim()
+        if (code.isEmpty()) {
+            viewModelScope.launch {
+                _effects.emit(CheckoutEffect.Message("Kupon kodu girin"))
+            }
+            return
+        }
+        if (_ui.value.couponValidating) return
+        viewModelScope.launch {
+            _ui.value = _ui.value.copy(couponValidating = true, couponMessage = null)
+            when (val result = validateCoupon(code)) {
+                is Result.Error -> {
+                    _ui.value = _ui.value.copy(
+                        couponValidating = false,
+                        couponValid = false,
+                        couponDiscount = null,
+                        couponMessage = result.error.message,
+                    )
+                }
+                is Result.Success -> {
+                    if (!result.data.valid) {
+                        _ui.value = _ui.value.copy(
+                            couponValidating = false,
+                            couponValid = false,
+                            couponDiscount = null,
+                            couponMessage = result.data.message ?: "Kupon geçersiz",
+                        )
+                    } else {
+                        _ui.value = _ui.value.copy(
+                            couponValidating = false,
+                            couponValid = true,
+                            couponDiscount = result.data.discountAmount,
+                            couponMessage = result.data.message ?: "Kupon uygulandı",
+                        )
+                    }
+                }
+            }
+        }
     }
 
     fun placeOrder(addressId: String) {
         if (_ui.value.submitting) return
         viewModelScope.launch {
             _ui.value = _ui.value.copy(submitting = true, error = null)
+            val coupon = _ui.value.couponCode.trim().ifBlank { null }
+            if (coupon != null) {
+                when (val couponResult = validateCoupon(coupon)) {
+                    is Result.Error -> {
+                        _ui.value = _ui.value.copy(
+                            submitting = false,
+                            couponValid = false,
+                            couponMessage = couponResult.error.message,
+                            error = couponResult.error.message,
+                        )
+                        _effects.emit(CheckoutEffect.Message(couponResult.error.message))
+                        return@launch
+                    }
+                    is Result.Success -> {
+                        if (!couponResult.data.valid) {
+                            val msg = couponResult.data.message ?: "Kupon geçersiz"
+                            _ui.value = _ui.value.copy(
+                                submitting = false,
+                                couponValid = false,
+                                couponDiscount = null,
+                                couponMessage = msg,
+                                error = msg,
+                            )
+                            _effects.emit(CheckoutEffect.Message(msg))
+                            return@launch
+                        }
+                        _ui.value = _ui.value.copy(
+                            couponValid = true,
+                            couponDiscount = couponResult.data.discountAmount,
+                            couponMessage = couponResult.data.message ?: "Kupon uygulandı",
+                        )
+                    }
+                }
+            }
             val input = CreateOrderInput(
                 shippingAddressId = addressId,
                 billingAddressId = addressId,
                 paymentMethod = "BANK_TRANSFER",
-                couponCode = _ui.value.couponCode.ifBlank { null },
+                couponCode = coupon,
             )
             when (val validation = validateCheckout(input)) {
                 is Result.Error -> {
@@ -288,6 +374,26 @@ fun CheckoutRoute(
                         label = "Kupon kodunuz",
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    Spacer(Modifier.height(FurkanSpacing.sm))
+                    FurkanOutlinedButton(
+                        if (ui.couponValidating) "Doğrulanıyor…" else "Kuponu doğrula",
+                        Modifier.fillMaxWidth(),
+                    ) {
+                        viewModel.applyCoupon()
+                    }
+                    ui.couponMessage?.let {
+                        Text(
+                            it,
+                            color = if (ui.couponValid == true) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                        )
+                    }
+                    ui.couponDiscount?.let {
+                        Text("Kupon indirimi (sunucu): $it TRY")
+                    }
                     Text("Toplam: ${ui.total.orEmpty()}", style = MaterialTheme.typography.titleMedium)
                     ui.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }

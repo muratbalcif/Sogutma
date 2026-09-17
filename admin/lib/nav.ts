@@ -25,6 +25,11 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/customers", label: "Müşteriler", permission: "customer.read" },
   { href: "/payments", label: "Ödemeler", permission: "payment.read" },
   {
+    href: "/bank-accounts",
+    label: "Banka Hesapları",
+    permission: "payment.read",
+  },
+  {
     href: "/bank-transfers",
     label: "Havale Bildirimleri",
     permission: "bank_transfer.read",

@@ -5,9 +5,11 @@ import com.furkansogutma.core.network.api.CommerceApi
 import com.furkansogutma.core.network.dto.CheckoutValidateRequestDto
 import com.furkansogutma.core.network.dto.CreateOrderRequestDto
 import com.furkansogutma.core.network.dto.CreatePaymentRequestDto
+import com.furkansogutma.core.network.dto.ValidateCouponRequestDto
 import com.furkansogutma.data.mapper.toDomain
 import com.furkansogutma.data.remote.SafeApiCall
 import com.furkansogutma.domain.order.CheckoutValidation
+import com.furkansogutma.domain.order.CouponValidation
 import com.furkansogutma.domain.order.CreateOrderInput
 import com.furkansogutma.domain.order.Order
 import com.furkansogutma.domain.order.OrderRepository
@@ -29,6 +31,17 @@ class OrderRepositoryImpl @Inject constructor(
                     couponCode = input.couponCode,
                 ),
             ).toDomain()
+        }
+
+    override suspend fun validateCoupon(code: String): Result<CouponValidation> =
+        safeApiCall {
+            val dto = api.validateCoupon(ValidateCouponRequestDto(code = code))
+            CouponValidation(
+                valid = dto.valid,
+                code = dto.code,
+                message = dto.message,
+                discountAmount = dto.discountAmount,
+            )
         }
 
     override suspend fun createOrder(input: CreateOrderInput): Result<Order> = safeApiCall {

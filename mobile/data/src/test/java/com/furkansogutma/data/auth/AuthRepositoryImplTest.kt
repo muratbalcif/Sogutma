@@ -33,4 +33,24 @@ class AuthRepositoryImplTest {
         assertThat(result).isInstanceOf(Result.Success::class.java)
         coVerify { tokenStorage.saveTokens("access", "refresh") }
     }
+
+    @Test
+    fun `updateProfile returns user`() = runTest {
+        coEvery { api.updateProfile(any()) } returns UserDto(
+            "1",
+            "a@b.com",
+            "Ali",
+            "B",
+            "+90555",
+            "INDIVIDUAL",
+            "ACTIVE",
+        )
+        val result = repo.updateProfile(
+            com.furkansogutma.domain.auth.UpdateProfileInput("Ali", "B", "+90555"),
+        )
+        assertThat(result).isInstanceOf(Result.Success::class.java)
+        val user = (result as Result.Success).data
+        assertThat(user.firstName).isEqualTo("Ali")
+        assertThat(user.phone).isEqualTo("+90555")
+    }
 }

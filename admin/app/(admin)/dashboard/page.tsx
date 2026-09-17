@@ -85,6 +85,10 @@ export default function DashboardPage() {
             label="Aktif kuponlar"
             value={data?.activeCoupons ?? null}
           />
+          <StatCard
+            label="Öne çıkan ürünler"
+            value={data?.featuredProducts ?? null}
+          />
           <StatCard label="Ürünler" value={data?.products ?? null} />
           <StatCard label="Siparişler" value={data?.orders ?? null} />
           <StatCard label="Ödemeler" value={data?.payments ?? null} />

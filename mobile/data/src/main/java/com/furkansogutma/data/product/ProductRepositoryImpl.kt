@@ -64,6 +64,9 @@ class ProductRepositoryImpl @Inject constructor(
     override suspend fun getCampaignProductsBySlug(slug: String): Result<List<CampaignProduct>> =
         safeApiCall { api.campaignProducts(slug).map { it.toDomain() } }
 
+    override suspend fun getRelatedProducts(slug: String): Result<List<Product>> =
+        safeApiCall { api.related(slug).map { it.toDomain() } }
+
     override suspend fun getBanners(): Result<List<Banner>> =
         safeApiCall { api.banners().map { it.toDomain() } }
 

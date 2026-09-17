@@ -7,6 +7,7 @@ import { envValidationSchema } from './config/env.validation';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { AddressesModule } from './modules/addresses/addresses.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { AdminRbacModule } from './modules/admin/admin-rbac.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BannersModule } from './modules/banners/banners.module';
@@ -74,6 +75,7 @@ import { EnvironmentVariables } from './config/env.validation';
     CustomersModule,
     AdminCustomersModule,
     AdminModule,
+    AdminRbacModule,
     AuthModule,
     AuditModule,
     StorageModule,

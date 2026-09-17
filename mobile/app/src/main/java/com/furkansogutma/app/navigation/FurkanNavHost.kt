@@ -284,7 +284,10 @@ fun FurkanNavHost(
                 arguments = listOf(navArgument("slug") { type = NavType.StringType }),
                 deepLinks = listOf(navDeepLink { uriPattern = "${DeepLinks.SCHEME}://product/{slug}" }),
             ) {
-                ProductDetailRoute(onBack = { navController.popBackStack() })
+                ProductDetailRoute(
+                    onBack = { navController.popBackStack() },
+                    onRelatedProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                )
             }
             composable(
                 route = AppRoutes.CATEGORY_DETAIL,
