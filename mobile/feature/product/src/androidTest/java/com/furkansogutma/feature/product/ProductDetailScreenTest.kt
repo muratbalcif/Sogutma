@@ -30,7 +30,8 @@ class ProductDetailScreenTest {
                 )
             }
         }
-        composeRule.onNodeWithText("Sepete ekle").assertIsDisplayed()
         composeRule.onNodeWithText("Test Ürün").assertIsDisplayed()
+        composeRule.onNodeWithText("Stokta").assertIsDisplayed()
+        composeRule.onNodeWithText("SKU: SKU").assertIsDisplayed()
     }
 }

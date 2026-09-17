@@ -20,10 +20,11 @@ class LoginScreenTest {
                     state = LoginUiState(),
                     onEvent = {},
                     onRegister = {},
+                    onForgotPassword = {},
                 )
             }
         }
-        composeRule.onNodeWithText("Giriş").assertIsDisplayed()
+        composeRule.onNodeWithText("FurkanSoğutma").assertIsDisplayed()
         composeRule.onNodeWithText("Giriş yap").performClick()
     }
 }

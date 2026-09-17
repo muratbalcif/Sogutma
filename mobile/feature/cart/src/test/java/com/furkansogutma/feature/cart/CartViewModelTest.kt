@@ -2,6 +2,8 @@ package com.furkansogutma.feature.cart
 
 import com.furkansogutma.core.common.result.Result
 import com.furkansogutma.domain.cart.Cart
+import com.furkansogutma.domain.cart.CartBadgeStore
+import com.furkansogutma.domain.cart.CartRepository
 import com.furkansogutma.domain.cart.GetCartUseCase
 import com.furkansogutma.domain.cart.UpdateCartItemUseCase
 import com.google.common.truth.Truth.assertThat
@@ -29,8 +31,11 @@ class CartViewModelTest {
     fun `loads empty cart`() = runTest {
         val getCart = mockk<GetCartUseCase>()
         val update = mockk<UpdateCartItemUseCase>()
-        coEvery { getCart() } returns Result.Success(Cart("1", emptyList(), "0", null, null, "0", "TRY"))
-        val vm = CartViewModel(getCart, update)
+        val repo = mockk<CartRepository>()
+        coEvery { getCart() } returns Result.Success(
+            Cart("1", emptyList(), "0", "0", "0", "TRY"),
+        )
+        val vm = CartViewModel(getCart, update, repo, CartBadgeStore())
         advanceUntilIdle()
         assertThat(vm.uiState.value).isInstanceOf(CartUiState.Success::class.java)
     }

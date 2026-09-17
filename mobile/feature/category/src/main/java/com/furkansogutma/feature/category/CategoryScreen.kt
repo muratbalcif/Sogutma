@@ -1,6 +1,7 @@
 package com.furkansogutma.feature.category
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,18 +9,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furkansogutma.core.common.result.Result
 import com.furkansogutma.core.designsystem.components.FurkanError
 import com.furkansogutma.core.designsystem.components.FurkanLoading
+import com.furkansogutma.core.designsystem.components.FurkanTopBar
 import com.furkansogutma.core.designsystem.theme.FurkanSpacing
 import com.furkansogutma.domain.category.Category
 import com.furkansogutma.domain.category.CategoryRepository
@@ -58,29 +57,29 @@ fun CategoryRoute(
     onCategoryClick: (String) -> Unit,
     viewModel: CategoryViewModel = hiltViewModel(),
 ) {
-    var state by remember { mutableStateOf<CategoryUiState>(CategoryUiState.Loading) }
-    LaunchedEffect(Unit) {
-        viewModel.uiState.collect { state = it }
-    }
-    when (val s = state) {
-        CategoryUiState.Loading -> FurkanLoading()
-        is CategoryUiState.Error -> FurkanError(s.message, onRetry = viewModel::load)
-        is CategoryUiState.Success -> LazyColumn(Modifier.fillMaxSize().padding(FurkanSpacing.md)) {
-            items(s.categories, key = { it.id }) { category ->
-                Text(
-                    category.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier
-                        .clickable { onCategoryClick(category.slug) }
-                        .padding(vertical = FurkanSpacing.sm),
-                )
-                category.children.forEach { child ->
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    Column(Modifier.fillMaxSize()) {
+        FurkanTopBar(title = "Kategoriler")
+        when (val s = state) {
+            CategoryUiState.Loading -> FurkanLoading()
+            is CategoryUiState.Error -> FurkanError(s.message, onRetry = viewModel::load)
+            is CategoryUiState.Success -> LazyColumn(Modifier.padding(FurkanSpacing.md)) {
+                items(s.categories, key = { it.id }) { category ->
                     Text(
-                        "  ${child.name}",
+                        category.name,
+                        style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier
-                            .clickable { onCategoryClick(child.slug) }
-                            .padding(vertical = FurkanSpacing.xs),
+                            .clickable { onCategoryClick(category.slug) }
+                            .padding(vertical = FurkanSpacing.sm),
                     )
+                    category.children.forEach { child ->
+                        Text(
+                            "  ${child.name}",
+                            modifier = Modifier
+                                .clickable { onCategoryClick(child.slug) }
+                                .padding(vertical = FurkanSpacing.xs),
+                        )
+                    }
                 }
             }
         }

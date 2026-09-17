@@ -68,11 +68,11 @@ export class AuthController {
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Request a password reset email (always returns success)' })
+  @ApiOperation({
+    summary: 'Request a password reset email (always returns success)',
+  })
   @ApiOkResponse({ schema: { example: { message: '...' } } })
-  forgotPassword(
-    @Body() dto: ForgotPasswordDto,
-  ): Promise<{ message: string }> {
+  forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ message: string }> {
     return this.authService.forgotPassword(dto.email);
   }
 

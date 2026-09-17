@@ -6,7 +6,7 @@ sealed interface AppRoute {
     data object Splash : AppRoute { override val route = "splash" }
     data object Login : AppRoute { override val route = "login" }
     data object Register : AppRoute { override val route = "register" }
-    data object Main : AppRoute { override val route = "main" }
+    data object ForgotPassword : AppRoute { override val route = "forgot_password" }
     data object Home : AppRoute { override val route = "home" }
     data object Categories : AppRoute { override val route = "categories" }
     data object Search : AppRoute { override val route = "search" }
@@ -16,42 +16,45 @@ sealed interface AppRoute {
     data object Orders : AppRoute { override val route = "orders" }
     data object Favorites : AppRoute { override val route = "favorites" }
     data object Addresses : AppRoute { override val route = "addresses" }
+    data object AddressForm : AppRoute { override val route = "address_form" }
     data object Alerts : AppRoute { override val route = "alerts" }
     data object Comments : AppRoute { override val route = "comments" }
     data object CurrentAccount : AppRoute { override val route = "current_account" }
     data object BankTransfers : AppRoute { override val route = "bank_transfers" }
     data object Settings : AppRoute { override val route = "settings" }
+    data object Profile : AppRoute { override val route = "profile" }
+    data object ProductList : AppRoute { override val route = "products" }
 
     data class ProductDetail(val slug: String) : AppRoute {
         override val route = "product/$slug"
-        companion object {
-            const val pattern = "product/{slug}"
-            fun create(slug: String) = "product/$slug"
-        }
     }
 
     data class CategoryDetail(val slug: String) : AppRoute {
         override val route = "category/$slug"
-        companion object {
-            const val pattern = "category/{slug}"
-            fun create(slug: String) = "category/$slug"
-        }
     }
 
     data class OrderDetail(val id: String) : AppRoute {
         override val route = "order/$id"
-        companion object {
-            const val pattern = "order/{id}"
-            fun create(id: String) = "order/$id"
-        }
     }
+}
 
-    data class ProductList(val category: String? = null) : AppRoute {
-        override val route = if (category != null) "products?category=$category" else "products"
-        companion object {
-            const val pattern = "products"
-        }
-    }
+object AppRoutes {
+    const val PRODUCT_DETAIL = "product/{slug}"
+    const val CATEGORY_DETAIL = "category/{slug}"
+    const val ORDER_DETAIL = "order/{id}"
+    const val PRODUCT_LIST_WITH_CATEGORY = "products?category={category}"
+    const val ORDER_SUCCESS = "order_success/{orderId}?payment={payment}"
+    const val BANK_TRANSFERS_WITH_ORDER = "bank_transfers?orderId={orderId}"
+
+    fun productDetail(slug: String) = "product/$slug"
+    fun categoryDetail(slug: String) = "category/$slug"
+    fun orderDetail(id: String) = "order/$id"
+    fun productList(category: String? = null) =
+        if (category.isNullOrBlank()) "products" else "products?category=$category"
+    fun orderSuccess(orderId: String, payment: String) =
+        "order_success/$orderId?payment=$payment"
+    fun addressForm(addressId: String? = null) =
+        if (addressId == null) "address_form" else "address_form?addressId=$addressId"
 }
 
 object DeepLinks {

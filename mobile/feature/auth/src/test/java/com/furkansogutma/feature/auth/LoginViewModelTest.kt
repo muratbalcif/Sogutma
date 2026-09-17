@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.furkansogutma.core.common.result.Result
 import com.furkansogutma.domain.auth.AuthUser
 import com.furkansogutma.domain.auth.LoginUseCase
+import com.furkansogutma.domain.cart.RefreshCartBadgeUseCase
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -21,12 +22,13 @@ import org.junit.Test
 class LoginViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val loginUseCase = mockk<LoginUseCase>()
+    private val refreshCartBadge = mockk<RefreshCartBadgeUseCase>(relaxed = true)
     private lateinit var viewModel: LoginViewModel
 
     @Before
     fun setup() {
         Dispatchers.setMain(dispatcher)
-        viewModel = LoginViewModel(loginUseCase)
+        viewModel = LoginViewModel(loginUseCase, refreshCartBadge)
     }
 
     @After

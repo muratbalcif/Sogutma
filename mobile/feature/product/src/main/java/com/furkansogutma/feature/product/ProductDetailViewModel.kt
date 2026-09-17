@@ -3,9 +3,11 @@ package com.furkansogutma.feature.product
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.furkansogutma.core.common.result.AppError
 import com.furkansogutma.core.common.result.Result
 import com.furkansogutma.domain.account.AccountRepository
 import com.furkansogutma.domain.cart.AddToCartUseCase
+import com.furkansogutma.domain.cart.CartBadgeStore
 import com.furkansogutma.domain.favorite.FavoriteRepository
 import com.furkansogutma.domain.product.GetProductUseCase
 import com.furkansogutma.domain.product.Product
@@ -20,7 +22,11 @@ import kotlinx.coroutines.launch
 
 sealed interface ProductDetailUiState {
     data object Loading : ProductDetailUiState
-    data class Success(val product: Product, val quantity: Int = 1, val message: String? = null) : ProductDetailUiState
+    data class Success(
+        val product: Product,
+        val quantity: Int = 1,
+        val isFavorite: Boolean = false,
+    ) : ProductDetailUiState
     data class Error(val message: String) : ProductDetailUiState
 }
 
@@ -39,6 +45,7 @@ class ProductDetailViewModel @Inject constructor(
     private val addToCart: AddToCartUseCase,
     private val favorites: FavoriteRepository,
     private val accountRepository: AccountRepository,
+    private val badgeStore: CartBadgeStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val slug = checkNotNull(savedStateHandle.get<String>("slug"))
@@ -78,18 +85,33 @@ class ProductDetailViewModel @Inject constructor(
         val state = _uiState.value as? ProductDetailUiState.Success ?: return
         viewModelScope.launch {
             when (val result = addToCart(state.product.id, state.quantity)) {
-                is Result.Success -> _messages.emit("Sepete eklendi")
-                is Result.Error -> _messages.emit(result.error.message)
+                is Result.Success -> {
+                    badgeStore.updateFromCart(result.data)
+                    _messages.emit("Ürün sepete eklendi.")
+                }
+                is Result.Error -> {
+                    val msg = when (result.error) {
+                        is AppError.Validation -> result.error.message.ifBlank { "Yeterli stok bulunmuyor." }
+                        else -> result.error.message
+                    }
+                    _messages.emit(msg)
+                }
             }
         }
     }
 
     private fun favorite() {
         val state = _uiState.value as? ProductDetailUiState.Success ?: return
+        val previous = state.isFavorite
+        _uiState.value = state.copy(isFavorite = !previous)
         viewModelScope.launch {
-            when (val result = favorites.addFavorite(state.product.id)) {
-                is Result.Success -> _messages.emit("Favorilere eklendi")
-                is Result.Error -> _messages.emit(result.error.message)
+            val result = if (!previous) favorites.addFavorite(state.product.id) else favorites.removeFavorite(state.product.id)
+            when (result) {
+                is Result.Success -> _messages.emit(if (!previous) "Favorilere eklendi" else "Favorilerden çıkarıldı")
+                is Result.Error -> {
+                    _uiState.value = state.copy(isFavorite = previous)
+                    _messages.emit(result.error.message)
+                }
             }
         }
     }
@@ -98,7 +120,7 @@ class ProductDetailViewModel @Inject constructor(
         val state = _uiState.value as? ProductDetailUiState.Success ?: return
         viewModelScope.launch {
             when (val result = accountRepository.createAlert(state.product.id)) {
-                is Result.Success -> _messages.emit("Stok bildirimi oluşturuldu")
+                is Result.Success -> _messages.emit("Stok bildirimi oluşturuldu.")
                 is Result.Error -> _messages.emit(result.error.message)
             }
         }

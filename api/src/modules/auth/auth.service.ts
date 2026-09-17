@@ -181,8 +181,7 @@ export class AuthService {
   async forgotPassword(email: string): Promise<{ message: string }> {
     await this.usersService.findByEmail(email);
     return {
-      message:
-        'Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.',
+      message: 'Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.',
     };
   }
 }

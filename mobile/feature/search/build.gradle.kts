@@ -22,6 +22,7 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        freeCompilerArgs += listOf("-opt-in=androidx.compose.material3.ExperimentalMaterial3Api", "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi")
     }
     buildFeatures {
         compose = true
@@ -33,6 +34,7 @@ implementation(project(":core:common"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:navigation"))
     implementation(project(":domain"))
+    implementation(project(":core:database"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

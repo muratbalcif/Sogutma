@@ -17,6 +17,7 @@ class HomeScreenTest {
         composeRule.setContent {
             FurkanSogutmaTheme {
                 HomeScreen(
+                    greeting = "Merhaba",
                     catalog = HomeCatalog(
                         banners = emptyList(),
                         categories = emptyList(),
@@ -25,8 +26,12 @@ class HomeScreenTest {
                         bestSelling = emptyList(),
                         brands = emptyList(),
                     ),
+                    cartCount = 0,
                     onProductClick = {},
                     onCategoryClick = {},
+                    onSearchClick = {},
+                    onCartClick = {},
+                    onSeeAllProducts = {},
                 )
             }
         }
