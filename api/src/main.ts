@@ -23,12 +23,20 @@ async function bootstrap(): Promise<void> {
         .split(',')
         .map((origin) => origin.trim())
         .filter(Boolean)
-    : [
-        'http://localhost:3001',
-        'http://127.0.0.1:3001',
-        'http://localhost:3002',
-        'http://127.0.0.1:3002',
-      ];
+    : nodeEnv === 'production'
+      ? []
+      : [
+          'http://localhost:3001',
+          'http://127.0.0.1:3001',
+          'http://localhost:3002',
+          'http://127.0.0.1:3002',
+        ];
+
+  if (nodeEnv === 'production' && origins.length === 0) {
+    throw new Error(
+      'CORS_ORIGINS must be set to an explicit allowlist in production (no wildcard)',
+    );
+  }
 
   app.enableCors({
     origin: origins,

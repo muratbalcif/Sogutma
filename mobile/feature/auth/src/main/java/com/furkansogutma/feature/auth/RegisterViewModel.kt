@@ -3,6 +3,8 @@ package com.furkansogutma.feature.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.furkansogutma.core.common.result.Result
+import com.furkansogutma.core.database.settings.AppSettingsDataStore
+import com.furkansogutma.domain.account.SyncDeviceTokenUseCase
 import com.furkansogutma.domain.auth.AuthRepository
 import com.furkansogutma.domain.auth.RegisterInput
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,6 +13,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -32,6 +35,8 @@ data class RegisterUiState(
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val syncDeviceToken: SyncDeviceTokenUseCase,
+    private val settings: AppSettingsDataStore,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState = _uiState.asStateFlow()
@@ -66,6 +71,7 @@ class RegisterViewModel @Inject constructor(
                 )
             ) {
                 is Result.Success -> {
+                    syncDeviceToken.register(settings.fcmToken.first())
                     _uiState.update { it.copy(isLoading = false) }
                     _done.emit(Unit)
                 }

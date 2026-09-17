@@ -8,13 +8,35 @@ const links = [
   { href: "/products", label: "Ürünler", permission: "product.read" },
   { href: "/categories", label: "Kategoriler", permission: "category.read" },
   { href: "/brands", label: "Markalar", permission: "brand.read" },
+  {
+    href: "/imports/products",
+    label: "Toplu Ürün Aktarımı",
+    permission: "import.create",
+  },
+  {
+    href: "/imports/prices",
+    label: "Toplu Fiyat Güncelleme",
+    permission: "import.create",
+  },
+  {
+    href: "/imports/stock",
+    label: "Toplu Stok Güncelleme",
+    permission: "import.create",
+  },
 ];
 
 export default function CatalogPage() {
   const { can } = usePermissions();
 
   return (
-    <ModulePage permission={["product.read", "category.read", "brand.read"]}>
+    <ModulePage
+      permission={[
+        "product.read",
+        "category.read",
+        "brand.read",
+        "import.create",
+      ]}
+    >
       <div className="grid gap-4 sm:grid-cols-3">
         {links
           .filter((link) => can(link.permission))

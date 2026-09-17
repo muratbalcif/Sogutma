@@ -13,13 +13,21 @@ describe('PaymentExpirationService', () => {
     $queryRaw: jest.fn(),
     $transaction: jest.fn(),
   };
-  const inventoryService = { releaseStockInTransaction: jest.fn() };
+  const orderStatusService = {
+    applyTransitionInTransaction: jest.fn().mockResolvedValue({
+      orderId: 'o1',
+      userId: 'u1',
+      orderNumber: 'FS-1',
+      fromStatus: OrderStatus.PENDING,
+      toStatus: OrderStatus.CANCELLED,
+    }),
+  };
   const notificationsService = { enqueueOrderStatus: jest.fn() };
-  const emailOutbox = { enqueue: jest.fn() };
+  const emailOutbox = { enqueueOrderEmail: jest.fn() };
 
   const service = new PaymentExpirationService(
     prisma as never,
-    inventoryService as never,
+    orderStatusService as never,
     notificationsService as never,
     emailOutbox as never,
   );
@@ -62,10 +70,9 @@ describe('PaymentExpirationService', () => {
     expect(notificationsService.enqueueOrderStatus).not.toHaveBeenCalled();
   });
 
-  it('cancels pending expired payment and releases stock once', async () => {
+  it('cancels pending expired payment via OrderStatusService', async () => {
     prisma.payment.findMany.mockResolvedValue([{ id: 'p1' }]);
     const txPaymentUpdate = jest.fn();
-    const txOrderUpdate = jest.fn();
     prisma.$transaction.mockImplementation(
       async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
         return fn({
@@ -88,7 +95,7 @@ describe('PaymentExpirationService', () => {
             }),
             update: txPaymentUpdate,
           },
-          order: { update: txOrderUpdate },
+          order: { update: jest.fn() },
           orderStatusHistory: { create: jest.fn() },
         });
       },
@@ -97,9 +104,9 @@ describe('PaymentExpirationService', () => {
     const count: number = await service.expirePendingPayments();
     expect(count).toBe(1);
     expect(txPaymentUpdate).toHaveBeenCalled();
-    expect(inventoryService.releaseStockInTransaction).toHaveBeenCalled();
+    expect(orderStatusService.applyTransitionInTransaction).toHaveBeenCalled();
     expect(notificationsService.enqueueOrderStatus).toHaveBeenCalled();
-    expect(emailOutbox.enqueue).toHaveBeenCalledWith(
+    expect(emailOutbox.enqueueOrderEmail).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'OrderCancelled' }),
     );
   });

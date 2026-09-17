@@ -19,10 +19,12 @@ export class CampaignsController {
   }
 
   @Get(':slug')
-  @ApiOperation({ summary: 'Get active campaign by slug' })
+  @ApiOperation({
+    summary: 'Get campaign landing by slug (includes expired for UI state)',
+  })
   @ApiOkResponse({ type: CampaignResponseDto })
-  getBySlug(@Param('slug') slug: string): Promise<CampaignResponseDto> {
-    return this.campaignsService.getPublicBySlug(slug);
+  getBySlug(@Param('slug') slug: string) {
+    return this.campaignsService.getLandingBySlug(slug);
   }
 
   @Get(':slug/products')

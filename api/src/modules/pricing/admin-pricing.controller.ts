@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -16,9 +17,12 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { Request } from 'express';
 import { Permissions } from '../admin/decorators/permissions.decorator';
 import { PermissionsGuard } from '../admin/guards/permissions.guard';
+import { AuditService } from '../audit/audit.service';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard';
+import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import {
   CreateCustomerPriceDto,
   CreateProductPriceDto,
@@ -34,7 +38,10 @@ import { PriceService } from './pricing.service';
 @UseGuards(JwtAccessGuard, PermissionsGuard)
 @Controller('admin/pricing')
 export class AdminPricingController {
-  constructor(private readonly priceService: PriceService) {}
+  constructor(
+    private readonly priceService: PriceService,
+    private readonly audit: AuditService,
+  ) {}
 
   @Get('products/:productId')
   @Permissions('pricing.read')
@@ -85,27 +92,69 @@ export class AdminPricingController {
   @Post('customers/:customerId')
   @Permissions('pricing.create')
   @ApiCreatedResponse({ type: CustomerPriceResponseDto })
-  createCustomerPrice(
+  async createCustomerPrice(
     @Param('customerId', ParseUUIDPipe) customerId: string,
     @Body() dto: CreateCustomerPriceDto,
+    @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<CustomerPriceResponseDto> {
-    return this.priceService.createCustomerPrice(customerId, dto);
+    const created = await this.priceService.createCustomerPrice(
+      customerId,
+      dto,
+    );
+    await this.audit.log({
+      adminUserId: request.user.id,
+      action: 'CUSTOMER_PRICE_CREATED',
+      entityType: 'CustomerPrice',
+      entityId: created.id,
+      metadata: {
+        customerId,
+        productId: created.productId,
+        newPrice: created.price,
+      },
+    });
+    return created;
   }
 
   @Patch('customer-prices/:id')
   @Permissions('pricing.update')
-  updateCustomerPrice(
+  async updateCustomerPrice(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCustomerPriceDto,
+    @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<CustomerPriceResponseDto> {
-    return this.priceService.updateCustomerPrice(id, dto);
+    const updated = await this.priceService.updateCustomerPrice(id, dto);
+    await this.audit.log({
+      adminUserId: request.user.id,
+      action: 'CUSTOMER_PRICE_UPDATED',
+      entityType: 'CustomerPrice',
+      entityId: id,
+      metadata: {
+        newPrice: updated.price,
+        active: updated.active,
+        patch: dto,
+      },
+    });
+    return updated;
   }
 
   @Delete('customer-prices/:id')
   @Permissions('pricing.delete')
-  deactivateCustomerPrice(
+  async deactivateCustomerPrice(
     @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<CustomerPriceResponseDto> {
-    return this.priceService.deactivateCustomerPrice(id);
+    const updated = await this.priceService.deactivateCustomerPrice(id);
+    await this.audit.log({
+      adminUserId: request.user.id,
+      action: 'CUSTOMER_PRICE_DELETED',
+      entityType: 'CustomerPrice',
+      entityId: id,
+      metadata: {
+        customerId: updated.customerId,
+        oldPrice: updated.price,
+        active: false,
+      },
+    });
+    return updated;
   }
 }

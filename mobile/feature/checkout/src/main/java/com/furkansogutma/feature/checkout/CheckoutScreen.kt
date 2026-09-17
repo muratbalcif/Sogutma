@@ -62,6 +62,7 @@ data class CheckoutUiModel(
     val addresses: List<Address> = emptyList(),
     val total: String? = null,
     val bankAccounts: List<CompanyBankAccount> = emptyList(),
+    val couponCode: String = "",
     val loading: Boolean = true,
     val submitting: Boolean = false,
     val error: String? = null,
@@ -115,6 +116,10 @@ class CheckoutViewModel @Inject constructor(
         }
     }
 
+    fun updateCouponCode(code: String) {
+        _ui.value = _ui.value.copy(couponCode = code)
+    }
+
     fun placeOrder(addressId: String) {
         if (_ui.value.submitting) return
         viewModelScope.launch {
@@ -125,6 +130,7 @@ class CheckoutViewModel @Inject constructor(
                         shippingAddressId = addressId,
                         billingAddressId = addressId,
                         paymentMethod = "BANK_TRANSFER",
+                        couponCode = _ui.value.couponCode.ifBlank { null },
                     ),
                 )
             ) {
@@ -253,6 +259,13 @@ fun CheckoutRoute(
                     Text("Sipariş onayı", style = MaterialTheme.typography.titleLarge)
                     Text("Adres: ${ui.addresses.firstOrNull { it.id == selectedAddress }?.fullName.orEmpty()}")
                     Text("Ödeme: Havale / EFT")
+                    Spacer(Modifier.height(FurkanSpacing.sm))
+                    FurkanTextField(
+                        value = ui.couponCode,
+                        onValueChange = viewModel::updateCouponCode,
+                        label = "Kupon kodunuz",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Text("Toplam: ${ui.total.orEmpty()}", style = MaterialTheme.typography.titleMedium)
                     ui.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }

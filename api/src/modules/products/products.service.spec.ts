@@ -16,12 +16,24 @@ describe('ProductsService', () => {
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       count: jest.fn(),
     },
     brand: { findUnique: jest.fn() },
     category: { findUnique: jest.fn() },
     inventory: { create: jest.fn() },
-    productImage: { deleteMany: jest.fn() },
+    orderItem: { count: jest.fn() },
+    productImage: {
+      deleteMany: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      count: jest.fn(),
+      delete: jest.fn(),
+    },
     productAttribute: { deleteMany: jest.fn() },
     productCompatibility: { deleteMany: jest.fn() },
     $transaction: jest.fn(),
@@ -36,11 +48,19 @@ describe('ProductsService', () => {
       .fn()
       .mockResolvedValue(new Map([['p1', null]])),
   };
+  const storage = {
+    deleteObject: jest.fn().mockResolvedValue(undefined),
+  };
+  const audit = {
+    log: jest.fn().mockResolvedValue(undefined),
+  };
 
   const service = new ProductsService(
     prisma as never,
     inventoryService as never,
     priceService as never,
+    storage as never,
+    audit as never,
   );
 
   const brand = {
@@ -86,6 +106,8 @@ describe('ProductsService', () => {
       name: 'Klima',
       slug: 'klima',
       description: 'desc',
+      metaTitle: null,
+      metaDescription: null,
       brandId: brand.id,
       categoryId: category.id,
       vatRate: new Prisma.Decimal(20),
@@ -107,6 +129,8 @@ describe('ProductsService', () => {
       name: 'Klima',
       slug: 'klima',
       description: 'desc',
+      metaTitle: null,
+      metaDescription: null,
       brandId: brand.id,
       categoryId: category.id,
       vatRate: new Prisma.Decimal(20),

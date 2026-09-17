@@ -13,11 +13,15 @@ import com.furkansogutma.core.network.dto.CreateBankTransferRequestDto
 import com.furkansogutma.core.network.dto.CreateOrderRequestDto
 import com.furkansogutma.core.network.dto.CreatePaymentRequestDto
 import com.furkansogutma.core.network.dto.FavoriteDto
+import com.furkansogutma.core.network.dto.MarkAllReadResponseDto
+import com.furkansogutma.core.network.dto.NotificationDto
+import com.furkansogutma.core.network.dto.NotificationPreferenceDto
 import com.furkansogutma.core.network.dto.OrderDto
 import com.furkansogutma.core.network.dto.PaginatedDto
 import com.furkansogutma.core.network.dto.PaymentDto
 import com.furkansogutma.core.network.dto.ProductAlertDto
 import com.furkansogutma.core.network.dto.RegisterDeviceRequestDto
+import com.furkansogutma.core.network.dto.UnreadCountDto
 import com.furkansogutma.core.network.dto.UpdateCartItemRequestDto
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -76,6 +80,9 @@ interface CommerceApi {
     @GET("orders/{id}")
     suspend fun order(@Path("id") id: String): OrderDto
 
+    @POST("orders/{id}/cancel")
+    suspend fun cancelOrder(@Path("id") id: String): OrderDto
+
     @POST("orders/{orderId}/payment")
     suspend fun createPayment(
         @Path("orderId") orderId: String,
@@ -120,4 +127,28 @@ interface CommerceApi {
 
     @DELETE("notifications/devices/{token}")
     suspend fun unregisterDevice(@Path("token") token: String): Map<String, Boolean>
+
+    @GET("notifications")
+    suspend fun notifications(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20,
+        @Query("unreadOnly") unreadOnly: Boolean? = null,
+    ): PaginatedDto<NotificationDto>
+
+    @GET("notifications/unread-count")
+    suspend fun notificationsUnreadCount(): UnreadCountDto
+
+    @PATCH("notifications/{id}/read")
+    suspend fun markNotificationRead(@Path("id") id: String): NotificationDto
+
+    @PATCH("notifications/read-all")
+    suspend fun markAllNotificationsRead(): MarkAllReadResponseDto
+
+    @GET("notifications/preferences")
+    suspend fun notificationPreferences(): NotificationPreferenceDto
+
+    @PATCH("notifications/preferences")
+    suspend fun updateNotificationPreferences(
+        @Body body: NotificationPreferenceDto,
+    ): NotificationPreferenceDto
 }

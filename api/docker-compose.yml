@@ -1,12 +1,16 @@
+# Local development dependencies only — NOT a production compose file.
+# Passwords come from env (.env) with unsafe local defaults for DX.
+# Production must use managed Postgres/Redis on a private network with strong secrets.
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: furkansogutma-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: furkansogutma
-      POSTGRES_USER: furkansogutma
-      POSTGRES_PASSWORD: furkansogutma
+      POSTGRES_DB: ${POSTGRES_DB:-furkansogutma}
+      POSTGRES_USER: ${POSTGRES_USER:-furkansogutma}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme-local-only}
     ports:
       - '${POSTGRES_PORT:-5432}:5432'
     volumes:
@@ -21,8 +25,9 @@ services:
     image: redis:7-alpine
     container_name: furkansogutma-redis
     restart: unless-stopped
+    # Local: no auth. Production Redis MUST use AUTH + private network.
     ports:
-      - '6379:6379'
+      - '${REDIS_PORT:-6379}:6379'
     volumes:
       - furkansogutma_redis_data:/data
     healthcheck:

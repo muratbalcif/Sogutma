@@ -26,6 +26,8 @@ export class BrandsService {
       name: brand.name,
       slug: brand.slug,
       logo: brand.logo,
+      description: brand.description,
+      sortOrder: brand.sortOrder,
       active: brand.active,
     };
   }
@@ -75,6 +77,8 @@ export class BrandsService {
         name: dto.name,
         slug: dto.slug,
         logo: dto.logo,
+        description: dto.description,
+        sortOrder: dto.sortOrder ?? 0,
         active: dto.active ?? true,
       },
     });
@@ -96,6 +100,8 @@ export class BrandsService {
         name: dto.name,
         slug: dto.slug,
         logo: dto.logo,
+        description: dto.description,
+        sortOrder: dto.sortOrder,
         active: dto.active,
       },
     });

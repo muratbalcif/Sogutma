@@ -19,7 +19,9 @@ describe('AuthService', () => {
   const tokenService = {
     issueTokenPair: jest.fn(),
     findActiveRefreshToken: jest.fn(),
+    findRefreshTokenByRaw: jest.fn(),
     revokeRefreshToken: jest.fn(),
+    revokeAllRefreshTokensForUser: jest.fn(),
     hashToken: jest.fn(),
   };
 
@@ -154,7 +156,7 @@ describe('AuthService', () => {
       email: user.email,
       userType: user.userType,
     });
-    tokenService.findActiveRefreshToken.mockResolvedValue({
+    tokenService.findRefreshTokenByRaw.mockResolvedValue({
       id: 'rt-1',
       userId: user.id,
       tokenHash: 'hash',
@@ -180,10 +182,34 @@ describe('AuthService', () => {
       email: user.email,
       userType: user.userType,
     });
-    tokenService.findActiveRefreshToken.mockResolvedValue(null);
+    tokenService.findRefreshTokenByRaw.mockResolvedValue(null);
 
     await expect(service.refresh('revoked')).rejects.toBeInstanceOf(
       UnauthorizedException,
+    );
+  });
+
+  it('refresh reuse of rotated token revokes all user sessions', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: user.id,
+      email: user.email,
+      userType: user.userType,
+    });
+    tokenService.findRefreshTokenByRaw.mockResolvedValue({
+      id: 'rt-1',
+      userId: user.id,
+      tokenHash: 'hash',
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: new Date(),
+      createdAt: new Date(),
+    });
+    tokenService.revokeAllRefreshTokensForUser = jest.fn();
+
+    await expect(service.refresh('old-refresh')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(tokenService.revokeAllRefreshTokensForUser).toHaveBeenCalledWith(
+      user.id,
     );
   });
 
@@ -193,7 +219,7 @@ describe('AuthService', () => {
       email: user.email,
       userType: user.userType,
     });
-    tokenService.findActiveRefreshToken.mockResolvedValue({
+    tokenService.findRefreshTokenByRaw.mockResolvedValue({
       id: 'rt-1',
       userId: user.id,
       tokenHash: 'hash',

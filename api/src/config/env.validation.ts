@@ -28,7 +28,11 @@ export const envValidationSchema = Joi.object({
   FIREBASE_PROJECT_ID: Joi.string().allow('').optional(),
   FIREBASE_CLIENT_EMAIL: Joi.string().allow('').optional(),
   FIREBASE_PRIVATE_KEY: Joi.string().allow('').optional(),
-  CORS_ORIGINS: Joi.string().allow('').optional(),
+  CORS_ORIGINS: Joi.when('NODE_ENV', {
+    is: 'production',
+    then: Joi.string().min(1).required(),
+    otherwise: Joi.string().allow('').optional(),
+  }),
   SITE_NAME: Joi.string().allow('').optional(),
   SITE_SUPPORT_EMAIL: Joi.string().allow('').optional(),
   SITE_SUPPORT_PHONE: Joi.string().allow('').optional(),
@@ -40,6 +44,29 @@ export const envValidationSchema = Joi.object({
   BANK_TRANSFER_IBAN: Joi.string().allow('').optional(),
   BANK_TRANSFER_ACCOUNT_NAME: Joi.string().allow('').optional(),
   PAYMENT_EXPIRY_HOURS: Joi.number().integer().min(1).max(168).default(24),
+  NOTIFICATION_OUTBOX_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(20)
+    .default(4),
+  R2_ACCOUNT_ID: Joi.string().allow('').optional(),
+  R2_ACCESS_KEY_ID: Joi.string().allow('').optional(),
+  R2_SECRET_ACCESS_KEY: Joi.string().allow('').optional(),
+  R2_BUCKET: Joi.string().allow('').optional(),
+  R2_PUBLIC_URL: Joi.string().uri().allow('').optional(),
+  R2_MAX_UPLOAD_BYTES: Joi.number()
+    .integer()
+    .min(1024)
+    .max(50 * 1024 * 1024)
+    .default(5 * 1024 * 1024),
+  R2_PRESIGN_TTL_SECONDS: Joi.number().integer().min(60).max(3600).default(300),
+  MAX_IMPORT_ROWS: Joi.number().integer().min(1).max(50000).default(5000),
+  IMPORT_BATCH_SIZE: Joi.number().integer().min(1).max(1000).default(100),
+  THROTTLE_TTL_MS: Joi.number().integer().min(1000).default(60000),
+  THROTTLE_LIMIT: Joi.number().integer().min(10).default(120),
+  AUTH_THROTTLE_LIMIT: Joi.number().integer().min(3).default(10),
+  BACKUP_RETENTION_DAYS: Joi.number().integer().min(1).max(365).default(14),
+  BUSINESS_TIMEZONE: Joi.string().default('Europe/Istanbul'),
 });
 
 export interface EnvironmentVariables {
@@ -68,4 +95,19 @@ export interface EnvironmentVariables {
   BANK_TRANSFER_IBAN?: string;
   BANK_TRANSFER_ACCOUNT_NAME?: string;
   PAYMENT_EXPIRY_HOURS?: number;
+  NOTIFICATION_OUTBOX_MAX_ATTEMPTS?: number;
+  R2_ACCOUNT_ID?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
+  R2_BUCKET?: string;
+  R2_PUBLIC_URL?: string;
+  R2_MAX_UPLOAD_BYTES?: number;
+  R2_PRESIGN_TTL_SECONDS?: number;
+  MAX_IMPORT_ROWS?: number;
+  IMPORT_BATCH_SIZE?: number;
+  THROTTLE_TTL_MS?: number;
+  THROTTLE_LIMIT?: number;
+  AUTH_THROTTLE_LIMIT?: number;
+  BACKUP_RETENTION_DAYS?: number;
+  BUSINESS_TIMEZONE?: string;
 }

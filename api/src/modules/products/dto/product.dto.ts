@@ -25,6 +25,14 @@ export class ProductImageInputDto {
   @MaxLength(500)
   url!: string;
 
+  @ApiPropertyOptional({
+    description: 'R2 object key for later cleanup',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  objectKey?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -148,10 +156,22 @@ export class CreateProductDto {
   @Max(100)
   vatRate!: number;
 
-  @ApiPropertyOptional({ default: true })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  @ApiPropertyOptional({ example: '12.000 BTU Klima | FurkanSoğutma' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  metaTitle?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  metaDescription?: string;
 
   @ApiPropertyOptional({ type: [ProductImageInputDto] })
   @IsOptional()
@@ -238,6 +258,18 @@ export class UpdateProductDto {
   @IsBoolean()
   active?: boolean;
 
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  metaTitle?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  metaDescription?: string | null;
+
   @ApiPropertyOptional({ type: [ProductImageInputDto] })
   @IsOptional()
   @IsArray()
@@ -261,4 +293,46 @@ export class UpdateProductDto {
   @ValidateNested({ each: true })
   @Type(() => ProductCompatibilityInputDto)
   compatibility?: ProductCompatibilityInputDto[];
+}
+
+export class RegisterProductImageDto {
+  @ApiProperty({ example: 'https://cdn.example.com/products/x.jpg' })
+  @IsUrl({ require_protocol: true })
+  @MaxLength(500)
+  url!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  objectKey?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  alt?: string;
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  isPrimary?: boolean;
+}
+
+export class ReorderImagesDto {
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  imageIds!: string[];
+}
+
+export class BulkProductStatusDto {
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  productIds!: string[];
+
+  @ApiProperty()
+  @IsBoolean()
+  active!: boolean;
 }

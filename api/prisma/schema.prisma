@@ -54,6 +54,8 @@ model User {
   notifications       Notification[]
   notificationPreference NotificationPreference?
   deviceTokens        DeviceToken[]
+  orderReturnsCreated OrderReturn[] @relation("OrderReturnCreatedBy")
+  couponUsages        CouponUsage[]
 
   @@index([status])
   @@index([userType])
@@ -61,14 +63,18 @@ model User {
 }
 
 model CorporateCustomer {
-  id             String   @id @default(uuid()) @db.Uuid
-  userId         String   @unique @db.Uuid
-  companyName    String
-  taxNumber      String
-  taxOffice      String
-  identityNumber String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @unique @db.Uuid
+  companyName      String
+  taxNumber        String
+  taxOffice        String
+  identityNumber   String?
+  /// When true, unpaid balance can grow up to creditLimit (cari satış).
+  allowCredit      Boolean  @default(false)
+  creditLimit      Decimal? @db.Decimal(12, 2)
+  paymentTermDays  Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -173,34 +179,41 @@ model Category {
 }
 
 model Brand {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String   @unique
-  logo      String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  logo        String?
+  description String?
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   products Product[]
 
   @@index([name])
   @@index([active])
+  @@index([sortOrder])
   @@map("brands")
 }
 
 model Product {
-  id          String   @id @default(uuid()) @db.Uuid
-  sku         String   @unique
-  barcode     String?  @unique
-  name        String
-  slug        String   @unique
-  description String?
-  brandId     String   @db.Uuid
-  categoryId  String   @db.Uuid
-  vatRate     Decimal  @db.Decimal(5, 2)
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(uuid()) @db.Uuid
+  sku             String   @unique
+  barcode         String?  @unique
+  name            String
+  slug            String   @unique
+  description     String?
+  metaTitle       String?
+  metaDescription String?
+  brandId         String   @db.Uuid
+  categoryId      String   @db.Uuid
+  vatRate         Decimal  @db.Decimal(5, 2)
+  active          Boolean  @default(true)
+  isFeatured      Boolean  @default(false)
+  featuredSortOrder Int    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   brand           Brand                  @relation(fields: [brandId], references: [id], onDelete: Restrict)
   category        Category               @relation(fields: [categoryId], references: [id], onDelete: Restrict)
@@ -223,6 +236,8 @@ model Product {
   @@index([categoryId])
   @@index([active])
   @@index([name])
+  @@index([isFeatured])
+  @@index([featuredSortOrder])
   @@map("products")
 }
 
@@ -230,6 +245,8 @@ model ProductImage {
   id        String   @id @default(uuid()) @db.Uuid
   productId String   @db.Uuid
   url       String
+  /// R2 object key for delete/orphan cleanup (optional for legacy rows).
+  objectKey String?
   alt       String?
   sortOrder Int      @default(0)
   isPrimary Boolean  @default(false)
@@ -239,6 +256,7 @@ model ProductImage {
 
   @@index([productId])
   @@index([sortOrder])
+  @@index([objectKey])
   @@map("product_images")
 }
 
@@ -500,22 +518,88 @@ model Order {
   shippingAddressSnapshot  Json
   billingAddressSnapshot   Json
   customerNote             String?
+  couponId                 String?     @db.Uuid
+  couponCode               String?
+  couponDiscountAmount     Decimal     @default(0) @db.Decimal(12, 2)
+  /// Corporate credit sales: orderDate + paymentTermDays (UTC instant).
+  dueDate                  DateTime?
   createdAt                DateTime    @default(now())
   updatedAt                DateTime    @updatedAt
 
   user            User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   shippingAddress Address?             @relation("OrderShippingAddress", fields: [shippingAddressId], references: [id], onDelete: SetNull)
   billingAddress  Address?             @relation("OrderBillingAddress", fields: [billingAddressId], references: [id], onDelete: SetNull)
+  coupon          Coupon?              @relation(fields: [couponId], references: [id], onDelete: SetNull)
   items           OrderItem[]
   statusHistory   OrderStatusHistory[]
   payments        Payment[]
   bankTransfers   BankTransferNotification[]
   accountTransactions AccountTransaction[]
+  shipping        Shipping?
+  orderReturn     OrderReturn?
+  couponUsages    CouponUsage[]
 
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([orderNumber])
+  @@index([couponId])
+  @@index([dueDate])
   @@map("orders")
+}
+
+enum ShippingProviderCode {
+  MANUAL
+}
+
+enum ShippingStatus {
+  PENDING
+  READY
+  SHIPPED
+  DELIVERED
+  RETURNED
+  CANCELLED
+}
+
+/// Carrier shipment record. Independent from Order.status.
+/// v1 provider: MANUAL only (admin enters tracking). Future: Aras/Yurtiçi/MNG/etc.
+model Shipping {
+  id             String               @id @default(uuid()) @db.Uuid
+  orderId        String               @unique @db.Uuid
+  provider       ShippingProviderCode @default(MANUAL)
+  trackingNumber String?
+  trackingUrl    String?
+  status         ShippingStatus       @default(PENDING)
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+  note           String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@index([trackingNumber])
+  @@map("shippings")
+}
+
+/// Lightweight return foundation (full RMA workflow later).
+model OrderReturn {
+  id              String   @id @default(uuid()) @db.Uuid
+  orderId         String   @unique @db.Uuid
+  returnReason    String?
+  adminNote       String?
+  createdByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("OrderReturnCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("order_returns")
 }
 
 model OrderItem {
@@ -648,16 +732,23 @@ model BankTransferNotification {
 }
 
 model AccountTransaction {
-  id          String                 @id @default(uuid()) @db.Uuid
-  userId      String                 @db.Uuid
-  orderId     String?                @db.Uuid
-  paymentId   String?                @db.Uuid
-  type        AccountTransactionType
-  amount      Decimal                @db.Decimal(12, 2)
-  currency    String                 @default("TRY") @db.Char(3)
-  description String
-  reference   String                 @unique
-  createdAt   DateTime               @default(now())
+  id           String                 @id @default(uuid()) @db.Uuid
+  userId       String                 @db.Uuid
+  orderId      String?                @db.Uuid
+  paymentId    String?                @db.Uuid
+  type         AccountTransactionType
+  amount       Decimal                @db.Decimal(12, 2)
+  currency     String                 @default("TRY") @db.Char(3)
+  description  String
+  /// Unique idempotency key, e.g. SALE:ORDER:{id}, PAYMENT:{id}, MANUAL:DEBIT:{uuid}
+  reference    String                 @unique
+  /// ORDER | PAYMENT | BANK_TRANSFER | MANUAL | REFUND | ADJUSTMENT | REVERSAL
+  referenceType String?
+  referenceId   String?
+  /// Running balance after this row (debit - credit convention).
+  balanceAfter Decimal?               @db.Decimal(12, 2)
+  createdBy    String?                @db.Uuid
+  createdAt    DateTime               @default(now())
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   order   Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
@@ -668,6 +759,9 @@ model AccountTransaction {
   @@index([paymentId])
   @@index([type])
   @@index([createdAt])
+  @@index([referenceType])
+  @@index([referenceId])
+  @@index([userId, createdAt])
   @@map("account_transactions")
 }
 
@@ -789,6 +883,58 @@ model Banner {
   @@map("banners")
 }
 
+enum CouponType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+model Coupon {
+  id                    String     @id @default(uuid()) @db.Uuid
+  /// Normalized uppercase unique code (case-insensitive matching).
+  code                  String     @unique
+  description           String?
+  type                  CouponType
+  value                 Decimal    @db.Decimal(12, 2)
+  minimumOrderAmount    Decimal?   @db.Decimal(12, 2)
+  maximumDiscountAmount Decimal?   @db.Decimal(12, 2)
+  usageLimit            Int?
+  perUserLimit          Int?
+  startsAt              DateTime
+  endsAt                DateTime
+  active                Boolean    @default(true)
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  usages CouponUsage[]
+  orders Order[]
+
+  @@index([active])
+  @@index([startsAt])
+  @@index([endsAt])
+  @@index([code])
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id             String   @id @default(uuid()) @db.Uuid
+  couponId       String   @db.Uuid
+  userId         String   @db.Uuid
+  orderId        String   @db.Uuid
+  discountAmount Decimal  @db.Decimal(12, 2)
+  createdAt      DateTime @default(now())
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([couponId, orderId])
+  @@index([couponId])
+  @@index([userId])
+  @@index([orderId])
+  @@index([couponId, userId])
+  @@map("coupon_usages")
+}
+
 enum NotificationType {
   ORDER_CREATED
   ORDER_CONFIRMED
@@ -796,14 +942,33 @@ enum NotificationType {
   ORDER_SHIPPED
   ORDER_DELIVERED
   ORDER_CANCELLED
+  ORDER_RETURNED
+  PAYMENT_PENDING
   PAYMENT_PAID
   PAYMENT_FAILED
+  PAYMENT_APPROVED
+  PAYMENT_REJECTED
   BANK_TRANSFER_SUBMITTED
   BANK_TRANSFER_APPROVED
   BANK_TRANSFER_REJECTED
   PRODUCT_BACK_IN_STOCK
+  STOCK_AVAILABLE
   CAMPAIGN
   SYSTEM
+}
+
+enum NotificationEntityType {
+  ORDER
+  PRODUCT
+  PAYMENT
+  CAMPAIGN
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
 }
 
 /// Async email delivery queue (not part of DB transactions).
@@ -825,14 +990,19 @@ model EmailOutbox {
 }
 
 model Notification {
-  id        String           @id @default(uuid()) @db.Uuid
-  userId    String           @db.Uuid
-  type      NotificationType
-  title     String
-  body      String
-  data      Json?
-  readAt    DateTime?
-  createdAt DateTime         @default(now())
+  id         String                  @id @default(uuid()) @db.Uuid
+  userId     String                  @db.Uuid
+  type       NotificationType
+  title      String
+  body       String
+  /// Alias for body in API responses (message).
+  data       Json?
+  entityType NotificationEntityType?
+  entityId   String?
+  /// Idempotency: type + entityType + entityId (when entity present).
+  eventKey   String?                 @unique
+  readAt     DateTime?
+  createdAt  DateTime                @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -840,6 +1010,8 @@ model Notification {
   @@index([type])
   @@index([readAt])
   @@index([createdAt])
+  @@index([userId, readAt])
+  @@index([entityType, entityId])
   @@map("notifications")
 }
 
@@ -883,18 +1055,108 @@ model DeviceToken {
 }
 
 model NotificationOutbox {
-  id            String    @id @default(uuid()) @db.Uuid
+  id            String      @id @default(uuid()) @db.Uuid
   type          String
   aggregateType String
   aggregateId   String
+  /// Idempotency key: type:aggregateType:aggregateId
+  eventKey      String?     @unique
   payload       Json
+  status        OutboxStatus @default(PENDING)
+  availableAt   DateTime    @default(now())
   processedAt   DateTime?
-  attempts      Int       @default(0)
+  attempts      Int         @default(0)
   lastError     String?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime    @default(now())
 
   @@index([processedAt])
+  @@index([status, availableAt])
   @@index([aggregateType, aggregateId])
   @@index([createdAt])
   @@map("notification_outbox")
+}
+
+enum ImportJobType {
+  PRODUCTS
+  PRICES
+  STOCK
+  PRODUCT_STATUS
+  CUSTOMERS
+}
+
+enum ImportJobStatus {
+  PENDING
+  VALIDATING
+  READY
+  PROCESSING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+model ImportJob {
+  id            String          @id @default(uuid()) @db.Uuid
+  type          ImportJobType
+  filename      String
+  /// Relative/object key of uploaded source file (R2 or local temp path).
+  sourceKey     String?
+  status        ImportJobStatus @default(PENDING)
+  totalRows     Int             @default(0)
+  validRows     Int             @default(0)
+  invalidRows   Int             @default(0)
+  successRows   Int             @default(0)
+  failedRows    Int             @default(0)
+  newRows       Int             @default(0)
+  updateRows    Int             @default(0)
+  /// Parsed preview payload (rows + errors) kept until confirm/expire.
+  preview       Json?
+  options       Json?
+  errorSummary  String?
+  createdBy     String          @db.Uuid
+  createdAt     DateTime        @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+
+  rows ImportRowResult[]
+
+  @@index([type])
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("import_jobs")
+}
+
+model ImportRowResult {
+  id        String   @id @default(uuid()) @db.Uuid
+  jobId     String   @db.Uuid
+  rowNumber Int
+  sku       String?
+  status    String
+  errors    String[]
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  job ImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([sku])
+  @@index([status])
+  @@map("import_row_results")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  adminUserId String   @db.Uuid
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([adminUserId])
+  @@index([action])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

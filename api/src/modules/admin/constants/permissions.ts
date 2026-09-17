@@ -41,6 +41,9 @@ export const ADMIN_PERMISSION_CODES = [
   'banner.update',
   'banner.delete',
   'notification.read',
+  'audit.read',
+  'import.read',
+  'import.create',
 ] as const;
 
 export type AdminPermissionCode = (typeof ADMIN_PERMISSION_CODES)[number];
@@ -73,11 +76,24 @@ export const PRODUCT_MANAGER_PERMISSION_CODES = [
   'banner.create',
   'banner.update',
   'banner.delete',
+  'import.read',
+  'import.create',
 ] as const;
 
 export const ORDER_MANAGER_PERMISSION_CODES = [
   'order.read',
   'order.update',
+] as const;
+
+export const CUSTOMER_MANAGER_PERMISSION_CODES = [
+  'customer.read',
+  'customer.update',
+  'order.read',
+  'pricing.read',
+  'pricing.create',
+  'pricing.update',
+  'pricing.delete',
+  'bank_transfer.read',
 ] as const;
 
 export const ACCOUNTING_PERMISSION_CODES = [
@@ -89,4 +105,5 @@ export const ACCOUNTING_PERMISSION_CODES = [
   'bank_transfer.read',
   'bank_transfer.approve',
   'bank_transfer.reject',
+  'customer.read',
 ] as const;

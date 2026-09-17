@@ -30,18 +30,28 @@ export class PriceService {
   ) {}
 
   /**
-   * Price resolution order:
+   * Price resolution order (deterministic):
    * 1. Customer-specific
    * 2. Corporate (corporate users)
    * 3. Wholesale (corporate users)
-   * 4. Campaign module / ProductPrice CAMPAIGN (lower effective price wins)
+   * 4. Campaign module / ProductPrice CAMPAIGN (lower effective price wins;
+   *    multi-campaign: higher priority → lower price → lower campaignId)
    * 5. Retail
+   *
+   * Clients must display this result only — never recompute discounts.
    */
   async resolvePrice(
     productId: string,
     context: PriceResolutionContext = {},
   ): Promise<ResolvedPriceDto | null> {
     const now = new Date();
+    const retail = await this.findValidProductPrice(
+      productId,
+      PriceType.RETAIL,
+      now,
+    );
+    const baseRetail = retail?.price ?? null;
+    const currencyFallback = retail?.currency ?? 'TRY';
 
     if (context.customerId) {
       const customerPrice = await this.findValidCustomerPrice(
@@ -50,11 +60,14 @@ export class PriceService {
         now,
       );
       if (customerPrice) {
-        return {
-          amount: toMoneyString(customerPrice.price),
-          currency: customerPrice.currency,
-          type: 'CUSTOMER',
-        };
+        return this.toResolved(
+          customerPrice.price,
+          baseRetail ?? customerPrice.price,
+          customerPrice.currency,
+          'CUSTOMER',
+          null,
+          customerPrice.validTo,
+        );
       }
     }
 
@@ -62,20 +75,18 @@ export class PriceService {
       for (const type of [PriceType.CORPORATE, PriceType.WHOLESALE]) {
         const price = await this.findValidProductPrice(productId, type, now);
         if (price) {
-          return {
-            amount: toMoneyString(price.price),
-            currency: price.currency,
-            type: price.type,
-          };
+          return this.toResolved(
+            price.price,
+            baseRetail ?? price.price,
+            price.currency,
+            price.type,
+            null,
+            price.validTo,
+          );
         }
       }
     }
 
-    const retail = await this.findValidProductPrice(
-      productId,
-      PriceType.RETAIL,
-      now,
-    );
     const legacyCampaign = await this.findValidProductPrice(
       productId,
       PriceType.CAMPAIGN,
@@ -83,6 +94,9 @@ export class PriceService {
     );
 
     let campaignAmount: Prisma.Decimal | null = null;
+    let campaignId: string | null = null;
+    let campaignValidUntil: Date | null = null;
+
     if (retail) {
       const moduleCampaign = await this.campaignsService.resolveCampaignPrice(
         productId,
@@ -91,31 +105,67 @@ export class PriceService {
       );
       if (moduleCampaign) {
         campaignAmount = moduleCampaign.amount;
+        campaignId = moduleCampaign.campaignId;
       }
     }
     if (legacyCampaign) {
       if (!campaignAmount || legacyCampaign.price.lessThan(campaignAmount)) {
         campaignAmount = legacyCampaign.price;
+        campaignId = null;
+        campaignValidUntil = legacyCampaign.validTo;
       }
     }
 
     if (campaignAmount) {
-      return {
-        amount: toMoneyString(campaignAmount),
-        currency: retail?.currency ?? legacyCampaign?.currency ?? 'TRY',
-        type: PriceType.CAMPAIGN,
-      };
+      return this.toResolved(
+        campaignAmount,
+        baseRetail ?? campaignAmount,
+        currencyFallback,
+        PriceType.CAMPAIGN,
+        campaignId,
+        campaignValidUntil,
+      );
     }
 
     if (retail) {
-      return {
-        amount: toMoneyString(retail.price),
-        currency: retail.currency,
-        type: retail.type,
-      };
+      return this.toResolved(
+        retail.price,
+        retail.price,
+        retail.currency,
+        retail.type,
+        null,
+        retail.validTo,
+      );
     }
 
     return null;
+  }
+
+  private toResolved(
+    final: Prisma.Decimal,
+    base: Prisma.Decimal,
+    currency: string,
+    type: PriceType | 'CUSTOMER',
+    campaignId: string | null,
+    validUntil: Date | null,
+  ): ResolvedPriceDto {
+    const discount = base.greaterThan(final)
+      ? base.sub(final)
+      : new Prisma.Decimal(0);
+    const pct = base.greaterThan(0)
+      ? discount.div(base).mul(100).toDecimalPlaces(2)
+      : new Prisma.Decimal(0);
+    return {
+      amount: toMoneyString(final),
+      basePrice: toMoneyString(base),
+      finalPrice: toMoneyString(final),
+      discountAmount: toMoneyString(discount),
+      discountPercentage: pct.toFixed(2),
+      currency,
+      type,
+      campaignId,
+      validUntil: validUntil ? validUntil.toISOString() : null,
+    };
   }
 
   async resolvePricesForProducts(
@@ -242,6 +292,12 @@ export class PriceService {
     await this.ensureCustomerExists(customerId);
     await this.ensureProductExists(dto.productId);
     this.ensureValidRange(dto.validFrom, dto.validTo);
+    await this.ensureNoCustomerPriceConflict(
+      customerId,
+      dto.productId,
+      dto.validFrom,
+      dto.validTo,
+    );
 
     const created = await this.prisma.customerPrice.create({
       data: {
@@ -367,6 +423,35 @@ export class PriceService {
   ): void {
     if (validFrom && validTo && new Date(validFrom) > new Date(validTo)) {
       throw new BadRequestException('validFrom must be before validTo');
+    }
+  }
+
+  private async ensureNoCustomerPriceConflict(
+    customerId: string,
+    productId: string,
+    validFrom?: string | null,
+    validTo?: string | null,
+    excludeId?: string,
+  ): Promise<void> {
+    const from = validFrom ? new Date(validFrom) : null;
+    const to = validTo ? new Date(validTo) : null;
+    const existing = await this.prisma.customerPrice.findMany({
+      where: {
+        customerId,
+        productId,
+        active: true,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+    });
+    for (const row of existing) {
+      const overlap =
+        (from === null || row.validTo === null || from <= row.validTo) &&
+        (to === null || row.validFrom === null || to >= row.validFrom);
+      if (overlap) {
+        throw new BadRequestException(
+          'Overlapping active customer price already exists for this product',
+        );
+      }
     }
   }
 

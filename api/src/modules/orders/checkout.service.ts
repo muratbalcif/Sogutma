@@ -1,6 +1,12 @@
-import { ConflictException, Injectable } from '@nestjs/common';
-import { UserType } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
+import { Prisma, UserType } from '@prisma/client';
+import { toMoneyString } from '../../common/utils/money.util';
 import { AddressesService } from '../addresses/addresses.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { PriceService } from '../pricing/pricing.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,6 +23,7 @@ export class CheckoutService {
     private readonly priceService: PriceService,
     private readonly inventoryService: InventoryService,
     private readonly addressesService: AddressesService,
+    private readonly couponsService: CouponsService,
   ) {}
 
   async validate(
@@ -92,10 +99,37 @@ export class CheckoutService {
       throw new ConflictException('Unable to calculate checkout totals');
     }
 
+    let couponDiscount = new Prisma.Decimal(0);
+    let couponCode: string | null = null;
+    const merchandiseTotal = new Prisma.Decimal(calculation.summary.total);
+
+    if (dto.couponCode) {
+      const couponResult = await this.couponsService.validateForUser({
+        code: dto.couponCode,
+        userId,
+        orderAmount: merchandiseTotal,
+      });
+      if (!couponResult.valid) {
+        throw new BadRequestException(couponResult.message ?? 'Invalid coupon');
+      }
+      couponDiscount = new Prisma.Decimal(couponResult.discountAmount!);
+      couponCode = couponResult.code ?? null;
+    }
+
+    const lineDiscount = new Prisma.Decimal(calculation.summary.discount);
+    const totalDiscount = lineDiscount.add(couponDiscount);
+    const total = merchandiseTotal.sub(couponDiscount);
+
     return {
       valid: true,
       items: toCheckoutItems(calculation.lines),
-      summary: calculation.summary,
+      summary: {
+        ...calculation.summary,
+        discount: toMoneyString(totalDiscount),
+        couponDiscount: toMoneyString(couponDiscount),
+        couponCode,
+        total: toMoneyString(total),
+      },
       issues: [],
     };
   }

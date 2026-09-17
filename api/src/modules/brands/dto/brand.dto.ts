@@ -1,12 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsInt,
   IsOptional,
   IsString,
   IsUrl,
   Matches,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -34,6 +36,19 @@ export class CreateBrandDto {
   @IsUrl({ require_protocol: true })
   @MaxLength(500)
   logo?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  description?: string;
+
+  @ApiPropertyOptional({ default: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
 
   @ApiPropertyOptional({ default: true })
   @IsOptional()
@@ -68,6 +83,19 @@ export class UpdateBrandDto {
   @MaxLength(500)
   logo?: string | null;
 
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  description?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
@@ -86,6 +114,12 @@ export class BrandResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   logo!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  description?: string | null;
+
+  @ApiProperty()
+  sortOrder?: number;
 
   @ApiProperty()
   active!: boolean;

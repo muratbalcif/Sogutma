@@ -3,13 +3,35 @@ import path from "path";
 
 const r2 = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
 
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "X-Frame-Options", value: "DENY" },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=()",
+  },
+  {
+    key: "Content-Security-Policy",
+    value: [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self' https: http://localhost:* http://127.0.0.1:*",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join("; "),
+  },
+];
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: path.join(__dirname, ".."),
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "**" },
-      { protocol: "http", hostname: "localhost" },
       ...(r2
         ? [
             {
@@ -18,7 +40,13 @@ const nextConfig: NextConfig = {
             },
           ]
         : []),
+      { protocol: "http", hostname: "localhost" },
+      { protocol: "https", hostname: "**.r2.dev" },
+      { protocol: "https", hostname: "**.cloudflarestorage.com" },
     ],
+  },
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
   },
 };
 

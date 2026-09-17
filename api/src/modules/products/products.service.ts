@@ -9,9 +9,11 @@ import {
   PaginatedResponseDto,
   buildPaginatedResponse,
 } from '../../common/dto/pagination.dto';
+import { AuditService } from '../audit/audit.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { PriceService } from '../pricing/pricing.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { R2StorageService } from '../storage/r2-storage.service';
 import {
   AdminProductQueryDto,
   ProductSearchQueryDto,
@@ -20,9 +22,16 @@ import {
 } from './dto/product-query.dto';
 import {
   ProductDetailDto,
+  ProductImageResponseDto,
   ProductListItemDto,
 } from './dto/product-response.dto';
-import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
+import {
+  BulkProductStatusDto,
+  CreateProductDto,
+  RegisterProductImageDto,
+  ReorderImagesDto,
+  UpdateProductDto,
+} from './dto/product.dto';
 
 const productListInclude = {
   brand: true,
@@ -58,6 +67,8 @@ export class ProductsService {
     private readonly prisma: PrismaService,
     private readonly inventoryService: InventoryService,
     private readonly priceService: PriceService,
+    private readonly storage: R2StorageService,
+    private readonly audit: AuditService,
   ) {}
 
   toListItem(
@@ -77,6 +88,11 @@ export class ProductsService {
       description: product.description,
       vatRate: product.vatRate.toFixed(2),
       active: product.active,
+      isFeatured: product.isFeatured,
+      metaTitle: product.metaTitle,
+      metaDescription: product.metaDescription,
+      createdAt: product.createdAt.toISOString(),
+      updatedAt: product.updatedAt.toISOString(),
       brand: {
         id: product.brand.id,
         name: product.brand.name,
@@ -89,13 +105,7 @@ export class ProductsService {
         name: product.category.name,
         slug: product.category.slug,
       },
-      images: product.images.map((image) => ({
-        id: image.id,
-        url: image.url,
-        alt: image.alt,
-        sortOrder: image.sortOrder,
-        isPrimary: image.isPrimary,
-      })),
+      images: product.images.map((image) => this.toImageResponse(image)),
       price,
       compareAtPrice: extras?.compareAtPrice ?? null,
       stock: this.inventoryService.toPublicStock(product.inventory),
@@ -128,6 +138,24 @@ export class ProductsService {
     };
   }
 
+  private toImageResponse(image: {
+    id: string;
+    url: string;
+    objectKey: string | null;
+    alt: string | null;
+    sortOrder: number;
+    isPrimary: boolean;
+  }): ProductImageResponseDto {
+    return {
+      id: image.id,
+      url: image.url,
+      objectKey: image.objectKey,
+      alt: image.alt,
+      sortOrder: image.sortOrder,
+      isPrimary: image.isPrimary,
+    };
+  }
+
   async findPublic(
     query: PublicProductQueryDto,
     viewer: ProductViewerContext = {},
@@ -145,16 +173,48 @@ export class ProductsService {
     limit = 8,
     viewer: ProductViewerContext = {},
   ): Promise<ProductListItemDto[]> {
-    const result = await this.findMany(
-      {
-        page: 1,
-        limit,
-        active: true,
-        sort: ProductSort.RECOMMENDED,
+    const products = await this.prisma.product.findMany({
+      where: { active: true, isFeatured: true },
+      include: productListInclude,
+      orderBy: [{ featuredSortOrder: 'asc' }, { updatedAt: 'desc' }],
+      take: limit,
+    });
+    return this.enrichList(products, viewer);
+  }
+
+  async setFeatured(
+    productId: string,
+    input: { isFeatured: boolean; featuredSortOrder?: number },
+    adminUserId?: string,
+  ): Promise<ProductDetailDto> {
+    const existing = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Product not found');
+    }
+    const product = await this.prisma.product.update({
+      where: { id: productId },
+      data: {
+        isFeatured: input.isFeatured,
+        featuredSortOrder:
+          input.featuredSortOrder ?? existing.featuredSortOrder,
       },
-      viewer,
-    );
-    return result.items;
+      include: productDetailInclude,
+    });
+    if (adminUserId) {
+      await this.audit.log({
+        adminUserId,
+        action: 'FEATURED_PRODUCT_UPDATED',
+        entityType: 'Product',
+        entityId: productId,
+        metadata: {
+          isFeatured: input.isFeatured,
+          featuredSortOrder: product.featuredSortOrder,
+        },
+      });
+    }
+    return this.toDetail(product);
   }
 
   async findBestSelling(
@@ -289,7 +349,10 @@ export class ProductsService {
     return this.toDetail(product, { price });
   }
 
-  async create(dto: CreateProductDto): Promise<ProductDetailDto> {
+  async create(
+    dto: CreateProductDto,
+    adminUserId?: string,
+  ): Promise<ProductDetailDto> {
     await this.ensureUniqueFields(dto.sku, dto.slug, dto.barcode);
     await this.ensureBrandAndCategory(dto.brandId, dto.categoryId);
     this.ensureSinglePrimaryImage(dto.images);
@@ -302,6 +365,8 @@ export class ProductsService {
           name: dto.name,
           slug: dto.slug,
           description: dto.description,
+          metaTitle: dto.metaTitle,
+          metaDescription: dto.metaDescription,
           brandId: dto.brandId,
           categoryId: dto.categoryId,
           vatRate: new Prisma.Decimal(dto.vatRate),
@@ -310,6 +375,7 @@ export class ProductsService {
             ? {
                 create: dto.images.map((image) => ({
                   url: image.url,
+                  objectKey: image.objectKey,
                   alt: image.alt,
                   sortOrder: image.sortOrder ?? 0,
                   isPrimary: image.isPrimary ?? false,
@@ -352,10 +418,24 @@ export class ProductsService {
       });
     });
 
+    if (adminUserId) {
+      await this.audit.log({
+        adminUserId,
+        action: 'PRODUCT_CREATED',
+        entityType: 'Product',
+        entityId: product.id,
+        metadata: { sku: product.sku },
+      });
+    }
+
     return this.toDetail(product);
   }
 
-  async update(id: string, dto: UpdateProductDto): Promise<ProductDetailDto> {
+  async update(
+    id: string,
+    dto: UpdateProductDto,
+    adminUserId?: string,
+  ): Promise<ProductDetailDto> {
     const existing = await this.prisma.product.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Product not found');
@@ -400,6 +480,8 @@ export class ProductsService {
           name: dto.name,
           slug: dto.slug,
           description: dto.description,
+          metaTitle: dto.metaTitle,
+          metaDescription: dto.metaDescription,
           brandId: dto.brandId,
           categoryId: dto.categoryId,
           vatRate:
@@ -411,6 +493,7 @@ export class ProductsService {
             ? {
                 create: dto.images.map((image) => ({
                   url: image.url,
+                  objectKey: image.objectKey,
                   alt: image.alt,
                   sortOrder: image.sortOrder ?? 0,
                   isPrimary: image.isPrimary ?? false,
@@ -441,22 +524,235 @@ export class ProductsService {
       });
     });
 
+    if (adminUserId) {
+      const action =
+        dto.active === undefined
+          ? 'PRODUCT_UPDATED'
+          : dto.active
+            ? 'PRODUCT_ACTIVATED'
+            : 'PRODUCT_DEACTIVATED';
+      await this.audit.log({
+        adminUserId,
+        action: dto.active === undefined ? 'PRODUCT_UPDATED' : action,
+        entityType: 'Product',
+        entityId: id,
+        metadata: { sku: product.sku, fields: Object.keys(dto) },
+      });
+    }
+
     return this.toDetail(product);
   }
 
-  async softDelete(id: string): Promise<ProductDetailDto> {
+  async softDelete(
+    id: string,
+    adminUserId?: string,
+  ): Promise<ProductDetailDto> {
     const existing = await this.prisma.product.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Product not found');
     }
 
+    const orderItemCount = await this.prisma.orderItem.count({
+      where: { productId: id },
+    });
+
+    // Never hard-delete; preserve order history snapshots via soft deactivate.
     const product = await this.prisma.product.update({
       where: { id },
       data: { active: false },
       include: productDetailInclude,
     });
-
+    if (adminUserId) {
+      await this.audit.log({
+        adminUserId,
+        action: 'PRODUCT_DEACTIVATED',
+        entityType: 'Product',
+        entityId: id,
+        metadata: {
+          sku: product.sku,
+          reason: orderItemCount > 0 ? 'has_order_history' : 'admin_delete',
+        },
+      });
+    }
     return this.toDetail(product);
+  }
+
+  async bulkSetActive(
+    dto: BulkProductStatusDto,
+    adminUserId: string,
+  ): Promise<{ updated: number }> {
+    if (dto.productIds.length === 0) {
+      throw new BadRequestException('productIds required');
+    }
+    if (dto.productIds.length > 500) {
+      throw new BadRequestException('Max 500 products per bulk status update');
+    }
+    const result = await this.prisma.product.updateMany({
+      where: { id: { in: dto.productIds } },
+      data: { active: dto.active },
+    });
+    await this.audit.log({
+      adminUserId,
+      action: dto.active ? 'PRODUCT_ACTIVATED' : 'PRODUCT_DEACTIVATED',
+      entityType: 'Product',
+      entityId: null,
+      metadata: {
+        productIds: dto.productIds,
+        updated: result.count,
+        active: dto.active,
+      },
+    });
+    return { updated: result.count };
+  }
+
+  async registerImage(
+    productId: string,
+    dto: RegisterProductImageDto,
+    adminUserId: string,
+  ): Promise<ProductImageResponseDto> {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    const image = await this.prisma.$transaction(async (tx) => {
+      if (dto.isPrimary) {
+        await tx.productImage.updateMany({
+          where: { productId },
+          data: { isPrimary: false },
+        });
+      }
+      const count = await tx.productImage.count({ where: { productId } });
+      return tx.productImage.create({
+        data: {
+          productId,
+          url: dto.url,
+          objectKey: dto.objectKey,
+          alt: dto.alt,
+          sortOrder: count,
+          isPrimary: dto.isPrimary ?? count === 0,
+        },
+      });
+    });
+
+    await this.audit.log({
+      adminUserId,
+      action: 'IMAGE_UPLOADED',
+      entityType: 'ProductImage',
+      entityId: image.id,
+      metadata: { productId, objectKey: dto.objectKey },
+    });
+
+    return this.toImageResponse(image);
+  }
+
+  async deleteImage(
+    productId: string,
+    imageId: string,
+    adminUserId: string,
+  ): Promise<{ deleted: true }> {
+    const image = await this.prisma.productImage.findFirst({
+      where: { id: imageId, productId },
+    });
+    if (!image) {
+      throw new NotFoundException('Image not found');
+    }
+
+    await this.prisma.productImage.delete({ where: { id: imageId } });
+
+    if (image.objectKey) {
+      try {
+        await this.storage.deleteObject(image.objectKey);
+      } catch {
+        // R2 failure after DB delete — orphan cleanup via objectKey index later
+      }
+    }
+
+    if (image.isPrimary) {
+      const next = await this.prisma.productImage.findFirst({
+        where: { productId },
+        orderBy: { sortOrder: 'asc' },
+      });
+      if (next) {
+        await this.prisma.productImage.update({
+          where: { id: next.id },
+          data: { isPrimary: true },
+        });
+      }
+    }
+
+    await this.audit.log({
+      adminUserId,
+      action: 'IMAGE_DELETED',
+      entityType: 'ProductImage',
+      entityId: imageId,
+      metadata: { productId, objectKey: image.objectKey },
+    });
+
+    return { deleted: true };
+  }
+
+  async reorderImages(
+    productId: string,
+    dto: ReorderImagesDto,
+  ): Promise<ProductImageResponseDto[]> {
+    const images = await this.prisma.productImage.findMany({
+      where: { productId },
+    });
+    if (images.length !== dto.imageIds.length) {
+      throw new BadRequestException('imageIds must include all product images');
+    }
+    const idSet = new Set(images.map((i) => i.id));
+    for (const id of dto.imageIds) {
+      if (!idSet.has(id)) {
+        throw new BadRequestException(`Unknown image id: ${id}`);
+      }
+    }
+
+    await this.prisma.$transaction(
+      dto.imageIds.map((id, index) =>
+        this.prisma.productImage.update({
+          where: { id },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+
+    const updated = await this.prisma.productImage.findMany({
+      where: { productId },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return updated.map((img) => this.toImageResponse(img));
+  }
+
+  async setPrimaryImage(
+    productId: string,
+    imageId: string,
+  ): Promise<ProductImageResponseDto> {
+    const image = await this.prisma.productImage.findFirst({
+      where: { id: imageId, productId },
+    });
+    if (!image) {
+      throw new NotFoundException('Image not found');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.productImage.updateMany({
+        where: { productId },
+        data: { isPrimary: false },
+      }),
+      this.prisma.productImage.update({
+        where: { id: imageId },
+        data: { isPrimary: true },
+      }),
+    ]);
+
+    const updated = await this.prisma.productImage.findUniqueOrThrow({
+      where: { id: imageId },
+    });
+    return this.toImageResponse(updated);
   }
 
   private async findMany(
@@ -484,6 +780,8 @@ export class ProductsService {
         { sku: { contains: query.search, mode: 'insensitive' } },
         { barcode: { contains: query.search, mode: 'insensitive' } },
         { description: { contains: query.search, mode: 'insensitive' } },
+        { brand: { name: { contains: query.search, mode: 'insensitive' } } },
+        { category: { name: { contains: query.search, mode: 'insensitive' } } },
       ];
     }
 

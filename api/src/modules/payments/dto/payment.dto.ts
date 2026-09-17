@@ -300,6 +300,18 @@ export class CurrentAccountResponseDto {
 
   @ApiProperty()
   currency!: string;
+
+  @ApiPropertyOptional()
+  overdueAmount?: string;
+
+  @ApiPropertyOptional()
+  creditLimit?: string | null;
+
+  @ApiPropertyOptional()
+  allowCredit?: boolean;
+
+  @ApiPropertyOptional()
+  paymentTermDays?: number | null;
 }
 
 export class AdminPaymentListQueryDto {

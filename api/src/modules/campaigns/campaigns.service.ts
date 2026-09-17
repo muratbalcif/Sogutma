@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { CampaignType, Prisma } from '@prisma/client';
 import { toMoneyString } from '../../common/utils/money.util';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AddCampaignProductDto,
@@ -22,7 +23,10 @@ import {
 
 @Injectable()
 export class CampaignsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async listPublic(): Promise<CampaignResponseDto[]> {
     const now = new Date();
@@ -53,10 +57,36 @@ export class CampaignsService {
     return this.toCampaignResponse(campaign);
   }
 
+  /**
+   * Landing page: returns campaign even if expired (client shows ended state).
+   * Eligibility for pricing still uses active window only via resolveCampaignPrice.
+   */
+  async getLandingBySlug(
+    slug: string,
+  ): Promise<
+    CampaignResponseDto & { status: 'ACTIVE' | 'EXPIRED' | 'INACTIVE' }
+  > {
+    const campaign = await this.prisma.campaign.findUnique({ where: { slug } });
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+    const now = new Date();
+    let status: 'ACTIVE' | 'EXPIRED' | 'INACTIVE' = 'INACTIVE';
+    if (campaign.active && campaign.startsAt <= now && campaign.endsAt >= now) {
+      status = 'ACTIVE';
+    } else if (campaign.endsAt < now) {
+      status = 'EXPIRED';
+    }
+    return { ...this.toCampaignResponse(campaign), status };
+  }
+
   async listPublicProducts(
     slug: string,
   ): Promise<CampaignProductResponseDto[]> {
-    const campaign = await this.getPublicBySlug(slug);
+    const campaign = await this.prisma.campaign.findUnique({ where: { slug } });
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
     const products = await this.prisma.campaignProduct.findMany({
       where: { campaignId: campaign.id },
       include: {
@@ -84,7 +114,26 @@ export class CampaignsService {
     return this.toCampaignResponse(campaign);
   }
 
-  async create(dto: CreateCampaignDto): Promise<CampaignResponseDto> {
+  async listAdminProducts(
+    campaignId: string,
+  ): Promise<CampaignProductResponseDto[]> {
+    await this.getAdminById(campaignId);
+    const products = await this.prisma.campaignProduct.findMany({
+      where: { campaignId },
+      include: {
+        product: {
+          select: { id: true, name: true, slug: true, sku: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return products.map((item) => this.toProductResponse(item));
+  }
+
+  async create(
+    dto: CreateCampaignDto,
+    adminUserId?: string,
+  ): Promise<CampaignResponseDto> {
     this.assertDateRange(dto.startsAt, dto.endsAt);
     try {
       const campaign = await this.prisma.campaign.create({
@@ -99,6 +148,15 @@ export class CampaignsService {
           endsAt: new Date(dto.endsAt),
         },
       });
+      if (adminUserId) {
+        await this.audit.log({
+          adminUserId,
+          action: 'CAMPAIGN_CREATED',
+          entityType: 'Campaign',
+          entityId: campaign.id,
+          metadata: { slug: campaign.slug },
+        });
+      }
       return this.toCampaignResponse(campaign);
     } catch (error) {
       if (
@@ -114,6 +172,7 @@ export class CampaignsService {
   async update(
     id: string,
     dto: UpdateCampaignDto,
+    adminUserId?: string,
   ): Promise<CampaignResponseDto> {
     const existing = await this.prisma.campaign.findUnique({ where: { id } });
     if (!existing) {
@@ -137,6 +196,21 @@ export class CampaignsService {
           endsAt: dto.endsAt ? new Date(dto.endsAt) : undefined,
         },
       });
+      if (adminUserId) {
+        const action =
+          dto.active === undefined
+            ? 'CAMPAIGN_UPDATED'
+            : dto.active
+              ? 'CAMPAIGN_ACTIVATED'
+              : 'CAMPAIGN_DEACTIVATED';
+        await this.audit.log({
+          adminUserId,
+          action,
+          entityType: 'Campaign',
+          entityId: id,
+          metadata: { slug: campaign.slug },
+        });
+      }
       return this.toCampaignResponse(campaign);
     } catch (error) {
       if (
@@ -149,7 +223,7 @@ export class CampaignsService {
     }
   }
 
-  async remove(id: string): Promise<{ success: true }> {
+  async remove(id: string, adminUserId?: string): Promise<{ success: true }> {
     const existing = await this.prisma.campaign.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Campaign not found');
@@ -158,6 +232,14 @@ export class CampaignsService {
       where: { id },
       data: { active: false },
     });
+    if (adminUserId) {
+      await this.audit.log({
+        adminUserId,
+        action: 'CAMPAIGN_DEACTIVATED',
+        entityType: 'Campaign',
+        entityId: id,
+      });
+    }
     return { success: true };
   }
 

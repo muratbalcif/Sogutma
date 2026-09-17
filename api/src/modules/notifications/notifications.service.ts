@@ -3,17 +3,23 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   DevicePlatform,
+  NotificationEntityType,
   NotificationType,
   OrderStatus,
+  OutboxStatus,
   Prisma,
 } from '@prisma/client';
 import {
   PaginatedResponseDto,
   buildPaginatedResponse,
 } from '../../common/dto/pagination.dto';
+import { EnvironmentVariables } from '../../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   DeviceTokenResponseDto,
@@ -23,14 +29,45 @@ import {
 } from './dto/notification.dto';
 import { FcmPushProvider } from './providers/fcm-push.provider';
 
+const CRITICAL_TYPES = new Set<NotificationType>([
+  NotificationType.ORDER_CANCELLED,
+  NotificationType.ORDER_CONFIRMED,
+  NotificationType.ORDER_SHIPPED,
+  NotificationType.ORDER_DELIVERED,
+  NotificationType.PAYMENT_APPROVED,
+  NotificationType.PAYMENT_REJECTED,
+  NotificationType.PAYMENT_PAID,
+  NotificationType.BANK_TRANSFER_APPROVED,
+  NotificationType.BANK_TRANSFER_REJECTED,
+]);
+
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationsService.name);
+  private timer: NodeJS.Timeout | null = null;
+  private readonly maxAttempts: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly pushProvider: FcmPushProvider,
-  ) {}
+    private readonly config: ConfigService<EnvironmentVariables, true>,
+  ) {
+    this.maxAttempts =
+      this.config.get('NOTIFICATION_OUTBOX_MAX_ATTEMPTS', { infer: true }) ?? 4;
+  }
+
+  onModuleInit(): void {
+    this.timer = setInterval(() => {
+      void this.processPendingOutbox(50);
+    }, 30 * 1000);
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
 
   async registerDevice(
     userId: string,
@@ -40,7 +77,6 @@ export class NotificationsService {
       where: { token: dto.token },
     });
     if (existing && existing.userId !== userId) {
-      // Re-associate token to the authenticated user (device ownership change)
       const updated = await this.prisma.deviceToken.update({
         where: { token: dto.token },
         data: {
@@ -102,28 +138,67 @@ export class NotificationsService {
     title: string;
     body: string;
     data?: Record<string, unknown>;
+    entityType?: NotificationEntityType;
+    entityId?: string;
+    eventKey?: string;
   }): Promise<NotificationResponseDto> {
-    // Persistence is always the source of truth; preferences only gate push.
-    const notification = await this.prisma.notification.create({
-      data: {
-        userId: input.userId,
-        type: input.type,
-        title: input.title,
-        body: input.body,
-        data: (input.data ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-      },
-    });
-
-    const prefs = await this.ensurePreferences(input.userId);
-    if (this.isAllowedByPreference(prefs, input.type)) {
-      await this.deliverPush(input.userId, {
-        title: input.title,
-        body: input.body,
-        data: this.toStringData(input.data),
+    if (input.eventKey) {
+      const existing = await this.prisma.notification.findUnique({
+        where: { eventKey: input.eventKey },
       });
+      if (existing) {
+        return this.toNotificationResponse(existing);
+      }
     }
 
-    return this.toNotificationResponse(notification);
+    try {
+      const notification = await this.prisma.notification.create({
+        data: {
+          userId: input.userId,
+          type: input.type,
+          title: input.title,
+          body: input.body,
+          data: (input.data ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          entityType: input.entityType,
+          entityId: input.entityId,
+          eventKey: input.eventKey,
+        },
+      });
+
+      // Push is best-effort and never part of order transactions.
+      const prefs = await this.ensurePreferences(input.userId);
+      if (
+        CRITICAL_TYPES.has(input.type) ||
+        this.isAllowedByPreference(prefs, input.type)
+      ) {
+        await this.deliverPush(input.userId, {
+          title: input.title,
+          body: input.body,
+          data: this.toStringData({
+            ...input.data,
+            entityType: input.entityType,
+            entityId: input.entityId,
+            type: input.type,
+          }),
+        });
+      }
+
+      return this.toNotificationResponse(notification);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        input.eventKey
+      ) {
+        const existing = await this.prisma.notification.findUnique({
+          where: { eventKey: input.eventKey },
+        });
+        if (existing) {
+          return this.toNotificationResponse(existing);
+        }
+      }
+      throw error;
+    }
   }
 
   async getPreferences(userId: string) {
@@ -247,32 +322,76 @@ export class NotificationsService {
     return this.toNotificationResponse(notification);
   }
 
+  async notifyOrderCreated(
+    orderId: string,
+    userId: string,
+    orderNumber: string,
+  ): Promise<void> {
+    await this.enqueueOutbox({
+      type: NotificationType.ORDER_CREATED,
+      aggregateType: 'ORDER',
+      aggregateId: orderId,
+      payload: {
+        userId,
+        orderId,
+        orderNumber,
+        title: `Sipariş oluşturuldu — ${orderNumber}`,
+        body: `${orderNumber} siparişiniz alındı. Ödeme bekleniyor.`,
+        entityType: NotificationEntityType.ORDER,
+        entityId: orderId,
+      },
+    });
+  }
+
+  async notifyPaymentPending(
+    orderId: string,
+    userId: string,
+    orderNumber: string,
+  ): Promise<void> {
+    await this.enqueueOutbox({
+      type: NotificationType.PAYMENT_PENDING,
+      aggregateType: 'PAYMENT',
+      aggregateId: orderId,
+      payload: {
+        userId,
+        orderId,
+        orderNumber,
+        title: `Ödeme bekleniyor — ${orderNumber}`,
+        body: `${orderNumber} için havale/EFT ödemesini tamamlayın.`,
+        entityType: NotificationEntityType.PAYMENT,
+        entityId: orderId,
+      },
+    });
+  }
+
   async enqueueOrderStatus(
     orderId: string,
     userId: string,
     status: OrderStatus,
     orderNumber: string,
+    shippingMeta?: { trackingNumber?: string; trackingUrl?: string | null },
   ): Promise<void> {
     const type = this.mapOrderStatus(status);
     if (!type) {
       return;
     }
-    await this.prisma.notificationOutbox.create({
-      data: {
-        type,
-        aggregateType: 'ORDER',
-        aggregateId: orderId,
-        payload: {
-          userId,
-          orderId,
-          orderNumber,
-          status,
-          title: this.orderTitle(status, orderNumber),
-          body: this.orderBody(status, orderNumber),
-        },
+    await this.enqueueOutbox({
+      type,
+      aggregateType: 'ORDER',
+      aggregateId: orderId,
+      payload: {
+        userId,
+        orderId,
+        orderNumber,
+        status,
+        title: this.orderTitle(status, orderNumber),
+        body: this.orderBody(status, orderNumber),
+        entityType: NotificationEntityType.ORDER,
+        entityId: orderId,
+        trackingNumber: shippingMeta?.trackingNumber,
+        trackingUrl: shippingMeta?.trackingUrl,
       },
     });
-    await this.processPendingOutbox(20);
   }
 
   async enqueuePaymentEvent(input: {
@@ -282,38 +401,45 @@ export class NotificationsService {
       | 'BANK_TRANSFER_APPROVED'
       | 'BANK_TRANSFER_REJECTED'
       | 'PAYMENT_PAID'
-      | 'PAYMENT_FAILED';
+      | 'PAYMENT_FAILED'
+      | 'PAYMENT_APPROVED'
+      | 'PAYMENT_REJECTED'
+      | 'PAYMENT_PENDING';
     title: string;
     body: string;
     data?: Record<string, unknown>;
   }): Promise<void> {
-    await this.prisma.notificationOutbox.create({
-      data: {
-        type: input.type,
-        aggregateType: 'PAYMENT',
-        aggregateId:
-          (typeof input.data?.transferId === 'string'
-            ? input.data.transferId
-            : undefined) ??
-          (typeof input.data?.orderId === 'string'
-            ? input.data.orderId
-            : undefined) ??
-          input.userId,
-        payload: {
-          userId: input.userId,
-          title: input.title,
-          body: input.body,
-          ...input.data,
-        },
+    const aggregateId =
+      (typeof input.data?.transferId === 'string'
+        ? input.data.transferId
+        : undefined) ??
+      (typeof input.data?.paymentId === 'string'
+        ? input.data.paymentId
+        : undefined) ??
+      (typeof input.data?.orderId === 'string'
+        ? input.data.orderId
+        : undefined) ??
+      input.userId;
+
+    await this.enqueueOutbox({
+      type: input.type,
+      aggregateType: 'PAYMENT',
+      aggregateId,
+      payload: {
+        userId: input.userId,
+        title: input.title,
+        body: input.body,
+        entityType: NotificationEntityType.PAYMENT,
+        entityId: aggregateId,
+        ...input.data,
       },
     });
-    await this.processPendingOutbox(20);
   }
 
   async notifyProductBackInStock(productId: string): Promise<void> {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, slug: true },
     });
     if (!product) {
       return;
@@ -329,12 +455,20 @@ export class NotificationsService {
 
     const now = new Date();
     for (const alert of alerts) {
-      await this.createNotification({
-        userId: alert.userId,
-        type: NotificationType.PRODUCT_BACK_IN_STOCK,
-        title: 'Ürün stokta',
-        body: `${product.name} tekrar stokta`,
-        data: { productId, alertId: alert.id },
+      await this.enqueueOutbox({
+        type: NotificationType.STOCK_AVAILABLE,
+        aggregateType: 'PRODUCT',
+        aggregateId: `${productId}:${alert.userId}`,
+        payload: {
+          userId: alert.userId,
+          title: 'Ürün stokta',
+          body: `${product.name} tekrar stokta`,
+          entityType: NotificationEntityType.PRODUCT,
+          entityId: productId,
+          productId,
+          productSlug: product.slug,
+          alertId: alert.id,
+        },
       });
       await this.prisma.productAlert.update({
         where: { id: alert.id },
@@ -343,15 +477,65 @@ export class NotificationsService {
     }
   }
 
+  private async enqueueOutbox(input: {
+    type: string;
+    aggregateType: string;
+    aggregateId: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    const eventKey = `${input.type}:${input.aggregateType}:${input.aggregateId}`;
+    try {
+      await this.prisma.notificationOutbox.create({
+        data: {
+          type: input.type,
+          aggregateType: input.aggregateType,
+          aggregateId: input.aggregateId,
+          eventKey,
+          payload: input.payload as Prisma.InputJsonValue,
+          status: OutboxStatus.PENDING,
+          availableAt: new Date(),
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        this.logger.debug(`Outbox idempotent skip: ${eventKey}`);
+        return;
+      }
+      throw error;
+    }
+    await this.processPendingOutbox(20);
+  }
+
   async processPendingOutbox(limit = 50): Promise<number> {
+    const now = new Date();
     const pending = await this.prisma.notificationOutbox.findMany({
-      where: { processedAt: null },
+      where: {
+        status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED] },
+        processedAt: null,
+        availableAt: { lte: now },
+        attempts: { lt: this.maxAttempts },
+      },
       orderBy: { createdAt: 'asc' },
       take: limit,
     });
 
     let processed = 0;
     for (const item of pending) {
+      const claimed = await this.prisma.notificationOutbox.updateMany({
+        where: {
+          id: item.id,
+          status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED] },
+          processedAt: null,
+        },
+        data: { status: OutboxStatus.PROCESSING },
+      });
+      if (claimed.count === 0) {
+        continue;
+      }
+
       try {
         const payload = item.payload as {
           userId?: string;
@@ -360,26 +544,35 @@ export class NotificationsService {
           orderId?: string;
           orderNumber?: string;
           campaignId?: string;
+          entityType?: NotificationEntityType;
+          entityId?: string;
+          productId?: string;
+          productSlug?: string;
+          trackingUrl?: string;
+          trackingNumber?: string;
         };
 
-        if (
-          (item.type.startsWith('ORDER_') ||
-            item.type.startsWith('PAYMENT_') ||
-            item.type.startsWith('BANK_TRANSFER_')) &&
-          payload.userId
-        ) {
+        if (payload.userId) {
           await this.createNotification({
             userId: payload.userId,
             type: item.type as NotificationType,
             title: payload.title ?? 'Bildirim',
             body: payload.body ?? '',
+            entityType: payload.entityType,
+            entityId: payload.entityId ?? item.aggregateId,
+            eventKey: item.eventKey ?? undefined,
             data: {
               orderId: payload.orderId,
               orderNumber: payload.orderNumber,
+              productId: payload.productId,
+              productSlug: payload.productSlug,
+              trackingUrl: payload.trackingUrl,
+              trackingNumber: payload.trackingNumber,
+              entityType: payload.entityType ?? item.aggregateType,
+              entityId: payload.entityId ?? item.aggregateId,
             },
           });
         } else if (item.type === 'CAMPAIGN_ANNOUNCE' && payload.campaignId) {
-          // Controlled foundation: do not fan-out to all users here.
           this.logger.log(
             `Campaign announce outbox processed for ${payload.campaignId} (no mass send)`,
           );
@@ -387,20 +580,32 @@ export class NotificationsService {
 
         await this.prisma.notificationOutbox.update({
           where: { id: item.id },
-          data: { processedAt: new Date(), attempts: { increment: 1 } },
+          data: {
+            status: OutboxStatus.SENT,
+            processedAt: new Date(),
+            attempts: { increment: 1 },
+            lastError: null,
+          },
         });
         processed += 1;
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown outbox error';
+        const attempts = item.attempts + 1;
+        const failed = attempts >= this.maxAttempts;
+        const backoffMs = Math.min(60_000 * attempts, 15 * 60_000);
         await this.prisma.notificationOutbox.update({
           where: { id: item.id },
           data: {
-            attempts: { increment: 1 },
+            status: failed ? OutboxStatus.FAILED : OutboxStatus.PENDING,
+            attempts,
             lastError: message.slice(0, 500),
+            availableAt: failed ? now : new Date(Date.now() + backoffMs),
           },
         });
-        this.logger.warn(`Outbox ${item.id} failed: ${message}`);
+        this.logger.warn(
+          `Outbox ${item.id} failed (attempt ${attempts}): ${message}`,
+        );
       }
     }
     return processed;
@@ -450,11 +655,18 @@ export class NotificationsService {
     },
     type: NotificationType,
   ): boolean {
-    if (type.startsWith('ORDER_')) return prefs.orderNotifications;
-    if (type.startsWith('PAYMENT_') || type.startsWith('BANK_TRANSFER_'))
+    if (type.startsWith('ORDER_') || type === NotificationType.ORDER_RETURNED) {
+      return prefs.orderNotifications;
+    }
+    if (type.startsWith('PAYMENT_') || type.startsWith('BANK_TRANSFER_')) {
       return prefs.paymentNotifications;
-    if (type === NotificationType.PRODUCT_BACK_IN_STOCK)
+    }
+    if (
+      type === NotificationType.PRODUCT_BACK_IN_STOCK ||
+      type === NotificationType.STOCK_AVAILABLE
+    ) {
       return prefs.stockAlerts;
+    }
     if (type === NotificationType.CAMPAIGN) return prefs.campaignNotifications;
     if (type === NotificationType.SYSTEM) return prefs.systemNotifications;
     return true;
@@ -474,13 +686,23 @@ export class NotificationsService {
         return NotificationType.ORDER_DELIVERED;
       case OrderStatus.CANCELLED:
         return NotificationType.ORDER_CANCELLED;
+      case OrderStatus.RETURNED:
+        return NotificationType.ORDER_RETURNED;
       default:
         return null;
     }
   }
 
   private orderTitle(status: OrderStatus, orderNumber: string): string {
-    return `Sipariş ${orderNumber}: ${status}`;
+    const labels: Partial<Record<OrderStatus, string>> = {
+      [OrderStatus.CONFIRMED]: 'Sipariş onaylandı',
+      [OrderStatus.PREPARING]: 'Sipariş hazırlanıyor',
+      [OrderStatus.SHIPPED]: 'Sipariş kargoda',
+      [OrderStatus.DELIVERED]: 'Sipariş teslim edildi',
+      [OrderStatus.CANCELLED]: 'Sipariş iptal edildi',
+      [OrderStatus.RETURNED]: 'İade başlatıldı',
+    };
+    return `${labels[status] ?? 'Sipariş güncellendi'} — ${orderNumber}`;
   }
 
   private orderBody(status: OrderStatus, orderNumber: string): string {
@@ -516,6 +738,8 @@ export class NotificationsService {
     title: string;
     body: string;
     data: Prisma.JsonValue;
+    entityType?: NotificationEntityType | null;
+    entityId?: string | null;
     readAt: Date | null;
     createdAt: Date;
   }): NotificationResponseDto {
@@ -524,7 +748,10 @@ export class NotificationsService {
       type: notification.type,
       title: notification.title,
       body: notification.body,
+      message: notification.body,
       data: (notification.data as Record<string, unknown> | null) ?? null,
+      entityType: notification.entityType ?? null,
+      entityId: notification.entityId ?? null,
       readAt: notification.readAt,
       createdAt: notification.createdAt,
     };

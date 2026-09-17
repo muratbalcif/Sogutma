@@ -20,6 +20,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,14 +46,19 @@ import com.furkansogutma.domain.auth.AuthState
 import com.furkansogutma.domain.auth.AuthUser
 import com.furkansogutma.domain.auth.LogoutUseCase
 import com.furkansogutma.domain.cart.CartBadgeStore
+import com.furkansogutma.domain.account.SyncDeviceTokenUseCase
 import com.furkansogutma.domain.favorite.FavoriteRepository
+import com.furkansogutma.domain.notification.NotificationPreferences
+import com.furkansogutma.domain.notification.NotificationRepository
 import com.furkansogutma.domain.order.GetOrderUseCase
 import com.furkansogutma.domain.order.GetOrdersUseCase
 import com.furkansogutma.domain.order.Order
+import com.furkansogutma.domain.order.OrderRepository
 import com.furkansogutma.domain.product.Product
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -61,6 +67,9 @@ class AccountViewModel @Inject constructor(
     authRepository: AuthRepository,
     private val logoutUseCase: LogoutUseCase,
     private val badgeStore: CartBadgeStore,
+    private val syncDeviceToken: SyncDeviceTokenUseCase,
+    private val settings: AppSettingsDataStore,
+    private val notificationRepository: NotificationRepository,
 ) : ViewModel() {
     val authState = authRepository.authState.stateIn(
         viewModelScope,
@@ -68,8 +77,22 @@ class AccountViewModel @Inject constructor(
         AuthState.Loading,
     )
 
+    var unreadNotifications by mutableStateOf(0)
+        private set
+
+    init {
+        viewModelScope.launch {
+            when (val result = notificationRepository.getUnreadCount()) {
+                is Result.Success -> unreadNotifications = result.data.count
+                is Result.Error -> Unit
+            }
+        }
+    }
+
     fun logout(onDone: () -> Unit) {
         viewModelScope.launch {
+            val token = settings.fcmToken.first()
+            syncDeviceToken.unregister(token)
             logoutUseCase()
             badgeStore.clear()
             onDone()
@@ -80,6 +103,7 @@ class AccountViewModel @Inject constructor(
 @Composable
 fun AccountRoute(
     onOrders: () -> Unit,
+    onNotifications: () -> Unit,
     onFavorites: () -> Unit,
     onAddresses: () -> Unit,
     onAlerts: () -> Unit,
@@ -93,9 +117,11 @@ fun AccountRoute(
 ) {
     val auth by viewModel.authState.collectAsStateWithLifecycle()
     val user = (auth as? AuthState.Authenticated)?.user
+    val unread = viewModel.unreadNotifications
     val items = listOf(
         "Profilim" to onProfile,
         "Siparişlerim" to onOrders,
+        (if (unread > 0) "Bildirimler ($unread)" else "Bildirimler") to onNotifications,
         "Favorilerim" to onFavorites,
         "Adreslerim" to onAddresses,
         "Stok Bildirimlerim" to onAlerts,
@@ -137,10 +163,13 @@ class AccountDataViewModel @Inject constructor(
     val favoriteRepository: FavoriteRepository,
     val getOrders: GetOrdersUseCase,
     val getOrder: GetOrderUseCase,
+    private val orderRepository: OrderRepository,
+    val notificationRepository: NotificationRepository,
     val settings: AppSettingsDataStore,
     val authRepository: AuthRepository,
-) : ViewModel()
-
+) : ViewModel() {
+    suspend fun cancelOrder(id: String) = orderRepository.cancelOrder(id)
+}
 @Composable
 fun ProfileRoute(onBack: () -> Unit, vm: AccountDataViewModel = hiltViewModel()) {
     var user by remember { mutableStateOf<AuthUser?>(null) }
@@ -197,41 +226,6 @@ fun OrdersRoute(onOrderClick: (String) -> Unit, onBack: () -> Unit = {}, vm: Acc
                         Text("${order.total} ${order.currency}")
                         order.paymentStatus?.let { Text("Ödeme: $it") }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun OrderDetailRoute(orderId: String, onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewModel()) {
-    var order by remember { mutableStateOf<Order?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(orderId) {
-        when (val result = vm.getOrder(orderId)) {
-            is Result.Success -> order = result.data
-            is Result.Error -> error = result.error.message
-        }
-    }
-    Column(Modifier.fillMaxSize()) {
-        FurkanTopBar("Sipariş detayı", onBack = onBack)
-        when {
-            error != null -> FurkanError(error!!)
-            order == null -> FurkanLoading()
-            else -> Column(Modifier.padding(FurkanSpacing.md)) {
-                Text(order!!.orderNumber, style = MaterialTheme.typography.headlineLarge)
-                Text(order!!.status)
-                order!!.paymentStatus?.let { Text("Ödeme: $it") }
-                order!!.shippingSummary?.let { Text(it) }
-                Spacer(Modifier.height(FurkanSpacing.md))
-                order!!.items.forEach {
-                    Text("${it.name} x${it.quantity}")
-                    Text("${it.unitPrice} → ${it.total}")
-                }
-                Spacer(Modifier.height(FurkanSpacing.md))
-                Text("Sipariş geçmişi", style = MaterialTheme.typography.titleLarge)
-                order!!.statusHistory.forEach {
-                    Text("${it.createdAt}: ${it.status}")
                 }
             }
         }
@@ -387,7 +381,10 @@ fun CommentsRoute(onBack: () -> Unit = {}) {
 fun CurrentAccountRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewModel()) {
     var current by remember { mutableStateOf<CurrentAccount?>(null) }
     var txs by remember { mutableStateOf<List<AccountTransaction>>(emptyList()) }
-    LaunchedEffect(Unit) {
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun load() {
         when (val result = vm.accountRepository.getCurrentAccount()) {
             is Result.Success -> current = result.data
             is Result.Error -> Unit
@@ -397,9 +394,23 @@ fun CurrentAccountRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hilt
             is Result.Error -> Unit
         }
     }
+
+    LaunchedEffect(Unit) { load() }
+
     Column(Modifier.fillMaxSize()) {
         FurkanTopBar("Cari hesabım", onBack = onBack)
         Column(Modifier.padding(FurkanSpacing.md)) {
+            FurkanButton(
+                if (refreshing) "Yenileniyor…" else "Yenile",
+                Modifier.fillMaxWidth(),
+            ) {
+                scope.launch {
+                    refreshing = true
+                    load()
+                    refreshing = false
+                }
+            }
+            Spacer(Modifier.height(FurkanSpacing.md))
             current?.let {
                 Text("Güncel bakiye: ${it.balance} ${it.currency}", style = MaterialTheme.typography.headlineLarge)
                 Text("Borç: ${it.debit.orEmpty()}")
@@ -475,7 +486,14 @@ fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: Acc
 @Composable
 fun SettingsRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewModel()) {
     val theme by vm.settings.themeMode.collectAsStateWithLifecycle(initialValue = "system")
+    var prefs by remember { mutableStateOf<NotificationPreferences?>(null) }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        when (val result = vm.notificationRepository.getPreferences()) {
+            is Result.Success -> prefs = result.data
+            is Result.Error -> Unit
+        }
+    }
     Column(Modifier.fillMaxSize()) {
         FurkanTopBar("Ayarlar", onBack = onBack)
         Column(Modifier.padding(FurkanSpacing.md)) {
@@ -490,7 +508,48 @@ fun SettingsRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewMo
                 )
             }
             Spacer(Modifier.height(FurkanSpacing.lg))
-            Text("Bildirim tercihleri backend preference API'si ile senkronize edilebilir.")
+            Text("Bildirim tercihleri", style = MaterialTheme.typography.titleLarge)
+            val current = prefs
+            if (current == null) {
+                Text("Yükleniyor…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                preferenceToggle("Sipariş bildirimleri", current.orderNotifications) {
+                    val updated = current.copy(orderNotifications = it)
+                    prefs = updated
+                    scope.launch { vm.notificationRepository.updatePreferences(updated) }
+                }
+                preferenceToggle("Ödeme bildirimleri", current.paymentNotifications) {
+                    val updated = current.copy(paymentNotifications = it)
+                    prefs = updated
+                    scope.launch { vm.notificationRepository.updatePreferences(updated) }
+                }
+                preferenceToggle("Stok uyarıları", current.stockAlerts) {
+                    val updated = current.copy(stockAlerts = it)
+                    prefs = updated
+                    scope.launch { vm.notificationRepository.updatePreferences(updated) }
+                }
+                preferenceToggle("Kampanya bildirimleri", current.campaignNotifications) {
+                    val updated = current.copy(campaignNotifications = it)
+                    prefs = updated
+                    scope.launch { vm.notificationRepository.updatePreferences(updated) }
+                }
+                preferenceToggle("Sistem bildirimleri", current.systemNotifications) {
+                    val updated = current.copy(systemNotifications = it)
+                    prefs = updated
+                    scope.launch { vm.notificationRepository.updatePreferences(updated) }
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun preferenceToggle(label: String, enabled: Boolean, onToggle: (Boolean) -> Unit) {
+    Text(
+        if (enabled) "✓ $label" else label,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle(!enabled) }
+            .padding(vertical = FurkanSpacing.sm),
+    )
 }

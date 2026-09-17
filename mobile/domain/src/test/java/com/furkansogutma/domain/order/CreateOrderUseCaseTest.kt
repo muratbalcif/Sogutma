@@ -27,6 +27,8 @@ class CreateOrderUseCaseTest {
             items = emptyList(),
             statusHistory = emptyList(),
             shippingSummary = null,
+            shipping = null,
+            canCancel = true,
         )
         coEvery { repo.createOrder(any()) } returns Result.Success(order)
         val result = CreateOrderUseCase(repo)(

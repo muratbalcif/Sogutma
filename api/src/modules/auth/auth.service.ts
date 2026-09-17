@@ -102,18 +102,25 @@ export class AuthService {
 
   async refresh(refreshToken: string): Promise<AuthTokensResponseDto> {
     const payload = await this.verifyRefreshToken(refreshToken);
-    const stored = await this.tokenService.findActiveRefreshToken(refreshToken);
+    const anyStored =
+      await this.tokenService.findRefreshTokenByRaw(refreshToken);
 
-    if (!stored) {
+    if (!anyStored) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    if (stored.expiresAt.getTime() <= Date.now()) {
+    // Reuse of a rotated/revoked refresh token → revoke all sessions for user.
+    if (anyStored.revokedAt) {
+      await this.tokenService.revokeAllRefreshTokensForUser(anyStored.userId);
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (anyStored.expiresAt.getTime() <= Date.now()) {
       await this.tokenService.revokeRefreshToken(refreshToken);
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    if (stored.userId !== payload.sub) {
+    if (anyStored.userId !== payload.sub) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 

@@ -27,4 +27,31 @@ export default (): EnvironmentVariables => ({
   BANK_TRANSFER_IBAN: process.env.BANK_TRANSFER_IBAN,
   BANK_TRANSFER_ACCOUNT_NAME: process.env.BANK_TRANSFER_ACCOUNT_NAME,
   PAYMENT_EXPIRY_HOURS: parseInt(process.env.PAYMENT_EXPIRY_HOURS ?? '24', 10),
+  NOTIFICATION_OUTBOX_MAX_ATTEMPTS: parseInt(
+    process.env.NOTIFICATION_OUTBOX_MAX_ATTEMPTS ?? '4',
+    10,
+  ),
+  R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
+  R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
+  R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
+  R2_BUCKET: process.env.R2_BUCKET,
+  R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
+  R2_MAX_UPLOAD_BYTES: parseInt(
+    process.env.R2_MAX_UPLOAD_BYTES ?? String(5 * 1024 * 1024),
+    10,
+  ),
+  R2_PRESIGN_TTL_SECONDS: parseInt(
+    process.env.R2_PRESIGN_TTL_SECONDS ?? '300',
+    10,
+  ),
+  MAX_IMPORT_ROWS: parseInt(process.env.MAX_IMPORT_ROWS ?? '5000', 10),
+  IMPORT_BATCH_SIZE: parseInt(process.env.IMPORT_BATCH_SIZE ?? '100', 10),
+  THROTTLE_TTL_MS: parseInt(process.env.THROTTLE_TTL_MS ?? '60000', 10),
+  THROTTLE_LIMIT: parseInt(process.env.THROTTLE_LIMIT ?? '120', 10),
+  AUTH_THROTTLE_LIMIT: parseInt(process.env.AUTH_THROTTLE_LIMIT ?? '10', 10),
+  BACKUP_RETENTION_DAYS: parseInt(
+    process.env.BACKUP_RETENTION_DAYS ?? '14',
+    10,
+  ),
+  BUSINESS_TIMEZONE: process.env.BUSINESS_TIMEZONE ?? 'Europe/Istanbul',
 });

@@ -107,8 +107,25 @@ export class NotificationsController {
     return this.notificationsService.markAllAsRead(request.user.id);
   }
 
+  @Post('read-all')
+  @ApiOperation({ summary: 'Mark all notifications as read (POST alias)' })
+  markAllReadPost(
+    @Req() request: Request & { user: AuthenticatedUser },
+  ): Promise<{ updated: number }> {
+    return this.notificationsService.markAllAsRead(request.user.id);
+  }
+
   @Patch(':id/read')
   markRead(
+    @Req() request: Request & { user: AuthenticatedUser },
+    @Param('id') id: string,
+  ): Promise<NotificationResponseDto> {
+    return this.notificationsService.markAsRead(request.user.id, id);
+  }
+
+  @Post(':id/read')
+  @ApiOperation({ summary: 'Mark notification as read (POST alias)' })
+  markReadPost(
     @Req() request: Request & { user: AuthenticatedUser },
     @Param('id') id: string,
   ): Promise<NotificationResponseDto> {

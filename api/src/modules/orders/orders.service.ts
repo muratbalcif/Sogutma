@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Inject,
@@ -24,13 +25,18 @@ import {
 import { sumMoney } from '../../common/utils/money.util';
 import { EnvironmentVariables } from '../../config/env.validation';
 import { AddressesService } from '../addresses/addresses.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BankAccountsService } from '../payments/bank-accounts.service';
 import { EmailOutboxService } from '../payments/email-outbox.service';
+import { AccountingService } from '../payments/accounting.service';
 import { PriceService } from '../pricing/pricing.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ShipOrderDto, StartReturnDto } from '../shipping/dto/shipping.dto';
+import { ShippingService } from '../shipping/shipping.service';
 import {
+  AdminOrderListQueryDto,
   CreateOrderDto,
   OrderResponseDto,
   UpdateOrderStatusDto,
@@ -46,20 +52,36 @@ export class OrdersService {
     private readonly priceService: PriceService,
     private readonly inventoryService: InventoryService,
     private readonly addressesService: AddressesService,
-    private readonly orderStatusService: OrderStatusService,
-    private readonly config: ConfigService<EnvironmentVariables, true>,
     private readonly bankAccountsService: BankAccountsService,
     private readonly emailOutbox: EmailOutboxService,
+    private readonly config: ConfigService<EnvironmentVariables, true>,
+    private readonly shippingService: ShippingService,
+    private readonly orderStatusService: OrderStatusService,
+    private readonly couponsService: CouponsService,
+    private readonly accountingService: AccountingService,
     @Optional()
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService?: NotificationsService,
   ) {}
+
+  private toResponse(
+    order: Parameters<typeof mapOrderToResponse>[0],
+  ): OrderResponseDto {
+    return mapOrderToResponse(order, this.orderStatusService);
+  }
 
   async create(
     userId: string,
     userType: UserType,
     dto: CreateOrderDto,
   ): Promise<OrderResponseDto> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.status !== 'ACTIVE') {
+      throw new ForbiddenException(
+        'Inactive or blocked customers cannot order',
+      );
+    }
+
     const shipping = await this.addressesService.getOwned(
       userId,
       dto.shippingAddressId,
@@ -155,17 +177,62 @@ export class OrdersService {
           const subtotal = sumMoney(
             calculation.lines.map((line) => line.subtotal),
           );
-          const discountAmount = sumMoney(
+          const lineDiscount = sumMoney(
             calculation.lines.map((line) => line.discountAmount),
           );
+          const merchandiseTotal = sumMoney(
+            calculation.lines.map((line) => line.totalAmount),
+          );
+
+          let couponId: string | null = null;
+          let couponCode: string | null = null;
+          let couponDiscountAmount = new Prisma.Decimal(0);
+          if (dto.couponCode) {
+            const couponResult = await this.couponsService.validateForUser({
+              code: dto.couponCode,
+              userId,
+              orderAmount: merchandiseTotal,
+            });
+            if (!couponResult.valid || !couponResult.couponId) {
+              throw new BadRequestException(
+                couponResult.message ?? 'Invalid coupon',
+              );
+            }
+            couponId = couponResult.couponId;
+            couponCode = couponResult.code ?? null;
+            couponDiscountAmount = new Prisma.Decimal(
+              couponResult.discountAmount!,
+            );
+          }
+
+          const discountAmount = lineDiscount.add(couponDiscountAmount);
           const taxAmount = sumMoney(
             calculation.lines.map((line) => line.taxAmount),
           );
           const shippingAmount = new Prisma.Decimal(0);
-          const totalAmount = sumMoney(
-            calculation.lines.map((line) => line.totalAmount),
-          ).add(shippingAmount);
+          const totalAmount = merchandiseTotal
+            .sub(couponDiscountAmount)
+            .add(shippingAmount);
           const currency = calculation.summary.currency;
+
+          await this.accountingService.assertCreditLimitAllows(
+            userId,
+            totalAmount,
+          );
+
+          const corporate = await tx.corporateCustomer.findUnique({
+            where: { userId },
+          });
+          let dueDate: Date | null = null;
+          if (
+            corporate &&
+            (corporate.allowCredit || corporate.paymentTermDays > 0)
+          ) {
+            dueDate = new Date();
+            dueDate.setUTCDate(
+              dueDate.getUTCDate() + (corporate.paymentTermDays || 0),
+            );
+          }
 
           const order = await tx.order.create({
             data: {
@@ -178,6 +245,10 @@ export class OrdersService {
               taxAmount,
               shippingAmount,
               totalAmount,
+              couponId,
+              couponCode,
+              couponDiscountAmount,
+              dueDate,
               shippingAddressId: shipping.id,
               billingAddressId: billing.id,
               shippingAddressSnapshot:
@@ -209,16 +280,28 @@ export class OrdersService {
             },
           });
 
-          await tx.accountTransaction.create({
-            data: {
+          if (couponId) {
+            await this.couponsService.recordUsage({
+              tx,
+              couponId,
               userId,
               orderId: order.id,
-              type: AccountTransactionType.SALE,
-              amount: totalAmount,
-              currency,
-              description: `Sale for order ${order.orderNumber}`,
-              reference: `SALE:ORDER:${order.id}`,
-            },
+              discountAmount: couponDiscountAmount,
+            });
+          }
+
+          await this.accountingService.recordIfAbsent({
+            tx,
+            userId,
+            orderId: order.id,
+            type: AccountTransactionType.SALE,
+            amount: totalAmount,
+            currency,
+            description: `Sale for order ${order.orderNumber}`,
+            reference: `SALE:ORDER:${order.id}`,
+            referenceType: 'ORDER',
+            referenceId: order.id,
+            createdBy: userId,
           });
 
           for (const line of calculation.lines) {
@@ -257,29 +340,37 @@ export class OrdersService {
         { timeout: 15000 },
       );
 
-      if (this.notificationsService) {
-        await this.notificationsService.enqueueOrderStatus(
-          created.orderId,
-          userId,
-          OrderStatus.PENDING,
-          created.orderNumber,
-        );
-      }
+      try {
+        if (this.notificationsService) {
+          await this.notificationsService.notifyOrderCreated(
+            created.orderId,
+            userId,
+            created.orderNumber,
+          );
+          await this.notificationsService.notifyPaymentPending(
+            created.orderId,
+            userId,
+            created.orderNumber,
+          );
+        }
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { email: true },
-      });
-      if (user?.email) {
-        await this.emailOutbox.enqueue({
-          event: 'OrderCreated',
-          toEmail: user.email,
-          subject: `Siparişiniz oluşturuldu — ${created.orderNumber}`,
-          payload: {
+        const user = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { email: true, firstName: true, lastName: true },
+        });
+        if (user?.email) {
+          await this.emailOutbox.enqueueOrderEmail({
+            event: 'OrderCreated',
+            toEmail: user.email,
+            customerName: `${user.firstName} ${user.lastName}`.trim(),
             orderId: created.orderId,
             orderNumber: created.orderNumber,
-          },
-        });
+            status: OrderStatus.PENDING,
+            totalAmount: undefined,
+          });
+        }
+      } catch {
+        // Outbox / email must never fail the checkout response.
       }
 
       const response = await this.getByIdForUser(userId, created.orderId);
@@ -308,12 +399,33 @@ export class OrdersService {
         orderBy: { createdAt: 'desc' },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
-        include: orderDetailInclude,
+        include: {
+          items: { orderBy: { createdAt: 'asc' as const } },
+          statusHistory: { orderBy: { createdAt: 'asc' as const } },
+          payments: { orderBy: { createdAt: 'desc' as const } },
+          shipping: true,
+          orderReturn: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+            },
+          },
+        },
       }),
     ]);
 
     return buildPaginatedResponse(
-      orders.map((order) => mapOrderToResponse(order)),
+      orders.map((order) =>
+        this.toResponse({
+          ...order,
+          shipping: order.shipping ?? null,
+          orderReturn: order.orderReturn ?? null,
+        }),
+      ),
       total,
       query.page,
       query.limit,
@@ -324,42 +436,50 @@ export class OrdersService {
     userId: string,
     orderId: string,
   ): Promise<OrderResponseDto> {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: orderDetailInclude,
-    });
+    const order = await this.findOrderDetail(orderId);
     if (!order) {
       throw new NotFoundException('Order not found');
     }
     if (order.userId !== userId) {
       throw new ForbiddenException('Order does not belong to user');
     }
-    return mapOrderToResponse(order);
+    return this.toResponse(order);
   }
 
   async cancelForUser(
     userId: string,
     orderId: string,
   ): Promise<OrderResponseDto> {
-    await this.cancelOrder(orderId, {
-      actorUserId: userId,
-      requireOwner: userId,
-      customerCancel: true,
+    const result = await this.prisma.$transaction(async (tx) => {
+      return this.orderStatusService.applyTransitionInTransaction(tx, {
+        orderId,
+        toStatus: OrderStatus.CANCELLED,
+        note: 'Cancelled by customer',
+        changedByUserId: userId,
+        requireOwnerUserId: userId,
+        customerCancel: true,
+        cancelPendingPayments: true,
+      });
     });
+
+    await this.afterStatusChange(result);
     return this.getByIdForUser(userId, orderId);
   }
 
   async listAdmin(
-    query: PaginationQueryDto & { status?: OrderStatus },
+    query: AdminOrderListQueryDto,
   ): Promise<PaginatedResponseDto<OrderResponseDto>> {
-    const where = query.status ? { status: query.status } : {};
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
+    const where = this.buildAdminWhere(query);
+    const sortBy = query.sortBy ?? 'createdAt';
+    const sortOrder = query.sortOrder ?? 'desc';
+
     const [total, orders] = await this.prisma.$transaction([
       this.prisma.order.count({ where }),
       this.prisma.order.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
         take: limit,
         include: orderDetailInclude,
@@ -367,7 +487,7 @@ export class OrdersService {
     ]);
 
     return buildPaginatedResponse(
-      orders.map((order) => mapOrderToResponse(order)),
+      orders.map((order) => this.toResponse(order)),
       total,
       page,
       limit,
@@ -375,14 +495,42 @@ export class OrdersService {
   }
 
   async getAdminById(orderId: string): Promise<OrderResponseDto> {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: orderDetailInclude,
-    });
+    const order = await this.findOrderDetail(orderId);
     if (!order) {
       throw new NotFoundException('Order not found');
     }
-    return mapOrderToResponse(order);
+    return this.toResponse(order);
+  }
+
+  private async findOrderDetail(orderId: string) {
+    try {
+      return await this.prisma.order.findUnique({
+        where: { id: orderId },
+        include: orderDetailInclude,
+      });
+    } catch {
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+          items: { orderBy: { createdAt: 'asc' as const } },
+          statusHistory: { orderBy: { createdAt: 'asc' as const } },
+          payments: { orderBy: { createdAt: 'desc' as const } },
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+            },
+          },
+        },
+      });
+      if (!order) {
+        return null;
+      }
+      return { ...order, shipping: null, orderReturn: null };
+    }
   }
 
   async updateStatusAdmin(
@@ -390,164 +538,194 @@ export class OrdersService {
     adminUserId: string,
     dto: UpdateOrderStatusDto,
   ): Promise<OrderResponseDto> {
-    const notify = await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`
-        SELECT id FROM orders WHERE id = ${orderId}::uuid FOR UPDATE
-      `;
-      const order = await tx.order.findUnique({ where: { id: orderId } });
-      if (!order) {
-        throw new NotFoundException('Order not found');
-      }
-
-      this.orderStatusService.assertTransition(order.status, dto.status);
-
-      if (
-        dto.status === OrderStatus.CANCELLED &&
-        order.status !== OrderStatus.CANCELLED
-      ) {
-        await this.releaseOrderStock(tx, orderId, adminUserId);
-      }
-
-      await tx.order.update({
-        where: { id: orderId },
-        data: { status: dto.status },
-      });
-      await tx.orderStatusHistory.create({
-        data: {
-          orderId,
-          fromStatus: order.status,
-          toStatus: dto.status,
-          note: dto.note,
-          changedBy: adminUserId,
-        },
-      });
-
-      return {
-        userId: order.userId,
-        orderNumber: order.orderNumber,
-        status: dto.status,
-      };
-    });
-
-    if (this.notificationsService) {
-      await this.notificationsService.enqueueOrderStatus(
-        orderId,
-        notify.userId,
-        notify.status,
-        notify.orderNumber,
+    if (dto.status === OrderStatus.SHIPPED) {
+      throw new BadRequestException(
+        'Use POST /admin/orders/:id/ship to ship with tracking',
       );
     }
 
+    const result = await this.prisma.$transaction(async (tx) => {
+      return this.orderStatusService.applyTransitionInTransaction(tx, {
+        orderId,
+        toStatus: dto.status,
+        note: dto.note,
+        changedByUserId: adminUserId,
+        returnReason: dto.returnReason,
+        adminReturnNote: dto.adminNote,
+        cancelPendingPayments: dto.status === OrderStatus.CANCELLED,
+      });
+    });
+
+    await this.afterStatusChange(result);
     return this.getAdminById(orderId);
   }
 
-  private async cancelOrder(
+  async shipOrderAdmin(
     orderId: string,
-    options: {
-      actorUserId: string;
-      requireOwner?: string;
-      customerCancel?: boolean;
-    },
-  ): Promise<void> {
-    const notifyPayload = await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`
-        SELECT id FROM orders WHERE id = ${orderId}::uuid FOR UPDATE
-      `;
-      const order = await tx.order.findUnique({
-        where: { id: orderId },
-        include: { items: true },
-      });
-      if (!order) {
-        throw new NotFoundException('Order not found');
-      }
-      if (options.requireOwner && order.userId !== options.requireOwner) {
-        throw new ForbiddenException('Order does not belong to user');
-      }
-      if (order.status === OrderStatus.CANCELLED) {
-        throw new ConflictException('Order is already cancelled');
-      }
-      if (options.customerCancel) {
-        if (!this.orderStatusService.canCustomerCancel(order.status)) {
-          throw new ConflictException(
-            `Order cannot be cancelled from status ${order.status}`,
-          );
-        }
-      } else {
-        this.orderStatusService.assertTransition(
-          order.status,
-          OrderStatus.CANCELLED,
-        );
-      }
-
-      await this.releaseOrderStock(tx, orderId, options.actorUserId);
-
-      await tx.payment.updateMany({
-        where: {
-          orderId,
-          status: PaymentStatus.PENDING,
-        },
-        data: {
-          status: PaymentStatus.CANCELLED,
-          failureCode: 'ORDER_CANCELLED',
-          failureMessage: 'Order cancelled',
-        },
+    adminUserId: string,
+    dto: ShipOrderDto,
+  ): Promise<OrderResponseDto> {
+    const result = await this.prisma.$transaction(async (tx) => {
+      await this.shippingService.upsertManualShipmentInTransaction(tx, {
+        orderId,
+        trackingNumber: dto.trackingNumber,
+        trackingUrl: dto.trackingUrl,
+        note: dto.note,
       });
 
-      await tx.order.update({
-        where: { id: orderId },
-        data: { status: OrderStatus.CANCELLED },
+      return this.orderStatusService.applyTransitionInTransaction(tx, {
+        orderId,
+        toStatus: OrderStatus.SHIPPED,
+        note: dto.note ?? 'Shipped',
+        changedByUserId: adminUserId,
       });
-      await tx.orderStatusHistory.create({
-        data: {
-          orderId,
-          fromStatus: order.status,
-          toStatus: OrderStatus.CANCELLED,
-          note: 'Order cancelled',
-          changedBy: options.actorUserId,
-        },
-      });
-
-      return {
-        userId: order.userId,
-        orderNumber: order.orderNumber,
-      };
     });
 
+    await this.afterStatusChange(result, {
+      trackingNumber: dto.trackingNumber,
+      trackingUrl: dto.trackingUrl,
+    });
+    return this.getAdminById(orderId);
+  }
+
+  async deliverOrderAdmin(
+    orderId: string,
+    adminUserId: string,
+    note?: string,
+  ): Promise<OrderResponseDto> {
+    const result = await this.prisma.$transaction(async (tx) => {
+      return this.orderStatusService.applyTransitionInTransaction(tx, {
+        orderId,
+        toStatus: OrderStatus.DELIVERED,
+        note: note ?? 'Delivered',
+        changedByUserId: adminUserId,
+      });
+    });
+
+    await this.afterStatusChange(result);
+    return this.getAdminById(orderId);
+  }
+
+  async startReturnAdmin(
+    orderId: string,
+    adminUserId: string,
+    dto: StartReturnDto,
+  ): Promise<OrderResponseDto> {
+    const result = await this.prisma.$transaction(async (tx) => {
+      return this.orderStatusService.applyTransitionInTransaction(tx, {
+        orderId,
+        toStatus: OrderStatus.RETURNED,
+        note: dto.adminNote ?? 'Return started',
+        changedByUserId: adminUserId,
+        returnReason: dto.returnReason,
+        adminReturnNote: dto.adminNote,
+      });
+    });
+
+    await this.afterStatusChange(result);
+    return this.getAdminById(orderId);
+  }
+
+  private async afterStatusChange(
+    result: {
+      orderId: string;
+      userId: string;
+      orderNumber: string;
+      toStatus: OrderStatus;
+    },
+    shippingMeta?: { trackingNumber?: string; trackingUrl?: string | null },
+  ): Promise<void> {
     if (this.notificationsService) {
       await this.notificationsService.enqueueOrderStatus(
-        orderId,
-        notifyPayload.userId,
-        OrderStatus.CANCELLED,
-        notifyPayload.orderNumber,
+        result.orderId,
+        result.userId,
+        result.toStatus,
+        result.orderNumber,
+        shippingMeta,
       );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: result.userId },
+      select: { email: true, firstName: true, lastName: true },
+    });
+    const order = await this.prisma.order.findUnique({
+      where: { id: result.orderId },
+      select: { totalAmount: true, currency: true },
+    });
+    if (user?.email) {
+      const event = this.emailEventForStatus(result.toStatus);
+      if (event) {
+        await this.emailOutbox.enqueueOrderEmail({
+          event,
+          toEmail: user.email,
+          customerName: `${user.firstName} ${user.lastName}`.trim(),
+          orderId: result.orderId,
+          orderNumber: result.orderNumber,
+          status: result.toStatus,
+          totalAmount: order
+            ? `${order.totalAmount.toFixed(2)} ${order.currency}`
+            : undefined,
+          trackingUrl: shippingMeta?.trackingUrl ?? undefined,
+        });
+      }
     }
   }
 
-  private async releaseOrderStock(
-    tx: Prisma.TransactionClient,
-    orderId: string,
-    actorUserId: string,
-  ): Promise<void> {
-    const items = await tx.orderItem.findMany({
-      where: { orderId, productId: { not: null } },
-    });
-
-    for (const item of items) {
-      if (!item.productId) {
-        continue;
-      }
-      await this.inventoryService.releaseStockInTransaction(
-        tx,
-        item.productId,
-        item.quantity,
-        {
-          createdBy: actorUserId,
-          referenceType: 'ORDER',
-          referenceId: orderId,
-          note: 'Released on order cancellation',
-        },
-      );
+  private emailEventForStatus(status: OrderStatus): string | null {
+    switch (status) {
+      case OrderStatus.CONFIRMED:
+        return 'OrderConfirmed';
+      case OrderStatus.PREPARING:
+        return 'OrderPreparing';
+      case OrderStatus.SHIPPED:
+        return 'OrderShipped';
+      case OrderStatus.DELIVERED:
+        return 'OrderDelivered';
+      case OrderStatus.CANCELLED:
+        return 'OrderCancelled';
+      case OrderStatus.RETURNED:
+        return 'OrderReturned';
+      default:
+        return null;
     }
+  }
+
+  private buildAdminWhere(
+    query: AdminOrderListQueryDto,
+  ): Prisma.OrderWhereInput {
+    const where: Prisma.OrderWhereInput = {};
+
+    if (query.status) {
+      where.status = query.status;
+    }
+
+    if (query.paymentStatus) {
+      where.payments = { some: { status: query.paymentStatus } };
+    }
+
+    if (query.dateFrom || query.dateTo) {
+      where.createdAt = {};
+      if (query.dateFrom) {
+        where.createdAt.gte = new Date(query.dateFrom);
+      }
+      if (query.dateTo) {
+        where.createdAt.lte = new Date(query.dateTo);
+      }
+    }
+
+    if (query.search?.trim()) {
+      const q = query.search.trim();
+      where.OR = [
+        { orderNumber: { contains: q, mode: 'insensitive' } },
+        { user: { email: { contains: q, mode: 'insensitive' } } },
+        { user: { phone: { contains: q, mode: 'insensitive' } } },
+        { user: { firstName: { contains: q, mode: 'insensitive' } } },
+        { user: { lastName: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    return where;
   }
 
   private async nextOrderNumber(tx: Prisma.TransactionClient): Promise<string> {

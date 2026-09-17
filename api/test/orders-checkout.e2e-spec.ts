@@ -553,4 +553,83 @@ describe('Orders & Checkout (e2e)', () => {
       .set('Authorization', `Bearer ${userAToken}`)
       .expect(201);
   });
+
+  it('admin prepare → ship with tracking → deliver and customer sees shipping', async () => {
+    await prisma.inventory.update({
+      where: { productId },
+      data: { quantity: 10, reservedQuantity: 0 },
+    });
+    await addToCart(userAToken, 1);
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({
+        shippingAddressId: addressAId,
+        billingAddressId: addressAId,
+      })
+      .expect(201);
+    const orderId = (created.body as OrderBody).id;
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/admin/orders/${orderId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: OrderStatus.CONFIRMED })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/admin/orders/${orderId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: OrderStatus.PREPARING })
+      .expect(200);
+
+    const shipped = await request(app.getHttpServer())
+      .post(`/api/v1/admin/orders/${orderId}/ship`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        trackingNumber: 'TRK-E2E-001',
+        trackingUrl:
+          'https://www.yurticikargo.com/tr/online-servisler/gonderi-sorgula?code=TRK-E2E-001',
+        note: 'Kargoya verildi',
+      })
+      .expect(201);
+    expect(
+      (shipped.body as OrderBody & { shipping: { trackingNumber: string } })
+        .shipping.trackingNumber,
+    ).toBe('TRK-E2E-001');
+    expect((shipped.body as OrderBody).status).toBe(OrderStatus.SHIPPED);
+
+    const delivered = await request(app.getHttpServer())
+      .post(`/api/v1/admin/orders/${orderId}/deliver`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ note: 'Teslim edildi' })
+      .expect(201);
+    expect((delivered.body as OrderBody).status).toBe(OrderStatus.DELIVERED);
+
+    const customerView = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${orderId}`)
+      .set('Authorization', `Bearer ${userAToken}`)
+      .expect(200);
+    const body = customerView.body as OrderBody & {
+      shipping: { trackingUrl: string | null; trackingNumber: string };
+      statusHistory: Array<{ toStatus: OrderStatus }>;
+      canCancel: boolean;
+    };
+    expect(body.shipping.trackingNumber).toBe('TRK-E2E-001');
+    expect(body.shipping.trackingUrl).toContain('yurticikargo.com');
+    expect(body.canCancel).toBe(false);
+    expect(body.statusHistory.map((h) => h.toStatus)).toEqual(
+      expect.arrayContaining([
+        OrderStatus.PENDING,
+        OrderStatus.CONFIRMED,
+        OrderStatus.PREPARING,
+        OrderStatus.SHIPPED,
+        OrderStatus.DELIVERED,
+      ]),
+    );
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${orderId}/cancel`)
+      .set('Authorization', `Bearer ${userAToken}`)
+      .expect(409);
+  });
 });

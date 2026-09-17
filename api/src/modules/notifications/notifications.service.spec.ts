@@ -25,6 +25,7 @@ describe('NotificationsService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     $transaction: jest.fn(),
   };
@@ -38,9 +39,12 @@ describe('NotificationsService', () => {
     }),
   };
 
+  const config = { get: jest.fn().mockReturnValue(4) };
+
   const service = new NotificationsService(
     prisma as never,
     pushProvider as never,
+    config as never,
   );
 
   beforeEach(() => {
@@ -104,5 +108,49 @@ describe('NotificationsService', () => {
       platform: 'ANDROID',
     });
     expect(device.token).toBe('token-abc-1234567890');
+  });
+
+  it('idempotent notification by eventKey', async () => {
+    const existing = {
+      id: 'n1',
+      type: NotificationType.ORDER_SHIPPED,
+      title: 't',
+      body: 'b',
+      data: null,
+      readAt: null,
+      createdAt: new Date(),
+    };
+    prisma.notification.findUnique.mockResolvedValue(existing);
+    const result = await service.createNotification({
+      userId: 'u1',
+      type: NotificationType.ORDER_SHIPPED,
+      title: 't',
+      body: 'b',
+      eventKey: 'ORDER_SHIPPED:ORDER:o1',
+    });
+    expect(result.id).toBe('n1');
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+  });
+
+  it('outbox retry marks FAILED after max attempts', async () => {
+    prisma.notificationOutbox.findMany.mockResolvedValue([
+      {
+        id: 'ob1',
+        type: 'ORDER_SHIPPED',
+        aggregateType: 'ORDER',
+        aggregateId: 'o1',
+        eventKey: 'ORDER_SHIPPED:ORDER:o1',
+        payload: { userId: 'u1', title: 't', body: 'b' },
+        attempts: 3,
+        status: 'PENDING',
+      },
+    ]);
+    prisma.notificationOutbox.updateMany.mockResolvedValue({ count: 1 });
+    prisma.notification.findUnique.mockResolvedValue(null);
+    prisma.notification.create.mockRejectedValue(new Error('db down'));
+
+    const processed = await service.processPendingOutbox(10);
+    expect(processed).toBe(0);
+    expect(prisma.notificationOutbox.update).toHaveBeenCalled();
   });
 });

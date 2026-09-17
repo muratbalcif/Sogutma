@@ -1,0 +1,70 @@
+name: API CI
+
+on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - '.github/workflows/api.yml'
+      - 'package-lock.json'
+  push:
+    branches: [main, master]
+    paths:
+      - 'api/**'
+      - '.github/workflows/api.yml'
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: furkansogutma
+          POSTGRES_PASSWORD: furkansogutma
+          POSTGRES_DB: furkansogutma
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U furkansogutma -d furkansogutma"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      PORT: 3000
+      DATABASE_URL: postgresql://furkansogutma:furkansogutma@localhost:5434/furkansogutma
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-access-secret-min-16
+      JWT_REFRESH_SECRET: ci-refresh-secret-min-16
+      CORS_ORIGINS: http://localhost:3001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci
+        working-directory: .
+      - name: Prisma migrate
+        run: npx prisma migrate deploy
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm run test
+      - name: Build
+        run: npm run build
+      - name: E2E tests
+        run: npm run test:e2e

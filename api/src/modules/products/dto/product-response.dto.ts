@@ -11,6 +11,9 @@ export class ProductImageResponseDto {
   url!: string;
 
   @ApiPropertyOptional({ nullable: true })
+  objectKey?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
   alt!: string | null;
 
   @ApiProperty()
@@ -86,6 +89,21 @@ export class ProductListItemDto {
 
   @ApiProperty()
   active!: boolean;
+
+  @ApiPropertyOptional()
+  isFeatured?: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  metaTitle?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  metaDescription?: string | null;
+
+  @ApiProperty()
+  createdAt!: string;
+
+  @ApiProperty()
+  updatedAt!: string;
 
   @ApiProperty({ type: BrandResponseDto })
   brand!: BrandResponseDto;

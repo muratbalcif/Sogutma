@@ -106,9 +106,13 @@ export function calculateCheckoutLines(input: {
     }
 
     const unitPrice = new Prisma.Decimal(price.amount);
-    const discountAmount = new Prisma.Decimal(0);
-    const subtotal = multiplyMoney(unitPrice, item.quantity);
-    const payable = subtotal.sub(discountAmount);
+    const unitDiscount = new Prisma.Decimal(price.discountAmount ?? '0');
+    const discountAmount = multiplyMoney(unitDiscount, item.quantity);
+    const subtotal = multiplyMoney(unitPrice, item.quantity).add(
+      discountAmount,
+    );
+    // subtotal = pre-discount merchandise value; payable = final amount charged
+    const payable = multiplyMoney(unitPrice, item.quantity);
     const taxAmount = extractInclusiveTax(payable, item.product.vatRate);
 
     lines.push({

@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -15,9 +16,11 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { Request } from 'express';
 import { Permissions } from '../admin/decorators/permissions.decorator';
 import { PermissionsGuard } from '../admin/guards/permissions.guard';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard';
+import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { CampaignsService } from './campaigns.service';
 import {
   AddCampaignProductDto,
@@ -51,11 +54,23 @@ export class AdminCampaignsController {
     return this.campaignsService.getAdminById(id);
   }
 
+  @Get(':id/products')
+  @Permissions('campaign.read')
+  @ApiOperation({ summary: 'List products in campaign (admin)' })
+  listProducts(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<CampaignProductResponseDto[]> {
+    return this.campaignsService.listAdminProducts(id);
+  }
+
   @Post()
   @Permissions('campaign.create')
   @ApiOkResponse({ type: CampaignResponseDto })
-  create(@Body() dto: CreateCampaignDto): Promise<CampaignResponseDto> {
-    return this.campaignsService.create(dto);
+  create(
+    @Body() dto: CreateCampaignDto,
+    @Req() request: Request & { user: AuthenticatedUser },
+  ): Promise<CampaignResponseDto> {
+    return this.campaignsService.create(dto, request.user.id);
   }
 
   @Patch(':id')
@@ -63,14 +78,18 @@ export class AdminCampaignsController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCampaignDto,
+    @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<CampaignResponseDto> {
-    return this.campaignsService.update(id, dto);
+    return this.campaignsService.update(id, dto, request.user.id);
   }
 
   @Delete(':id')
   @Permissions('campaign.delete')
-  remove(@Param('id', ParseUUIDPipe) id: string): Promise<{ success: true }> {
-    return this.campaignsService.remove(id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: Request & { user: AuthenticatedUser },
+  ): Promise<{ success: true }> {
+    return this.campaignsService.remove(id, request.user.id);
   }
 
   @Post(':id/products')

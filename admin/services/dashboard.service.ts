@@ -1,6 +1,13 @@
 import { apiRequest } from "@/lib/api-client";
 import type { PaginatedResponse } from "@/types/api";
-import { ordersService, paymentsService } from "@/services/admin-api.service";
+import {
+  campaignsService,
+  couponsAdminService,
+  inventoryService,
+  ordersService,
+  paymentsService,
+  accountingService,
+} from "@/services/admin-api.service";
 
 export type DashboardTotals = {
   products: number | null;
@@ -17,6 +24,10 @@ export type DashboardTotals = {
   paidPayments: number | null;
   todayTransferAmount: string | null;
   pendingOrders: number | null;
+  criticalStock: number | null;
+  activeCampaigns: number | null;
+  activeCoupons: number | null;
+  featuredProducts: number | null;
 };
 
 async function safeTotal(path: string): Promise<number | null> {
@@ -59,7 +70,10 @@ export async function fetchDashboardTotals(): Promise<DashboardTotals> {
     pendingPayments,
     paidPayments,
     pendingOrders,
-    todayTransfers,
+    collectionSummary,
+    criticalStock,
+    activeCampaigns,
+    activeCoupons,
   ] = await Promise.all([
     safeTotal("/admin/products?page=1&limit=1"),
     safeTotal("/admin/orders?page=1&limit=1"),
@@ -86,14 +100,20 @@ export async function fetchDashboardTotals(): Promise<DashboardTotals> {
       .list(1, 1, { status: "PENDING" })
       .then((r) => r.meta.total)
       .catch(() => null),
-    paymentsService
-      .listBankTransfers(1, 100, { status: "APPROVED" })
-      .then((r) => {
-        const sum = r.items
-          .filter((item) => new Date(item.createdAt) >= today)
-          .reduce((acc, item) => acc + Number(item.amount), 0);
-        return sum.toFixed(2);
-      })
+    accountingService
+      .collectionsSummary()
+      .catch(() => null),
+    inventoryService
+      .critical()
+      .then((rows) => rows.length)
+      .catch(() => null),
+    campaignsService
+      .list()
+      .then((rows) => rows.filter((c) => c.active).length)
+      .catch(() => null),
+    couponsAdminService
+      .list()
+      .then((rows) => rows.filter((c) => c.active).length)
       .catch(() => null),
   ]);
 
@@ -110,7 +130,11 @@ export async function fetchDashboardTotals(): Promise<DashboardTotals> {
     pendingBankTransfers,
     pendingPayments,
     paidPayments,
-    todayTransferAmount: todayTransfers,
+    todayTransferAmount: collectionSummary?.todayCollections ?? null,
     pendingOrders,
+    criticalStock,
+    activeCampaigns,
+    activeCoupons,
+    featuredProducts: null,
   };
 }

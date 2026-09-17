@@ -11,10 +11,13 @@ import com.furkansogutma.core.network.dto.CartDto
 import com.furkansogutma.core.network.dto.CartValidationDto
 import com.furkansogutma.core.network.dto.CategoryDto
 import com.furkansogutma.core.network.dto.CompanyBankAccountDto
+import com.furkansogutma.core.network.dto.NotificationDto
+import com.furkansogutma.core.network.dto.NotificationPreferenceDto
 import com.furkansogutma.core.network.dto.OrderDto
 import com.furkansogutma.core.network.dto.ProductAlertDto
 import com.furkansogutma.core.network.dto.ProductDto
 import com.furkansogutma.core.network.dto.SiteConfigDto
+import com.furkansogutma.core.network.dto.UnreadCountDto
 import com.furkansogutma.core.network.dto.UserDto
 import com.furkansogutma.domain.account.AccountTransaction
 import com.furkansogutma.domain.account.Address
@@ -30,8 +33,12 @@ import com.furkansogutma.domain.cart.CartIssue
 import com.furkansogutma.domain.cart.CartItem
 import com.furkansogutma.domain.cart.CartValidation
 import com.furkansogutma.domain.category.Category
+import com.furkansogutma.domain.notification.AppNotification
+import com.furkansogutma.domain.notification.NotificationPreferences
+import com.furkansogutma.domain.notification.UnreadCount
 import com.furkansogutma.domain.order.Order
 import com.furkansogutma.domain.order.OrderItem
+import com.furkansogutma.domain.order.OrderShipping
 import com.furkansogutma.domain.order.OrderStatusHistory
 import com.furkansogutma.domain.product.Banner
 import com.furkansogutma.domain.product.Brand
@@ -144,6 +151,50 @@ fun OrderDto.toDomain() = Order(
     shippingSummary = shippingAddress?.let {
         "${it.firstName} ${it.lastName}, ${it.addressLine}, ${it.district}/${it.city}"
     },
+    shipping = shipping?.let {
+        OrderShipping(
+            provider = it.provider,
+            trackingNumber = it.trackingNumber,
+            trackingUrl = it.trackingUrl,
+            status = it.status,
+        )
+    },
+    canCancel = canCancel,
+)
+
+fun NotificationDto.toDomain() = AppNotification(
+    id = id,
+    type = type,
+    title = title,
+    body = body.ifBlank { message.orEmpty() },
+    entityType = entityType,
+    entityId = entityId,
+    productSlug = data?.productSlug ?: data?.slug,
+    orderId = data?.orderId
+        ?: entityId?.takeIf {
+            entityType.equals("ORDER", ignoreCase = true) ||
+                entityType.equals("PAYMENT", ignoreCase = true)
+        },
+    readAt = readAt,
+    createdAt = createdAt,
+)
+
+fun UnreadCountDto.toDomain() = UnreadCount(count)
+
+fun NotificationPreferenceDto.toDomain() = NotificationPreferences(
+    orderNotifications = orderNotifications,
+    paymentNotifications = paymentNotifications,
+    stockAlerts = stockAlerts,
+    campaignNotifications = campaignNotifications,
+    systemNotifications = systemNotifications,
+)
+
+fun NotificationPreferences.toDto() = NotificationPreferenceDto(
+    orderNotifications = orderNotifications,
+    paymentNotifications = paymentNotifications,
+    stockAlerts = stockAlerts,
+    campaignNotifications = campaignNotifications,
+    systemNotifications = systemNotifications,
 )
 
 fun AddressDto.toDomain() = Address(
@@ -155,7 +206,12 @@ fun ProductAlertDto.toDomain() = ProductAlert(
     id, productId, product?.name, product?.slug, status, createdAt,
 )
 
-fun AccountCurrentDto.toDomain() = CurrentAccount(balance, debit, credit, currency)
+fun AccountCurrentDto.toDomain() = CurrentAccount(
+    balance = balance,
+    debit = totalDebit ?: debit,
+    credit = totalCredit ?: credit,
+    currency = currency,
+)
 fun AccountTransactionDto.toDomain() = AccountTransaction(id, type, amount, balanceAfter, description, createdAt)
 fun BankTransferDto.toDomain() = BankTransfer(id, orderId, amount, transferDate, description, status, bankName, senderName)
 fun SiteConfigDto.toDomain() = SiteConfig(

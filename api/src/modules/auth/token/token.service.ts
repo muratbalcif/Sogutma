@@ -83,6 +83,14 @@ export class TokenService {
     return { accessToken, refreshToken };
   }
 
+  async findRefreshTokenByRaw(rawToken: string) {
+    const tokenHash = this.hashToken(rawToken);
+    return this.prisma.refreshToken.findFirst({
+      where: { tokenHash },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async findActiveRefreshToken(rawToken: string) {
     const tokenHash = this.hashToken(rawToken);
     return this.prisma.refreshToken.findFirst({
@@ -102,5 +110,13 @@ export class TokenService {
 
   async revokeRefreshToken(rawToken: string): Promise<void> {
     await this.revokeRefreshTokenByHash(this.hashToken(rawToken));
+  }
+
+  /** Reuse detection: revoke every refresh token for the user. */
+  async revokeAllRefreshTokensForUser(userId: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 }

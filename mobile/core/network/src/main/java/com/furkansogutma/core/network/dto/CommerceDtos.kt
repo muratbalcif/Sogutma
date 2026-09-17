@@ -85,6 +85,7 @@ data class CreateOrderRequestDto(
     val shippingAddressId: String,
     val billingAddressId: String,
     val customerNote: String? = null,
+    val couponCode: String? = null,
 )
 
 data class CreatePaymentRequestDto(
@@ -107,8 +108,22 @@ data class OrderDto(
     val items: List<OrderItemDto> = emptyList(),
     val statusHistory: List<OrderStatusHistoryDto> = emptyList(),
     val payment: PaymentDto? = null,
+    val shipping: ShippingDto? = null,
+    val canCancel: Boolean = false,
     val createdAt: String,
     val updatedAt: String? = null,
+)
+
+data class ShippingDto(
+    val id: String? = null,
+    val orderId: String? = null,
+    val provider: String? = null,
+    val trackingNumber: String? = null,
+    val trackingUrl: String? = null,
+    val status: String? = null,
+    val shippedAt: String? = null,
+    val deliveredAt: String? = null,
+    val note: String? = null,
 )
 
 data class OrderItemDto(
@@ -155,9 +170,12 @@ data class ProductAlertDto(
 
 data class AccountCurrentDto(
     val balance: String,
+    val totalDebit: String? = null,
+    val totalCredit: String? = null,
     val debit: String? = null,
     val credit: String? = null,
     val currency: String = "TRY",
+    val overdueAmount: String? = null,
 )
 
 data class AccountTransactionDto(
@@ -193,6 +211,45 @@ data class CreateBankTransferRequestDto(
 data class RegisterDeviceRequestDto(
     val token: String,
     val platform: String = "ANDROID",
+)
+
+data class NotificationDto(
+    val id: String,
+    val type: String,
+    val title: String,
+    val body: String,
+    val message: String? = null,
+    val data: NotificationDataDto? = null,
+    val entityType: String? = null,
+    val entityId: String? = null,
+    val readAt: String? = null,
+    val createdAt: String,
+)
+
+data class NotificationDataDto(
+    val orderId: String? = null,
+    val orderNumber: String? = null,
+    val productId: String? = null,
+    val productSlug: String? = null,
+    val slug: String? = null,
+    val trackingUrl: String? = null,
+    val trackingNumber: String? = null,
+)
+
+data class UnreadCountDto(
+    val count: Int,
+)
+
+data class NotificationPreferenceDto(
+    val orderNotifications: Boolean = true,
+    val paymentNotifications: Boolean = true,
+    val stockAlerts: Boolean = true,
+    val campaignNotifications: Boolean = true,
+    val systemNotifications: Boolean = true,
+)
+
+data class MarkAllReadResponseDto(
+    val updated: Int = 0,
 )
 
 data class SiteConfigDto(

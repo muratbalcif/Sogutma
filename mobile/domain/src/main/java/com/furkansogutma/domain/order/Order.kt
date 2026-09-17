@@ -16,6 +16,15 @@ data class Order(
     val items: List<OrderItem>,
     val statusHistory: List<OrderStatusHistory>,
     val shippingSummary: String?,
+    val shipping: OrderShipping? = null,
+    val canCancel: Boolean = false,
+)
+
+data class OrderShipping(
+    val provider: String?,
+    val trackingNumber: String?,
+    val trackingUrl: String?,
+    val status: String?,
 )
 
 data class OrderItem(
@@ -40,4 +49,5 @@ data class CreateOrderInput(
     val billingAddressId: String,
     val paymentMethod: String,
     val note: String? = null,
+    val couponCode: String? = null,
 )

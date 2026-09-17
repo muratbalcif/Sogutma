@@ -274,6 +274,8 @@ export class PaymentsService {
         currency: payment.currency,
         description: `Refund for payment ${payment.id}`,
         reference: `REFUND:PAYMENT:${payment.id}`,
+        referenceType: 'REFUND',
+        referenceId: payment.id,
       });
     });
 
@@ -315,6 +317,8 @@ export class PaymentsService {
       currency: payment.currency,
       description: `Payment received for order ${payment.order.orderNumber}`,
       reference: `PAYMENT:${payment.id}`,
+      referenceType: 'PAYMENT',
+      referenceId: payment.id,
     });
   }
 
@@ -366,22 +370,12 @@ export class PaymentsService {
     if (order.status !== OrderStatus.PENDING) {
       return;
     }
-    this.orderStatusService.assertTransition(
-      OrderStatus.PENDING,
-      OrderStatus.CONFIRMED,
-    );
-    await tx.order.update({
-      where: { id: orderId },
-      data: { status: OrderStatus.CONFIRMED },
-    });
-    await tx.orderStatusHistory.create({
-      data: {
-        orderId,
-        fromStatus: OrderStatus.PENDING,
-        toStatus: OrderStatus.CONFIRMED,
-        note: 'Confirmed after successful payment',
-        changedBy,
-      },
+    await this.orderStatusService.applyTransitionInTransaction(tx, {
+      orderId,
+      toStatus: OrderStatus.CONFIRMED,
+      note: 'Confirmed after successful payment',
+      changedByUserId: changedBy,
+      cancelPendingPayments: false,
     });
   }
 

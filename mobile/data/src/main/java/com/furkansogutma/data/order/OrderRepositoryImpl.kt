@@ -23,6 +23,7 @@ class OrderRepositoryImpl @Inject constructor(
                 shippingAddressId = input.shippingAddressId,
                 billingAddressId = input.billingAddressId,
                 customerNote = input.note,
+                couponCode = input.couponCode,
             ),
         )
         // v1: payment is created with the order as BANK_TRANSFER; this call is idempotent.
@@ -35,4 +36,7 @@ class OrderRepositoryImpl @Inject constructor(
 
     override suspend fun getOrder(id: String): Result<Order> =
         safeApiCall { api.order(id).toDomain() }
+
+    override suspend fun cancelOrder(id: String): Result<Order> =
+        safeApiCall { api.cancelOrder(id).toDomain() }
 }

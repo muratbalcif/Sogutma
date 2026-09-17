@@ -4,8 +4,11 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import { EnvironmentVariables } from '../../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
+import { renderOrderEmailHtml } from './email-templates';
 
 /**
  * Email delivery is intentionally outside order/payment DB transactions.
@@ -17,7 +20,10 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EmailOutboxService.name);
   private timer: NodeJS.Timeout | null = null;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService<EnvironmentVariables, true>,
+  ) {}
 
   onModuleInit(): void {
     this.timer = setInterval(() => {
@@ -44,6 +50,51 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
         toEmail: input.toEmail,
         subject: input.subject,
         payload: input.payload as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  async enqueueOrderEmail(input: {
+    event: string;
+    toEmail: string;
+    customerName: string;
+    orderId: string;
+    orderNumber: string;
+    status: string;
+    totalAmount?: string;
+    trackingUrl?: string;
+  }): Promise<void> {
+    const siteName =
+      this.config.get('SITE_NAME', { infer: true }) || 'FurkanSoğutma';
+    const support =
+      this.config.get('SITE_SUPPORT_EMAIL', { infer: true }) || undefined;
+    const webBase =
+      this.config.get('CORS_ORIGINS', { infer: true })?.split(',')[0]?.trim() ||
+      'https://furkansogutma.com';
+    const actionUrl = `${webBase.replace(/\/$/, '')}/account/orders/${input.orderId}`;
+    const html = renderOrderEmailHtml({
+      customerName: input.customerName,
+      orderNumber: input.orderNumber,
+      status: input.status,
+      totalAmount: input.totalAmount,
+      actionUrl,
+      trackingUrl: input.trackingUrl,
+      supportEmail: support,
+      websiteUrl: webBase,
+    });
+
+    await this.enqueue({
+      event: input.event,
+      toEmail: input.toEmail,
+      subject: `${siteName} — ${input.orderNumber}: ${input.status}`,
+      payload: {
+        orderId: input.orderId,
+        orderNumber: input.orderNumber,
+        status: input.status,
+        html,
+        customerName: input.customerName,
+        totalAmount: input.totalAmount,
+        trackingUrl: input.trackingUrl,
       },
     });
   }

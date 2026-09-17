@@ -1,0 +1,39 @@
+name: Web CI
+
+on:
+  pull_request:
+    paths:
+      - 'web/**'
+      - '.github/workflows/web.yml'
+      - 'package-lock.json'
+  push:
+    branches: [main, master]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web.yml'
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3000/api/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci
+        working-directory: .
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+      - name: E2E
+        run: npm run test:e2e

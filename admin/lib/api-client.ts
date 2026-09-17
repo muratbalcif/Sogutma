@@ -66,7 +66,10 @@ export async function apiRequest<T>(
     Accept: "application/json",
   };
 
-  if (body !== undefined) {
+  const isFormData =
+    typeof FormData !== "undefined" && body instanceof FormData;
+
+  if (body !== undefined && !isFormData) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -81,7 +84,12 @@ export async function apiRequest<T>(
     fetch(`${API_BASE}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body:
+        body === undefined
+          ? undefined
+          : isFormData
+            ? (body as FormData)
+            : JSON.stringify(body),
       signal,
     });
 
@@ -121,4 +129,34 @@ export async function apiRequest<T>(
   }
 
   return parsed as T;
+}
+
+/** Authenticated download for CSV/text endpoints (non-JSON body). */
+export async function apiDownloadText(
+  path: string,
+  filename: string,
+): Promise<void> {
+  const headers: Record<string, string> = { Accept: "text/csv, text/plain, */*" };
+  const token = authStorage.getAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let response = await fetch(`${API_BASE}${path}`, { headers });
+  if (response.status === 401) {
+    const refreshed = await refreshOnce();
+    if (refreshed) {
+      const next = authStorage.getAccessToken();
+      if (next) headers.Authorization = `Bearer ${next}`;
+      response = await fetch(`${API_BASE}${path}`, { headers });
+    }
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, `Download failed (${response.status})`, null);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }

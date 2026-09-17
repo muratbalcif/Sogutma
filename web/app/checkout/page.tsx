@@ -49,6 +49,10 @@ export default function CheckoutPage() {
     addressLine: "",
   });
 
+  const [couponCode, setCouponCode] = useState("");
+  const [couponMessage, setCouponMessage] = useState<string | null>(null);
+  const [couponDiscount, setCouponDiscount] = useState<string | null>(null);
+
   const addressesQuery = useQuery({
     queryKey: ["addresses"],
     queryFn: () => clientApiFetch<Address[]>("/addresses"),
@@ -64,6 +68,29 @@ export default function CheckoutPage() {
 
   const addresses = useMemo(() => addressesQuery.data ?? [], [addressesQuery.data]);
   const banks = banksQuery.data ?? [];
+
+  async function validateCoupon() {
+    setCouponMessage(null);
+    setCouponDiscount(null);
+    try {
+      const result = await clientApiFetch<{
+        valid: boolean;
+        message?: string;
+        discountAmount?: string;
+      }>("/checkout/coupon/validate", {
+        method: "POST",
+        body: JSON.stringify({ code: couponCode }),
+      });
+      if (!result.valid) {
+        setCouponMessage(result.message ?? "Kupon geçersiz");
+        return;
+      }
+      setCouponDiscount(result.discountAmount ?? null);
+      setCouponMessage(result.message ?? "Kupon uygulandı");
+    } catch (err) {
+      setCouponMessage(err instanceof Error ? err.message : "Kupon doğrulanamadı");
+    }
+  }
 
   async function saveAddress() {
     const created = await clientApiFetch<Address>("/addresses", {
@@ -91,6 +118,7 @@ export default function CheckoutPage() {
           body: JSON.stringify({
             shippingAddressId,
             billingAddressId: billingAddressId || shippingAddressId,
+            couponCode: couponCode.trim() || undefined,
           }),
         },
       );
@@ -256,6 +284,29 @@ export default function CheckoutPage() {
               </li>
             ))}
           </ul>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              placeholder="Kupon kodunuz"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value)}
+              className="max-w-xs uppercase"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void validateCoupon()}
+            >
+              Uygula
+            </Button>
+          </div>
+          {couponMessage ? (
+            <p className="text-sm text-slate-600">{couponMessage}</p>
+          ) : null}
+          {couponDiscount ? (
+            <p className="text-sm text-emerald-700">
+              Kupon indirimi (sunucu): {couponDiscount} TRY
+            </p>
+          ) : null}
           <p className="font-semibold">
             Toplam: {cartQuery.data?.summary.total}{" "}
             {cartQuery.data?.summary.currency}

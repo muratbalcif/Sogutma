@@ -3,14 +3,18 @@ import {
   PaymentMethod,
   PaymentStatus,
   Prisma,
+  ShippingProviderCode,
+  ShippingStatus,
 } from '@prisma/client';
 import { toMoneyString } from '../../common/utils/money.util';
 import { AddressSnapshot } from '../addresses/dto/address.dto';
 import { OrderResponseDto } from './dto/order.dto';
+import { OrderStatusService } from './order-status.service';
 
 export type OrderWithRelations = {
   id: string;
   orderNumber: string;
+  userId: string;
   status: OrderStatus;
   currency: string;
   subtotal: Prisma.Decimal;
@@ -52,12 +56,46 @@ export type OrderWithRelations = {
     provider: string | null;
     expiresAt: Date | null;
   }>;
+  shipping?: {
+    id: string;
+    orderId: string;
+    provider: ShippingProviderCode;
+    trackingNumber: string | null;
+    trackingUrl: string | null;
+    status: ShippingStatus;
+    shippedAt: Date | null;
+    deliveredAt: Date | null;
+    note: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null;
+  user?: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone: string | null;
+  } | null;
+  orderReturn?: {
+    id: string;
+    returnReason: string | null;
+    adminNote: string | null;
+    createdAt: Date;
+  } | null;
 };
 
 export function mapOrderToResponse(
   order: OrderWithRelations,
+  orderStatusService?: OrderStatusService,
 ): OrderResponseDto {
   const latestPayment = order.payments[0] ?? null;
+  const allowedTransitions = orderStatusService
+    ? orderStatusService.getAllowedTransitions(order.status)
+    : [];
+  const canCancel = orderStatusService
+    ? orderStatusService.canCustomerCancel(order.status)
+    : false;
+
   return {
     id: order.id,
     orderNumber: order.orderNumber,
@@ -103,6 +141,40 @@ export function mapOrderToResponse(
           expiresAt: latestPayment.expiresAt,
         }
       : null,
+    shipping: order.shipping
+      ? {
+          id: order.shipping.id,
+          orderId: order.shipping.orderId,
+          provider: order.shipping.provider,
+          trackingNumber: order.shipping.trackingNumber,
+          trackingUrl: order.shipping.trackingUrl,
+          status: order.shipping.status,
+          shippedAt: order.shipping.shippedAt,
+          deliveredAt: order.shipping.deliveredAt,
+          note: order.shipping.note,
+          createdAt: order.shipping.createdAt,
+          updatedAt: order.shipping.updatedAt,
+        }
+      : null,
+    customer: order.user
+      ? {
+          id: order.user.id,
+          email: order.user.email,
+          firstName: order.user.firstName,
+          lastName: order.user.lastName,
+          phone: order.user.phone,
+        }
+      : undefined,
+    orderReturn: order.orderReturn
+      ? {
+          id: order.orderReturn.id,
+          returnReason: order.orderReturn.returnReason,
+          adminNote: order.orderReturn.adminNote,
+          createdAt: order.orderReturn.createdAt,
+        }
+      : null,
+    allowedTransitions,
+    canCancel,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
   };
@@ -112,4 +184,31 @@ export const orderDetailInclude = {
   items: { orderBy: { createdAt: 'asc' as const } },
   statusHistory: { orderBy: { createdAt: 'asc' as const } },
   payments: { orderBy: { createdAt: 'desc' as const } },
+  shipping: true,
+  orderReturn: true,
+  user: {
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+    },
+  },
+} as const;
+
+/** Safer include when optional relations may be unavailable mid-migration. */
+export const orderDetailIncludeMinimal = {
+  items: { orderBy: { createdAt: 'asc' as const } },
+  statusHistory: { orderBy: { createdAt: 'asc' as const } },
+  payments: { orderBy: { createdAt: 'desc' as const } },
+  user: {
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+    },
+  },
 } as const;

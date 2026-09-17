@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   ADMIN_PERMISSION_CODES,
   ACCOUNTING_PERMISSION_CODES,
+  CUSTOMER_MANAGER_PERMISSION_CODES,
   ORDER_MANAGER_PERMISSION_CODES,
   PRODUCT_MANAGER_PERMISSION_CODES,
 } from './constants/permissions';
@@ -158,6 +159,30 @@ export class AdminService {
         update: {},
         create: {
           roleId: accounting.id,
+          permissionId: permission.id,
+        },
+      });
+    }
+
+    const customerManager = await this.prisma.adminRole.findUniqueOrThrow({
+      where: { code: AdminRoleCode.CUSTOMER_MANAGER },
+    });
+
+    for (const code of CUSTOMER_MANAGER_PERMISSION_CODES) {
+      const permission = permissionByCode.get(code);
+      if (!permission) {
+        continue;
+      }
+      await this.prisma.adminRolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: customerManager.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: customerManager.id,
           permissionId: permission.id,
         },
       });

@@ -16,7 +16,8 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
+import type { Request } from 'express';
 import { UserResponseDto } from '../users/dto/user-response.dto';
 import { AuthService } from './auth.service';
 import { AuthTokensResponseDto } from './dto/auth-tokens-response.dto';
@@ -34,6 +35,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Register a new user' })
   @ApiCreatedResponse({ type: AuthTokensResponseDto })
   register(@Body() dto: RegisterDto): Promise<AuthTokensResponseDto> {
@@ -42,6 +44,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiOkResponse({ type: AuthTokensResponseDto })
   @ApiUnauthorizedResponse({ description: 'Invalid email or password' })
@@ -51,6 +54,7 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Rotate refresh token and issue a new token pair' })
   @ApiOkResponse({ type: AuthTokensResponseDto })
   @ApiUnauthorizedResponse({ description: 'Invalid refresh token' })
@@ -68,6 +72,7 @@ export class AuthController {
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Request a password reset email (always returns success)',
   })

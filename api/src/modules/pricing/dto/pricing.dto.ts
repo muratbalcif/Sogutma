@@ -152,14 +152,41 @@ export class UpdateCustomerPriceDto {
 }
 
 export class ResolvedPriceDto {
-  @ApiProperty({ example: '24999.90' })
+  @ApiProperty({ example: '12990.00', description: 'Final payable unit price' })
   amount!: string;
+
+  @ApiProperty({
+    example: '15000.00',
+    description: 'Retail/base reference when available',
+  })
+  basePrice!: string;
+
+  @ApiProperty({
+    example: '12990.00',
+    description: 'Alias of amount for clients',
+  })
+  finalPrice!: string;
+
+  @ApiProperty({ example: '2010.00' })
+  discountAmount!: string;
+
+  @ApiProperty({ example: '13.40' })
+  discountPercentage!: string;
 
   @ApiProperty({ example: 'TRY' })
   currency!: string;
 
-  @ApiProperty({ example: 'RETAIL' })
+  @ApiProperty({ example: 'CAMPAIGN' })
   type!: PriceType | 'CUSTOMER';
+
+  @ApiPropertyOptional({ nullable: true })
+  campaignId?: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Validity end of the winning price source when known',
+  })
+  validUntil?: string | null;
 }
 
 export class ProductPriceResponseDto {

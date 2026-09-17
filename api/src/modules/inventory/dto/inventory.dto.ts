@@ -52,6 +52,9 @@ export class InventoryResponseDto {
 
   @ApiProperty()
   minimumQuantity!: number;
+
+  @ApiPropertyOptional()
+  product?: { sku: string; name: string };
 }
 
 export class CriticalInventoryItemDto {

@@ -102,6 +102,9 @@ export class InventoryService {
     const [total, items] = await this.prisma.$transaction([
       this.prisma.inventory.count(),
       this.prisma.inventory.findMany({
+        include: {
+          product: { select: { sku: true, name: true } },
+        },
         orderBy: { updatedAt: 'desc' },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
@@ -109,7 +112,10 @@ export class InventoryService {
     ]);
 
     return buildPaginatedResponse(
-      items.map((item) => this.toResponse(item)),
+      items.map((item) => ({
+        ...this.toResponse(item),
+        product: item.product,
+      })),
       total,
       query.page,
       query.limit,

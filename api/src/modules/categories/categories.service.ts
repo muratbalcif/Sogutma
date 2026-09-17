@@ -137,6 +137,20 @@ export class CategoriesService {
       throw new NotFoundException('Category not found');
     }
 
+    const [childCount, productCount] = await Promise.all([
+      this.prisma.category.count({ where: { parentId: id, active: true } }),
+      this.prisma.product.count({ where: { categoryId: id, active: true } }),
+    ]);
+
+    // Never hard-delete when children/products exist; soft-deactivate instead.
+    if (childCount > 0 || productCount > 0) {
+      const category = await this.prisma.category.update({
+        where: { id },
+        data: { active: false },
+      });
+      return this.toResponse(category);
+    }
+
     const category = await this.prisma.category.update({
       where: { id },
       data: { active: false },

@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { AdminModule } from '../admin/admin.module';
+import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -20,6 +21,7 @@ import { DevelopmentPaymentProvider } from './providers/development.payment-prov
   imports: [
     AuthModule,
     AdminModule,
+    AuditModule,
     InventoryModule,
     forwardRef(() => OrdersModule),
     forwardRef(() => NotificationsModule),

@@ -37,8 +37,17 @@ export class NotificationResponseDto {
   @ApiProperty()
   body!: string;
 
+  @ApiProperty({ description: 'Alias of body for clients' })
+  message!: string;
+
   @ApiPropertyOptional({ nullable: true })
   data!: Record<string, unknown> | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  entityType!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  entityId!: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   readAt!: Date | null;

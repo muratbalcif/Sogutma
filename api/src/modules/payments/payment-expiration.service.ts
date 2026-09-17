@@ -5,8 +5,8 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
-import { InventoryService } from '../inventory/inventory.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { OrderStatusService } from '../orders/order-status.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailOutboxService } from './email-outbox.service';
 
@@ -22,7 +22,7 @@ export class PaymentExpirationService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly inventoryService: InventoryService,
+    private readonly orderStatusService: OrderStatusService,
     private readonly notificationsService: NotificationsService,
     private readonly emailOutbox: EmailOutboxService,
   ) {}
@@ -125,36 +125,13 @@ export class PaymentExpirationService implements OnModuleInit, OnModuleDestroy {
         },
       });
 
-      await tx.order.update({
-        where: { id: payment.orderId },
-        data: { status: OrderStatus.CANCELLED },
+      await this.orderStatusService.applyTransitionInTransaction(tx, {
+        orderId: payment.orderId,
+        toStatus: OrderStatus.CANCELLED,
+        note: 'Cancelled: bank transfer payment expired',
+        changedByUserId: null,
+        cancelPendingPayments: false,
       });
-      await tx.orderStatusHistory.create({
-        data: {
-          orderId: payment.orderId,
-          fromStatus: OrderStatus.PENDING,
-          toStatus: OrderStatus.CANCELLED,
-          note: 'Cancelled: bank transfer payment expired',
-          changedBy: null,
-        },
-      });
-
-      for (const item of payment.order.items) {
-        if (!item.productId) {
-          continue;
-        }
-        await this.inventoryService.releaseStockInTransaction(
-          tx,
-          item.productId,
-          item.quantity,
-          {
-            createdBy: payment.order.userId,
-            referenceType: 'ORDER',
-            referenceId: payment.orderId,
-            note: 'Released on payment expiry',
-          },
-        );
-      }
 
       return {
         orderId: payment.orderId,
@@ -174,15 +151,13 @@ export class PaymentExpirationService implements OnModuleInit, OnModuleDestroy {
       OrderStatus.CANCELLED,
       result.orderNumber,
     );
-    await this.emailOutbox.enqueue({
+    await this.emailOutbox.enqueueOrderEmail({
       event: 'OrderCancelled',
       toEmail: result.email,
-      subject: `Sipariş iptal edildi — ${result.orderNumber}`,
-      payload: {
-        orderId: result.orderId,
-        orderNumber: result.orderNumber,
-        reason: 'PAYMENT_EXPIRED',
-      },
+      customerName: 'Müşterimiz',
+      orderId: result.orderId,
+      orderNumber: result.orderNumber,
+      status: OrderStatus.CANCELLED,
     });
     return true;
   }

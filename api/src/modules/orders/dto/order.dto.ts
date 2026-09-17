@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
+  IsDateString,
   IsEnum,
   IsOptional,
   IsString,
@@ -10,6 +11,7 @@ import {
 } from 'class-validator';
 import { AddressSnapshot } from '../../addresses/dto/address.dto';
 import { PublicBankAccountDto } from '../../payments/dto/payment.dto';
+import { ShippingResponseDto } from '../../shipping/dto/shipping.dto';
 
 export class CreateOrderDto {
   @ApiProperty({ format: 'uuid' })
@@ -25,6 +27,15 @@ export class CreateOrderDto {
   @IsString()
   @MaxLength(1000)
   customerNote?: string;
+
+  @ApiPropertyOptional({
+    description: 'Coupon code only — discount is calculated on the server',
+    example: 'FURKAN10',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  couponCode?: string;
 }
 
 export class CheckoutValidateDto {
@@ -41,6 +52,12 @@ export class CheckoutValidateDto {
   @IsString()
   @MaxLength(1000)
   customerNote?: string;
+
+  @ApiPropertyOptional({ example: 'FURKAN10' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  couponCode?: string;
 }
 
 export class UpdateOrderStatusDto {
@@ -53,6 +70,18 @@ export class UpdateOrderStatusDto {
   @IsString()
   @MaxLength(500)
   note?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  returnReason?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  adminNote?: string;
 }
 
 export class OrderIssueDto {
@@ -102,8 +131,14 @@ export class OrderTotalsDto {
   @ApiProperty()
   subtotal!: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Campaign/line discounts + coupon' })
   discount!: string;
+
+  @ApiPropertyOptional({ description: 'Coupon portion of discount' })
+  couponDiscount?: string;
+
+  @ApiPropertyOptional()
+  couponCode?: string | null;
 
   @ApiProperty()
   tax!: string;
@@ -207,6 +242,37 @@ export class PaymentResponseDto {
   expiresAt!: Date | null;
 }
 
+export class OrderCustomerResponseDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  email!: string;
+
+  @ApiProperty()
+  firstName!: string;
+
+  @ApiProperty()
+  lastName!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  phone!: string | null;
+}
+
+export class OrderReturnResponseDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  returnReason!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  adminNote!: string | null;
+
+  @ApiProperty()
+  createdAt!: Date;
+}
+
 export class OrderResponseDto {
   @ApiProperty()
   id!: string;
@@ -253,6 +319,21 @@ export class OrderResponseDto {
   @ApiPropertyOptional({ type: PaymentResponseDto, nullable: true })
   payment!: PaymentResponseDto | null;
 
+  @ApiPropertyOptional({ type: ShippingResponseDto, nullable: true })
+  shipping!: ShippingResponseDto | null;
+
+  @ApiPropertyOptional({ type: OrderCustomerResponseDto })
+  customer?: OrderCustomerResponseDto;
+
+  @ApiPropertyOptional({ type: OrderReturnResponseDto, nullable: true })
+  orderReturn?: OrderReturnResponseDto | null;
+
+  @ApiProperty({ type: [String], enum: OrderStatus })
+  allowedTransitions!: OrderStatus[];
+
+  @ApiProperty()
+  canCancel!: boolean;
+
   @ApiPropertyOptional({ type: [PublicBankAccountDto] })
   bankAccounts?: PublicBankAccountDto[];
 
@@ -278,4 +359,37 @@ export class AdminOrderListQueryDto {
   @IsOptional()
   @IsEnum(OrderStatus)
   status?: OrderStatus;
+
+  @ApiPropertyOptional({ enum: PaymentStatus })
+  @IsOptional()
+  @IsEnum(PaymentStatus)
+  paymentStatus?: PaymentStatus;
+
+  @ApiPropertyOptional({ description: 'ISO date from' })
+  @IsOptional()
+  @IsDateString()
+  dateFrom?: string;
+
+  @ApiPropertyOptional({ description: 'ISO date to' })
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
+
+  @ApiPropertyOptional({
+    description: 'Order number, customer email, phone, or name',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  search?: string;
+
+  @ApiPropertyOptional({ enum: ['createdAt', 'totalAmount', 'orderNumber'] })
+  @IsOptional()
+  @IsString()
+  sortBy?: 'createdAt' | 'totalAmount' | 'orderNumber';
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'] })
+  @IsOptional()
+  @IsString()
+  sortOrder?: 'asc' | 'desc';
 }

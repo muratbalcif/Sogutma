@@ -73,6 +73,18 @@ export default function DashboardPage() {
             label="Bekleyen siparişler"
             value={data?.pendingOrders ?? null}
           />
+          <StatCard
+            label="Kritik stoklar"
+            value={data?.criticalStock ?? null}
+          />
+          <StatCard
+            label="Aktif kampanyalar"
+            value={data?.activeCampaigns ?? null}
+          />
+          <StatCard
+            label="Aktif kuponlar"
+            value={data?.activeCoupons ?? null}
+          />
           <StatCard label="Ürünler" value={data?.products ?? null} />
           <StatCard label="Siparişler" value={data?.orders ?? null} />
           <StatCard label="Ödemeler" value={data?.payments ?? null} />

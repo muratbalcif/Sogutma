@@ -14,6 +14,9 @@ describe('OrdersService', () => {
       count: jest.fn(),
       findMany: jest.fn(),
     },
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ id: 'u1', status: 'ACTIVE' }),
+    },
   };
   const priceService = { resolvePricesForProducts: jest.fn() };
   const inventoryService = {
@@ -36,27 +39,46 @@ describe('OrdersService', () => {
     })),
   };
   const orderStatusService = {
-    canCustomerCancel: jest.fn(),
+    canCustomerCancel: jest.fn().mockReturnValue(true),
     assertTransition: jest.fn(),
+    getAllowedTransitions: jest.fn().mockReturnValue([]),
+    applyTransitionInTransaction: jest.fn(),
+  };
+  const shippingService = {
+    upsertManualShipmentInTransaction: jest.fn(),
   };
 
   const config = { get: jest.fn().mockReturnValue(24) };
   const bankAccountsService = { listPublic: jest.fn().mockResolvedValue([]) };
-  const emailOutbox = { enqueue: jest.fn() };
+  const emailOutbox = { enqueue: jest.fn(), enqueueOrderEmail: jest.fn() };
+
+  const couponsService = {
+    validateForUser: jest.fn(),
+    recordUsage: jest.fn(),
+  };
+
+  const accountingService = {
+    assertCreditLimitAllows: jest.fn().mockResolvedValue(undefined),
+    recordIfAbsent: jest.fn().mockResolvedValue({ created: true }),
+  };
 
   const service = new OrdersService(
     prisma as never,
     priceService as never,
     inventoryService as never,
     addressesService as never,
-    orderStatusService as never,
-    config as never,
     bankAccountsService as never,
     emailOutbox as never,
+    config as never,
+    shippingService as never,
+    orderStatusService as never,
+    couponsService as never,
+    accountingService as never,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1', status: 'ACTIVE' });
   });
 
   it('rejects empty cart with 409', async () => {
