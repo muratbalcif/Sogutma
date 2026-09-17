@@ -30,7 +30,7 @@ export function ProductActions({ product }: { product: ProductDetail }) {
       });
       queryClient.setQueryData(["cart"], cart);
       const qty =
-        cart.items.find((item) => item.product.id === product.id)?.quantity ??
+        cart.items.find((item) => item.product?.id === product.id)?.quantity ??
         quantity;
       setMessage(`Sepete eklendi · Adet: ${qty}`);
       router.refresh();
