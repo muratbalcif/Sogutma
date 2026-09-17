@@ -15,8 +15,14 @@ export const envValidationSchema = Joi.object({
   }),
   JWT_REFRESH_SECRET: Joi.when('NODE_ENV', {
     is: 'production',
-    then: Joi.string().min(32).required(),
-    otherwise: Joi.string().min(16).required(),
+    then: Joi.string()
+      .min(32)
+      .invalid(Joi.ref('JWT_ACCESS_SECRET'))
+      .required(),
+    otherwise: Joi.string()
+      .min(16)
+      .invalid(Joi.ref('JWT_ACCESS_SECRET'))
+      .required(),
   }),
   ACCESS_TOKEN_EXPIRES_IN: Joi.string().default('15m'),
   REFRESH_TOKEN_EXPIRES_IN: Joi.string().default('30d'),

@@ -5,7 +5,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from '@prisma/client';
+import { OutboxStatus, Prisma } from '@prisma/client';
 import { EnvironmentVariables } from '../../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { renderOrderEmailHtml } from './email-templates';
@@ -14,11 +14,13 @@ type SendResult =
   | { ok: true }
   | { ok: false; error: string; retryable: boolean };
 
+/** How long a PROCESSING claim is exclusive before another worker may reclaim. */
+const CLAIM_LEASE_MS = 5 * 60 * 1000;
+
 /**
  * Email delivery is intentionally outside order/payment DB transactions.
- * Rows are only marked processed after a successful provider send.
- * Without RESEND_API_KEY + EMAIL_FROM, delivery fails (retryable) and
- * processedAt is never set.
+ * Rows are claimed atomically (status → PROCESSING) so multi-instance
+ * workers cannot double-send. processedAt is set only after successful send.
  */
 @Injectable()
 export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
@@ -65,6 +67,8 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
         toEmail: input.toEmail,
         subject: input.subject,
         payload: input.payload as Prisma.InputJsonValue,
+        status: OutboxStatus.PENDING,
+        availableAt: new Date(),
       },
     });
   }
@@ -115,10 +119,22 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
   }
 
   async processPending(limit = 30): Promise<number> {
+    const now = new Date();
     const pending = await this.prisma.emailOutbox.findMany({
       where: {
         processedAt: null,
         attempts: { lt: this.maxAttempts },
+        OR: [
+          {
+            status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED] },
+            availableAt: { lte: now },
+          },
+          {
+            // Stale claim lease — previous worker likely died mid-send.
+            status: OutboxStatus.PROCESSING,
+            availableAt: { lte: now },
+          },
+        ],
       },
       orderBy: { createdAt: 'asc' },
       take: limit,
@@ -126,6 +142,11 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
 
     let processed = 0;
     for (const item of pending) {
+      const claimed = await this.claim(item.id, now);
+      if (!claimed) {
+        continue;
+      }
+
       const html =
         item.payload &&
         typeof item.payload === 'object' &&
@@ -147,8 +168,9 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
           await this.prisma.emailOutbox.update({
             where: { id: item.id },
             data: {
+              status: OutboxStatus.SENT,
               processedAt: new Date(),
-              attempts: item.attempts + 1,
+              attempts: { increment: 1 },
               lastError: null,
             },
           });
@@ -156,32 +178,60 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
           continue;
         }
 
-        await this.prisma.emailOutbox.update({
-          where: { id: item.id },
-          data: {
-            attempts: item.attempts + 1,
-            lastError: result.error.slice(0, 500),
-          },
-        });
+        await this.markFailed(item.id, item.attempts + 1, result.error);
         this.logger.warn(
           `Email outbox ${item.id} not delivered (attempt ${item.attempts + 1}): ${result.error}`,
         );
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown email error';
-        await this.prisma.emailOutbox.update({
-          where: { id: item.id },
-          data: {
-            attempts: item.attempts + 1,
-            lastError: message.slice(0, 500),
-          },
-        });
+        await this.markFailed(item.id, item.attempts + 1, message);
         this.logger.warn(
           `Email outbox ${item.id} failed (attempt ${item.attempts + 1}): ${message}`,
         );
       }
     }
     return processed;
+  }
+
+  /**
+   * Atomic exclusive claim. Returns false if another worker already owns the row.
+   */
+  async claim(id: string, now = new Date()): Promise<boolean> {
+    const leaseUntil = new Date(now.getTime() + CLAIM_LEASE_MS);
+    const claimed = await this.prisma.emailOutbox.updateMany({
+      where: {
+        id,
+        processedAt: null,
+        OR: [
+          { status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED] } },
+          { status: OutboxStatus.PROCESSING, availableAt: { lte: now } },
+        ],
+      },
+      data: {
+        status: OutboxStatus.PROCESSING,
+        availableAt: leaseUntil,
+      },
+    });
+    return claimed.count === 1;
+  }
+
+  private async markFailed(
+    id: string,
+    attempts: number,
+    error: string,
+  ): Promise<void> {
+    const backoffMs = Math.min(60_000 * attempts, 15 * 60_000);
+    await this.prisma.emailOutbox.update({
+      where: { id },
+      data: {
+        status: OutboxStatus.FAILED,
+        attempts,
+        lastError: error.slice(0, 500),
+        availableAt: new Date(Date.now() + backoffMs),
+        processedAt: null,
+      },
+    });
   }
 
   /** Exposed for tests — sends via Resend when configured. */

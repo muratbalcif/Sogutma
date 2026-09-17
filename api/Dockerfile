@@ -1,15 +1,20 @@
 # Multi-stage production image for FurkanSoğutma API.
-# Development typically runs API on the host; compose starts Postgres + Redis.
+# Build from repository root (monorepo lockfile):
+#   docker build -f api/Dockerfile -t furkansogutma-api .
 
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+COPY api/package.json ./api/
+RUN npm ci -w furkansogutma-api --include-workspace-root=false
 
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY --from=deps /app/api/node_modules ./api/node_modules
+COPY package.json package-lock.json ./
+COPY api ./api
+WORKDIR /app/api
 RUN npx prisma generate
 RUN npm run build
 
@@ -19,10 +24,13 @@ ENV NODE_ENV=production
 RUN apk add --no-cache wget \
   && addgroup -S app && adduser -S app -G app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+COPY api/package.json ./api/
+RUN npm ci -w furkansogutma-api --omit=dev --include-workspace-root=false \
+  && npm cache clean --force
+COPY --from=build /app/api/dist ./api/dist
+COPY --from=build /app/api/prisma ./api/prisma
+COPY --from=build /app/api/node_modules/.prisma ./api/node_modules/.prisma
+WORKDIR /app/api
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

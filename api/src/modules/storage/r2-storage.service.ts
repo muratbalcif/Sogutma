@@ -101,8 +101,11 @@ export class R2StorageService {
     }
   }
 
-  assertUploadSize(contentLength?: number): void {
-    if (contentLength != null && contentLength > this.maxBytes) {
+  assertUploadSize(contentLength: number): void {
+    if (!Number.isFinite(contentLength) || contentLength < 1) {
+      throw new BadRequestException('contentLength is required');
+    }
+    if (contentLength > this.maxBytes) {
       throw new BadRequestException(
         `File exceeds max upload size (${this.maxBytes} bytes)`,
       );
@@ -139,7 +142,7 @@ export class R2StorageService {
     filename: string;
     contentType: string;
     folder: string;
-    contentLength?: number;
+    contentLength: number;
   }): Promise<{
     uploadUrl: string;
     objectKey: string;
@@ -162,6 +165,7 @@ export class R2StorageService {
       Bucket: this.bucket,
       Key: objectKey,
       ContentType: input.contentType,
+      ContentLength: input.contentLength,
     });
     const uploadUrl = await getSignedUrl(this.client, command, {
       expiresIn: this.presignTtlSeconds,

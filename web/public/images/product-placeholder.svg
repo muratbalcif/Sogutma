@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640" fill="none">
+  <rect width="640" height="640" fill="#F8FAFC"/>
+  <rect x="160" y="180" width="320" height="240" rx="16" stroke="#94A3B8" stroke-width="8" fill="#F1F5F9"/>
+  <circle cx="240" cy="260" r="28" fill="#CBD5E1"/>
+  <path d="M176 372l88-72 64 48 72-88 64 112H176z" fill="#CBD5E1"/>
+  <text x="320" y="480" text-anchor="middle" fill="#64748B" font-family="system-ui,sans-serif" font-size="28">Ürün görseli</text>
+</svg>

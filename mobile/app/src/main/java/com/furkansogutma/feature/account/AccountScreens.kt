@@ -290,16 +290,25 @@ fun ProfileRoute(onBack: () -> Unit, vm: AccountDataViewModel = hiltViewModel())
 fun OrdersRoute(onOrderClick: (String) -> Unit, onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewModel()) {
     var orders by remember { mutableStateOf<List<Order>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) {
-        when (val result = vm.getOrders()) {
-            is Result.Success -> orders = result.data
-            is Result.Error -> error = result.error.message
+    val scope = rememberCoroutineScope()
+
+    fun load() {
+        scope.launch {
+            orders = null
+            error = null
+            when (val result = vm.getOrders()) {
+                is Result.Success -> orders = result.data
+                is Result.Error -> error = result.error.message
+            }
         }
     }
+
+    LaunchedEffect(Unit) { load() }
+
     Column(Modifier.fillMaxSize()) {
         FurkanTopBar("Siparişlerim", onBack = onBack)
         when {
-            error != null -> FurkanError(error!!)
+            error != null && orders == null -> FurkanError(error!!) { load() }
             orders == null -> FurkanLoading()
             orders!!.isEmpty() -> FurkanEmptyState("Sipariş yok", "Henüz siparişiniz bulunmuyor.")
             else -> LazyColumn(Modifier.padding(FurkanSpacing.md)) {
@@ -330,16 +339,24 @@ fun FavoritesRoute(
     var products by remember { mutableStateOf<List<Product>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) {
-        when (val result = vm.favoriteRepository.getFavorites()) {
-            is Result.Success -> products = result.data
-            is Result.Error -> error = result.error.message
+
+    fun load() {
+        scope.launch {
+            products = null
+            error = null
+            when (val result = vm.favoriteRepository.getFavorites()) {
+                is Result.Success -> products = result.data
+                is Result.Error -> error = result.error.message
+            }
         }
     }
+
+    LaunchedEffect(Unit) { load() }
+
     Column(Modifier.fillMaxSize()) {
         FurkanTopBar("Favorilerim", onBack = onBack)
         when {
-            error != null -> FurkanError(error!!)
+            error != null && products == null -> FurkanError(error!!) { load() }
             products == null -> FurkanLoading()
             products!!.isEmpty() -> FurkanEmptyState("Favori yok", "Favori ürünleriniz burada görünür.")
             else -> LazyColumn(Modifier.padding(FurkanSpacing.md)) {
@@ -442,16 +459,26 @@ fun AddressFormRoute(onBack: () -> Unit, onSaved: () -> Unit, vm: AccountDataVie
 @Composable
 fun AlertsRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewModel()) {
     var alerts by remember { mutableStateOf<List<ProductAlert>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) {
-        when (val result = vm.accountRepository.getAlerts()) {
-            is Result.Success -> alerts = result.data
-            is Result.Error -> alerts = emptyList()
+
+    fun load() {
+        scope.launch {
+            alerts = null
+            error = null
+            when (val result = vm.accountRepository.getAlerts()) {
+                is Result.Success -> alerts = result.data
+                is Result.Error -> error = result.error.message
+            }
         }
     }
+
+    LaunchedEffect(Unit) { load() }
+
     Column(Modifier.fillMaxSize()) {
         FurkanTopBar("Stok bildirimleri", onBack = onBack)
         when {
+            error != null && alerts == null -> FurkanError(error!!) { load() }
             alerts == null -> FurkanLoading()
             alerts!!.isEmpty() -> FurkanEmptyState("Bildirim yok", "Stok bildirimleriniz burada.")
             else -> LazyColumn(Modifier.padding(FurkanSpacing.md)) {
@@ -556,17 +583,26 @@ fun CurrentAccountRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hilt
 @Composable
 fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewModel()) {
     var items by remember { mutableStateOf<List<BankTransfer>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
     var sender by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) {
-        when (val result = vm.accountRepository.getBankTransfers()) {
-            is Result.Success -> items = result.data
-            is Result.Error -> items = emptyList()
+
+    fun load() {
+        scope.launch {
+            items = null
+            error = null
+            when (val result = vm.accountRepository.getBankTransfers()) {
+                is Result.Success -> items = result.data
+                is Result.Error -> error = result.error.message
+            }
         }
     }
+
+    LaunchedEffect(Unit) { load() }
+
     Column(Modifier.fillMaxSize()) {
         FurkanTopBar("Havale bildirimleri", onBack = onBack)
         Column(Modifier.padding(FurkanSpacing.md)) {
@@ -598,6 +634,7 @@ fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: Acc
                 Spacer(Modifier.height(FurkanSpacing.lg))
             }
             when {
+                error != null && items == null -> FurkanError(error!!) { load() }
                 items == null -> FurkanLoading()
                 items!!.isEmpty() -> FurkanEmptyState("Havale yok", "Havale bildirimleriniz burada.")
                 else -> items!!.forEach {
@@ -694,16 +731,25 @@ fun SettingsRoute(
 fun LegalDocumentRoute(slug: String, onBack: () -> Unit, vm: AccountDataViewModel = hiltViewModel()) {
     var page by remember { mutableStateOf<LegalPage?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(slug) {
-        when (val result = vm.accountRepository.getLegalPage(slug)) {
-            is Result.Success -> page = result.data
-            is Result.Error -> error = result.error.message
+    val scope = rememberCoroutineScope()
+
+    fun load() {
+        scope.launch {
+            page = null
+            error = null
+            when (val result = vm.accountRepository.getLegalPage(slug)) {
+                is Result.Success -> page = result.data
+                is Result.Error -> error = result.error.message
+            }
         }
     }
+
+    LaunchedEffect(slug) { load() }
+
     Column(Modifier.fillMaxSize()) {
         FurkanTopBar(page?.title ?: "Yasal metin", onBack = onBack)
         when {
-            error != null -> FurkanError(error!!)
+            error != null && page == null -> FurkanError(error!!) { load() }
             page == null -> FurkanLoading()
             else -> {
                 Column(Modifier.padding(FurkanSpacing.md)) {

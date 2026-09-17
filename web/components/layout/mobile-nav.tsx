@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { CartNavLink } from "@/components/layout/cart-nav-link";
+import { NavLink } from "@/components/layout/nav-link";
 import type { CategoryNode } from "@/types/api";
 
 export function MobileNav({ categories }: { categories: CategoryNode[] }) {
@@ -26,35 +27,38 @@ export function MobileNav({ categories }: { categories: CategoryNode[] }) {
           onClick={() => setOpen(false)}
         >
           <div
-            className="absolute right-0 top-0 h-full w-72 bg-white p-4 shadow-xl"
+            className="absolute right-0 top-0 h-full w-80 bg-surface p-5 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <p className="mb-4 font-semibold text-navy">Menü</p>
-            <nav className="flex flex-col gap-2 text-sm">
-              <Link href="/account" onClick={() => setOpen(false)}>
+            <p className="mb-5 font-[family-name:var(--font-display)] text-lg font-semibold text-primary">
+              Menü
+            </p>
+            <nav className="flex flex-col gap-1">
+              <NavLink href="/account" exact onClick={() => setOpen(false)}>
                 Hesabım
-              </Link>
-              <Link href="/account/favorites" onClick={() => setOpen(false)}>
+              </NavLink>
+              <NavLink
+                href="/account/favorites"
+                onClick={() => setOpen(false)}
+              >
                 Favoriler
-              </Link>
-              <Link href="/cart" onClick={() => setOpen(false)}>
-                Sepet
-              </Link>
-              <Link href="/products" onClick={() => setOpen(false)}>
+              </NavLink>
+              <CartNavLink onNavigate={() => setOpen(false)} />
+              <NavLink href="/products" onClick={() => setOpen(false)}>
                 Ürünler
-              </Link>
-              <Link href="/campaigns" onClick={() => setOpen(false)}>
+              </NavLink>
+              <NavLink href="/campaigns" onClick={() => setOpen(false)}>
                 Kampanyalar
-              </Link>
-              <hr className="my-2" />
+              </NavLink>
+              <hr className="my-3 border-border" />
               {categories.map((cat) => (
-                <Link
+                <NavLink
                   key={cat.id}
                   href={`/categories/${cat.slug}`}
                   onClick={() => setOpen(false)}
                 >
                   {cat.name}
-                </Link>
+                </NavLink>
               ))}
             </nav>
           </div>

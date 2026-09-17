@@ -87,6 +87,14 @@ export const ORDER_MANAGER_PERMISSION_CODES = [
   'order.update',
 ] as const;
 
+export const STOCK_MANAGER_PERMISSION_CODES = [
+  'stock.read',
+  'stock.update',
+  'import.read',
+  'import.create',
+  'product.read',
+] as const;
+
 export const CUSTOMER_MANAGER_PERMISSION_CODES = [
   'customer.read',
   'customer.update',

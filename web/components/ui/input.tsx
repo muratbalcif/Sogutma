@@ -8,7 +8,8 @@ export function Input({
   return (
     <input
       className={clsx(
-        "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900",
+        "w-full rounded-[13px] border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted",
+        "transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20",
         className,
       )}
       {...props}

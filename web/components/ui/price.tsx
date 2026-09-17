@@ -9,13 +9,20 @@ export function Price({
   currency?: string;
   compareAt?: string | null;
 }) {
+  const discounted = shouldShowCompareAt(amount, compareAt);
   return (
-    <div className="flex items-baseline gap-2">
-      <span className="text-lg font-semibold text-navy">
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <span
+        className={
+          discounted
+            ? "text-lg font-bold text-accent-dark"
+            : "text-lg font-bold text-foreground"
+        }
+      >
         {formatMoney(amount, currency)}
       </span>
-      {shouldShowCompareAt(amount, compareAt) ? (
-        <span className="text-sm text-slate-400 line-through">
+      {discounted ? (
+        <span className="text-sm text-muted line-through">
           {formatMoney(compareAt!, currency)}
         </span>
       ) : null}

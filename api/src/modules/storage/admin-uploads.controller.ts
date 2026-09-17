@@ -40,12 +40,11 @@ class PresignUploadDto {
   @MaxLength(120)
   folder?: string;
 
-  @ApiPropertyOptional({ example: 102400 })
-  @IsOptional()
+  @ApiProperty({ example: 102400 })
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  contentLength?: number;
+  contentLength!: number;
 }
 
 class PresignUploadResponseDto {

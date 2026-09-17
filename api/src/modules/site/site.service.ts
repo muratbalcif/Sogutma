@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export const LEGAL_SLUGS = ['kvkk', 'privacy', 'terms'] as const;
@@ -8,6 +9,7 @@ export type LegalPageDto = {
   slug: string;
   title: string;
   body: string;
+  version: number;
   updatedAt: string;
 };
 
@@ -106,7 +108,10 @@ Destek kanalları site yapılandırmasında yer alır.`,
 
 @Injectable()
 export class SiteService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async ensureLegalPages(): Promise<void> {
     for (const slug of LEGAL_SLUGS) {
@@ -146,18 +151,51 @@ export class SiteService {
   async updateLegalPage(
     slug: string,
     input: { title?: string; body?: string },
+    adminUserId?: string,
   ): Promise<LegalPageDto> {
     if (!LEGAL_SLUGS.includes(slug as LegalSlug)) {
       throw new NotFoundException('Legal page not found');
     }
     await this.ensureLegalPages();
+    const current = await this.prisma.legalPage.findUnique({ where: { slug } });
+    if (!current) {
+      throw new NotFoundException('Legal page not found');
+    }
+
+    const nextTitle = input.title !== undefined ? input.title : current.title;
+    const nextBody = input.body !== undefined ? input.body : current.body;
+    const contentChanged =
+      nextTitle !== current.title || nextBody !== current.body;
+
+    if (!contentChanged) {
+      return this.toDto(current);
+    }
+
     const row = await this.prisma.legalPage.update({
       where: { slug },
       data: {
-        ...(input.title !== undefined ? { title: input.title } : {}),
-        ...(input.body !== undefined ? { body: input.body } : {}),
+        title: nextTitle,
+        body: nextBody,
+        version: { increment: 1 },
       },
     });
+
+    if (adminUserId) {
+      await this.audit.log({
+        adminUserId,
+        action: 'LEGAL_PAGE_UPDATED',
+        entityType: 'LegalPage',
+        entityId: row.id,
+        metadata: {
+          slug: row.slug,
+          version: row.version,
+          previousVersion: current.version,
+          titleChanged: nextTitle !== current.title,
+          bodyChanged: nextBody !== current.body,
+        },
+      });
+    }
+
     return this.toDto(row);
   }
 
@@ -165,12 +203,14 @@ export class SiteService {
     slug: string;
     title: string;
     body: string;
+    version: number;
     updatedAt: Date;
   }): LegalPageDto {
     return {
       slug: row.slug,
       title: row.title,
       body: row.body,
+      version: row.version,
       updatedAt: row.updatedAt.toISOString(),
     };
   }

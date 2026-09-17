@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
   Inject,
@@ -38,6 +39,8 @@ import { PaymentsService } from './payments.service';
  */
 @Injectable()
 export class BankTransferService {
+  private readonly logger = new Logger(BankTransferService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentsService: PaymentsService,
@@ -359,40 +362,56 @@ export class BankTransferService {
       return updated;
     });
 
-    await this.notificationsService?.enqueuePaymentEvent({
-      userId: approved.order.userId,
-      type: 'BANK_TRANSFER_APPROVED',
-      title: 'Ödemeniz onaylandı',
-      body: `${approved.order.orderNumber} ödemesi onaylandı.`,
-      data: { orderId: approved.orderId, transferId: approved.id },
-    });
-    await this.notificationsService?.enqueueOrderStatus(
-      approved.orderId,
-      approved.order.userId,
-      OrderStatus.CONFIRMED,
-      approved.order.orderNumber,
-    );
-    await this.emailOutbox.enqueue({
-      event: 'TransferApproved',
-      toEmail: approved.order.user.email,
-      subject: `Ödeme onaylandı — ${approved.order.orderNumber}`,
-      payload: {
-        orderId: approved.orderId,
-        orderNumber: approved.order.orderNumber,
-        transferId: approved.id,
-      },
-    });
-    await this.emailOutbox.enqueue({
-      event: 'OrderConfirmed',
-      toEmail: approved.order.user.email,
-      subject: `Siparişiniz onaylandı — ${approved.order.orderNumber}`,
-      payload: {
-        orderId: approved.orderId,
-        orderNumber: approved.order.orderNumber,
-      },
-    });
+    await this.safeNotifyAfterApprove(approved);
 
     return this.getAdminById(id);
+  }
+
+  /** Side effects must not roll back an already-committed approval. */
+  private async safeNotifyAfterApprove(approved: {
+    id: string;
+    orderId: string;
+    order: { orderNumber: string; userId: string; user: { email: string } };
+  }): Promise<void> {
+    try {
+      await this.notificationsService?.enqueuePaymentEvent({
+        userId: approved.order.userId,
+        type: 'BANK_TRANSFER_APPROVED',
+        title: 'Ödemeniz onaylandı',
+        body: `${approved.order.orderNumber} ödemesi onaylandı.`,
+        data: { orderId: approved.orderId, transferId: approved.id },
+      });
+      await this.notificationsService?.enqueueOrderStatus(
+        approved.orderId,
+        approved.order.userId,
+        OrderStatus.CONFIRMED,
+        approved.order.orderNumber,
+      );
+      await this.emailOutbox.enqueue({
+        event: 'TransferApproved',
+        toEmail: approved.order.user.email,
+        subject: `Ödeme onaylandı — ${approved.order.orderNumber}`,
+        payload: {
+          orderId: approved.orderId,
+          orderNumber: approved.order.orderNumber,
+          transferId: approved.id,
+        },
+      });
+      await this.emailOutbox.enqueue({
+        event: 'OrderConfirmed',
+        toEmail: approved.order.user.email,
+        subject: `Siparişiniz onaylandı — ${approved.order.orderNumber}`,
+        payload: {
+          orderId: approved.orderId,
+          orderNumber: approved.order.orderNumber,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Post-approve notify failed for transfer ${approved.id}: ${message}`,
+      );
+    }
   }
 
   async reject(
@@ -457,24 +476,31 @@ export class BankTransferService {
       return updated;
     });
 
-    await this.notificationsService?.enqueuePaymentEvent({
-      userId: rejected.order.userId,
-      type: 'BANK_TRANSFER_REJECTED',
-      title: 'Ödeme bildiriminiz reddedildi',
-      body: `${rejected.order.orderNumber}: ${reason}`,
-      data: { orderId: rejected.orderId, transferId: rejected.id },
-    });
-    await this.emailOutbox.enqueue({
-      event: 'TransferRejected',
-      toEmail: rejected.order.user.email,
-      subject: `Havale bildirimi reddedildi — ${rejected.order.orderNumber}`,
-      payload: {
-        orderId: rejected.orderId,
-        orderNumber: rejected.order.orderNumber,
-        transferId: rejected.id,
-        reason,
-      },
-    });
+    try {
+      await this.notificationsService?.enqueuePaymentEvent({
+        userId: rejected.order.userId,
+        type: 'BANK_TRANSFER_REJECTED',
+        title: 'Ödeme bildiriminiz reddedildi',
+        body: `${rejected.order.orderNumber}: ${reason}`,
+        data: { orderId: rejected.orderId, transferId: rejected.id },
+      });
+      await this.emailOutbox.enqueue({
+        event: 'TransferRejected',
+        toEmail: rejected.order.user.email,
+        subject: `Havale bildirimi reddedildi — ${rejected.order.orderNumber}`,
+        payload: {
+          orderId: rejected.orderId,
+          orderNumber: rejected.order.orderNumber,
+          transferId: rejected.id,
+          reason,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Post-reject notify failed for transfer ${rejected.id}: ${message}`,
+      );
+    }
 
     return this.getAdminById(id);
   }

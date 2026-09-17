@@ -41,6 +41,9 @@ const nextConfig: NextConfig = {
           ]
         : []),
       { protocol: "http", hostname: "localhost" },
+      // Seed / local placeholder CDN used in catalog fixtures
+      { protocol: "https", hostname: "cdn.furkansogutma.local" },
+      { protocol: "http", hostname: "cdn.furkansogutma.local" },
       { protocol: "https", hostname: "**.r2.dev" },
       { protocol: "https", hostname: "**.cloudflarestorage.com" },
     ],

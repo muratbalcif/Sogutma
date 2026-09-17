@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   AccountTransactionType,
+  BankTransferStatus,
   OrderStatus,
   PaymentMethod,
   PaymentStatus,
@@ -179,7 +180,12 @@ export class PaymentsService {
     if (!payment) {
       throw new NotFoundException('Payment not found');
     }
-    return this.toResponse(payment);
+    const pendingBankTransferId = await this.findPendingBankTransferId(
+      payment.id,
+      payment.method,
+      payment.status,
+    );
+    return this.toResponse(payment, pendingBankTransferId);
   }
 
   async listAdmin(
@@ -213,8 +219,12 @@ export class PaymentsService {
       }),
     ]);
 
+    const pendingIds = await this.mapPendingBankTransferIds(items);
+
     return buildPaginatedResponse(
-      items.map((item) => this.toResponse(item)),
+      items.map((item) =>
+        this.toResponse(item, pendingIds.get(item.id) ?? null),
+      ),
       total,
       page,
       limit,
@@ -387,23 +397,80 @@ export class PaymentsService {
     return provider;
   }
 
-  private toResponse(payment: {
-    id: string;
-    orderId: string;
-    method: PaymentMethod;
-    status: PaymentStatus;
-    amount: Prisma.Decimal;
-    currency: string;
-    provider: string | null;
-    providerPaymentId: string | null;
-    idempotencyKey: string | null;
-    failureCode: string | null;
-    failureMessage: string | null;
-    paidAt: Date | null;
-    expiresAt?: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-  }): PaymentResponseDto {
+  private async findPendingBankTransferId(
+    paymentId: string,
+    method: PaymentMethod,
+    status: PaymentStatus,
+  ): Promise<string | null> {
+    if (
+      method !== PaymentMethod.BANK_TRANSFER ||
+      status !== PaymentStatus.PENDING
+    ) {
+      return null;
+    }
+    const notification = await this.prisma.bankTransferNotification.findFirst({
+      where: { paymentId, status: BankTransferStatus.PENDING },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return notification?.id ?? null;
+  }
+
+  private async mapPendingBankTransferIds(
+    items: Array<{
+      id: string;
+      method: PaymentMethod;
+      status: PaymentStatus;
+    }>,
+  ): Promise<Map<string, string>> {
+    const pendingPaymentIds = items
+      .filter(
+        (item) =>
+          item.method === PaymentMethod.BANK_TRANSFER &&
+          item.status === PaymentStatus.PENDING,
+      )
+      .map((item) => item.id);
+    if (pendingPaymentIds.length === 0) {
+      return new Map();
+    }
+    const notifications =
+      await this.prisma.bankTransferNotification.findMany({
+        where: {
+          paymentId: { in: pendingPaymentIds },
+          status: BankTransferStatus.PENDING,
+        },
+        select: { id: true, paymentId: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    const map = new Map<string, string>();
+    for (const row of notifications) {
+      if (!map.has(row.paymentId)) {
+        map.set(row.paymentId, row.id);
+      }
+    }
+    return map;
+  }
+
+  private toResponse(
+    payment: {
+      id: string;
+      orderId: string;
+      method: PaymentMethod;
+      status: PaymentStatus;
+      amount: Prisma.Decimal;
+      currency: string;
+      provider: string | null;
+      providerPaymentId: string | null;
+      idempotencyKey: string | null;
+      failureCode: string | null;
+      failureMessage: string | null;
+      paidAt: Date | null;
+      expiresAt?: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+    },
+    pendingBankTransferId: string | null = null,
+  ): PaymentResponseDto {
     return {
       id: payment.id,
       orderId: payment.orderId,
@@ -418,6 +485,7 @@ export class PaymentsService {
       failureMessage: payment.failureMessage,
       paidAt: payment.paidAt,
       expiresAt: payment.expiresAt ?? null,
+      pendingBankTransferId,
       createdAt: payment.createdAt,
       updatedAt: payment.updatedAt,
     };

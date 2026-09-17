@@ -104,16 +104,18 @@ export type AuthUser = {
 export type CartResponse = {
   id: string;
   items: Array<{
-    productId: string;
     quantity: number;
+    unitPrice: string | null;
+    subtotal: string | null;
+    currency: string | null;
+    available: boolean;
+    issueCode: string | null;
     product: ProductListItem;
-    unitPrice: string;
-    lineTotal: string;
-    currency: string;
   }>;
-  subtotal: string;
-  taxAmount?: string;
-  discountAmount?: string;
-  total: string;
-  currency: string;
+  summary: {
+    subtotal: string;
+    discount: string;
+    total: string;
+    currency: string;
+  };
 };

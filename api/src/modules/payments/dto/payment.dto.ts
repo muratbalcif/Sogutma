@@ -216,6 +216,10 @@ export class PaymentResponseDto {
   @ApiPropertyOptional({ nullable: true })
   expiresAt!: Date | null;
 
+  /** Pending bank-transfer notification id when admin can approve from payments UI. */
+  @ApiPropertyOptional({ nullable: true })
+  pendingBankTransferId!: string | null;
+
   @ApiProperty()
   createdAt!: Date;
 

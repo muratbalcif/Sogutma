@@ -66,10 +66,12 @@ import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import com.furkansogutma.core.common.money.MoneyFormatter
 import com.furkansogutma.core.designsystem.theme.BadgeRed
+import com.furkansogutma.core.designsystem.theme.ButtonShape
 import com.furkansogutma.core.designsystem.theme.FurkanSogutmaTheme
 import com.furkansogutma.core.designsystem.theme.FurkanSpacing
 import com.furkansogutma.core.designsystem.theme.OnSurfaceFaint
 import com.furkansogutma.core.designsystem.theme.PillShape
+import com.furkansogutma.core.designsystem.theme.PrimaryLight
 import com.furkansogutma.core.designsystem.theme.White
 
 @Composable
@@ -83,7 +85,7 @@ fun FurkanButton(
     Button(
         onClick = onClick,
         enabled = enabled && !loading,
-        shape = PillShape,
+        shape = ButtonShape,
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -115,7 +117,7 @@ fun FurkanOutlinedButton(
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        shape = PillShape,
+        shape = ButtonShape,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = MaterialTheme.colorScheme.onSurface,
@@ -142,7 +144,7 @@ fun FurkanAddToCartButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        shape = PillShape,
+        shape = ButtonShape,
         contentPadding = PaddingValues(horizontal = FurkanSpacing.md, vertical = FurkanSpacing.xs),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
@@ -150,7 +152,7 @@ fun FurkanAddToCartButton(
         ),
         modifier = modifier
             .fillMaxWidth()
-            .height(40.dp)
+            .height(44.dp)
             .semantics { contentDescription = label },
     ) {
         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -235,15 +237,23 @@ fun FurkanSearchBar(
         onValueChange = onQueryChange,
         modifier = modifier
             .fillMaxWidth()
+            .height(54.dp)
             .semantics { contentDescription = "Arama" },
         singleLine = true,
-        shape = PillShape,
-        placeholder = { Text(placeholder, color = OnSurfaceFaint) },
+        shape = MaterialTheme.shapes.medium,
+        placeholder = {
+            Text(
+                placeholder,
+                color = OnSurfaceFaint,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        },
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = White,
-            unfocusedContainerColor = White,
-            focusedBorderColor = MaterialTheme.colorScheme.outline,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
             unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+            cursorColor = MaterialTheme.colorScheme.primary,
         ),
     )
 }
@@ -273,8 +283,14 @@ fun FurkanPrice(
             Text(
                 text = specialLabel,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.secondary,
                 fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = MoneyFormatter.formatTry(amount),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.secondary,
             )
         } else {
             Text(
@@ -282,13 +298,13 @@ fun FurkanPrice(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(
+                text = MoneyFormatter.formatTry(amount),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
-        Text(
-            text = MoneyFormatter.formatTry(amount),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
     }
 }
 
@@ -373,31 +389,32 @@ fun FurkanEmptyState(
 ) {
     Column(
         modifier = modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .padding(FurkanSpacing.xl),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             modifier = Modifier
-                .size(96.dp)
+                .size(88.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(PrimaryLight),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(36.dp),
+                tint = MaterialTheme.colorScheme.primary,
             )
         }
-        Spacer(Modifier.height(FurkanSpacing.lg))
+        Spacer(Modifier.height(FurkanSpacing.md))
         Text(
             title,
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold,
         )
         if (message.isNotBlank()) {
             Spacer(Modifier.height(FurkanSpacing.xs))
@@ -409,7 +426,7 @@ fun FurkanEmptyState(
             )
         }
         if (actionLabel != null && onAction != null) {
-            Spacer(Modifier.height(FurkanSpacing.lg))
+            Spacer(Modifier.height(FurkanSpacing.md))
             FurkanButton(
                 text = actionLabel,
                 onClick = onAction,
@@ -654,30 +671,39 @@ fun FurkanCategoryTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val label = title.trim().ifBlank { "Kategori" }
     Row(
         modifier = modifier
             .height(72.dp)
-            .shadow(2.dp, MaterialTheme.shapes.medium, clip = false)
+            .shadow(4.dp, MaterialTheme.shapes.medium, clip = false)
             .clip(MaterialTheme.shapes.medium)
             .background(White)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .padding(horizontal = FurkanSpacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             Modifier
-                .width(4.dp)
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.primary),
-        )
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(PrimaryLight),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                label.take(1).uppercase(),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Spacer(Modifier.width(FurkanSpacing.sm))
         Text(
-            text = title,
+            text = label,
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = FurkanSpacing.sm),
-            maxLines = 3,
+            modifier = Modifier.weight(1f),
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -700,7 +726,7 @@ fun FurkanProductCard(
 ) {
     Column(
         modifier = modifier
-            .shadow(2.dp, MaterialTheme.shapes.medium, clip = false)
+            .shadow(6.dp, MaterialTheme.shapes.medium, clip = false)
             .clip(MaterialTheme.shapes.medium)
             .background(White)
             .clickable(onClick = onClick)
@@ -710,11 +736,12 @@ fun FurkanProductCard(
         Box {
             FurkanNetworkImage(
                 url = imageUrl,
-                contentDescription = "$name ürün görseli",
+                contentDescription = name,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(MaterialTheme.shapes.small),
+                    .clip(MaterialTheme.shapes.small)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
             )
             if (onCampaign) {
                 FurkanBadge(
@@ -723,17 +750,25 @@ fun FurkanProductCard(
                 )
             }
             if (onFavoriteClick != null) {
-                FurkanFavoriteIcon(
-                    isFavorite = isFavorite,
-                    onClick = onFavoriteClick,
-                    modifier = Modifier.align(Alignment.TopEnd),
-                )
+                Surface(
+                    shape = CircleShape,
+                    color = White.copy(alpha = 0.95f),
+                    shadowElevation = 2.dp,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(FurkanSpacing.xs),
+                ) {
+                    FurkanFavoriteIcon(
+                        isFavorite = isFavorite,
+                        onClick = onFavoriteClick,
+                    )
+                }
             }
         }
         Spacer(Modifier.height(FurkanSpacing.xs))
         if (brand.isNotBlank()) {
             Text(
-                brand.uppercase(),
+                brand,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -741,17 +776,25 @@ fun FurkanProductCard(
             )
         }
         Text(
-            name.uppercase(),
+            name,
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             color = MaterialTheme.colorScheme.onSurface,
+            minLines = 2,
         )
-        val code = sku ?: stockLabel
-        if (!code.isNullOrBlank()) {
+        if (!stockLabel.isNullOrBlank()) {
             Text(
-                if (code.startsWith("Stok", ignoreCase = true)) code else "Stok Kodu $code",
+                stockLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else if (!sku.isNullOrBlank()) {
+            Text(
+                "SKU $sku",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

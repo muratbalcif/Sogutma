@@ -10,12 +10,12 @@ export function Badge({
   return (
     <span
       className={clsx(
-        "inline-flex rounded px-2 py-0.5 text-xs font-medium",
-        tone === "neutral" && "bg-slate-100 text-slate-700",
-        tone === "success" && "bg-emerald-100 text-emerald-800",
-        tone === "warning" && "bg-amber-100 text-amber-900",
-        tone === "danger" && "bg-red-100 text-red-800",
-        tone === "accent" && "bg-cyan-100 text-cyan-900",
+        "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        tone === "neutral" && "bg-surface-secondary text-text-secondary",
+        tone === "success" && "bg-emerald-100 text-success",
+        tone === "warning" && "bg-amber-100 text-warning",
+        tone === "danger" && "bg-red-100 text-error",
+        tone === "accent" && "bg-amber-100 text-accent-dark",
       )}
     >
       {children}

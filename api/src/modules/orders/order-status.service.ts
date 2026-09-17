@@ -13,6 +13,7 @@ import {
   ShippingStatus,
 } from '@prisma/client';
 import { InventoryService } from '../inventory/inventory.service';
+import { AccountingService } from '../payments/accounting.service';
 
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
@@ -54,7 +55,10 @@ export type ApplyTransitionInput = {
 
 @Injectable()
 export class OrderStatusService {
-  constructor(private readonly inventoryService: InventoryService) {}
+  constructor(
+    private readonly inventoryService: InventoryService,
+    private readonly accountingService: AccountingService,
+  ) {}
 
   canCustomerCancel(status: OrderStatus): boolean {
     return CUSTOMER_CANCELLABLE.includes(status);
@@ -116,7 +120,24 @@ export class OrderStatusService {
     }
 
     if (input.toStatus === OrderStatus.CANCELLED) {
+      const paidPayment = await tx.payment.findFirst({
+        where: { orderId: order.id, status: PaymentStatus.PAID },
+        select: { id: true },
+      });
+      if (paidPayment) {
+        throw new ConflictException(
+          'Paid orders cannot be cancelled; use refund flow',
+        );
+      }
+
       await this.releaseOrderStockOnce(tx, order.id, input.changedByUserId);
+      await this.accountingService.reverseSaleForCancelledOrder({
+        tx,
+        userId: order.userId,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        actorUserId: input.changedByUserId ?? null,
+      });
       if (input.cancelPendingPayments !== false) {
         await tx.payment.updateMany({
           where: { orderId: order.id, status: PaymentStatus.PENDING },

@@ -1,8 +1,10 @@
 package com.furkansogutma.feature.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,21 +29,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furkansogutma.core.designsystem.components.FurkanCartIconButton
+import com.furkansogutma.core.designsystem.components.FurkanEmptyState
 import com.furkansogutma.core.designsystem.components.FurkanError
 import com.furkansogutma.core.designsystem.components.FurkanHomeSkeleton
 import com.furkansogutma.core.designsystem.components.FurkanNetworkImage
 import com.furkansogutma.core.designsystem.components.FurkanProductCard
 import com.furkansogutma.core.designsystem.components.FurkanSearchBar
 import com.furkansogutma.core.designsystem.theme.FurkanSpacing
+import com.furkansogutma.core.designsystem.theme.PrimaryLight
 import com.furkansogutma.core.designsystem.theme.White
+import com.furkansogutma.domain.category.Category
+import com.furkansogutma.domain.product.Brand
 import com.furkansogutma.domain.product.HomeCatalog
 import com.furkansogutma.domain.product.Product
 
@@ -100,25 +108,29 @@ fun HomeScreen(
                 Modifier
                     .fillMaxWidth()
                     .background(White)
-                    .padding(horizontal = FurkanSpacing.md, vertical = FurkanSpacing.sm),
+                    .padding(horizontal = FurkanSpacing.md, vertical = FurkanSpacing.md),
             ) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
                         Text(
                             "FurkanSoğutma",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
                         )
+                        Spacer(Modifier.height(FurkanSpacing.xxs))
                         Text(
                             greeting,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     FurkanCartIconButton(count = cartCount, onClick = onCartClick)
                 }
-                Spacer(Modifier.height(FurkanSpacing.sm))
+                Spacer(Modifier.height(FurkanSpacing.md))
                 FurkanSearchBar(
                     query = "",
                     onQueryChange = { onSearchClick() },
@@ -140,72 +152,55 @@ fun HomeScreen(
                         contentDescription = banner.title,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(160.dp)
-                            .clip(MaterialTheme.shapes.large),
+                            .height(168.dp)
+                            .clip(MaterialTheme.shapes.large)
+                            .shadow(4.dp, MaterialTheme.shapes.large, clip = false),
                     )
                 }
             }
         }
-        item { SectionHeader("Kategoriler", onSeeAll = { onSeeAllProducts(null) }) }
         item {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = FurkanSpacing.md),
-                horizontalArrangement = Arrangement.spacedBy(FurkanSpacing.md),
-            ) {
-                items(catalog.categories, key = { it.id }) { category ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .width(80.dp)
-                            .clickable { onCategoryClick(category.slug) },
-                    ) {
-                        FurkanNetworkImage(
-                            url = null,
-                            contentDescription = category.name,
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(White),
-                        )
-                        Spacer(Modifier.height(FurkanSpacing.xxs))
-                        Text(
-                            category.name,
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 2,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
-            }
+            SectionHeader("Kategoriler", onSeeAll = { onSeeAllProducts(null) })
         }
-        item { ProductSection("Günün Ürünleri", catalog.featured, onProductClick) { onSeeAllProducts(null) } }
-        item { ProductSection("Kampanyalar", catalog.campaigns, onProductClick, onSeeAllCampaigns) }
-        item { ProductSection("En Çok Satanlar", catalog.bestSelling, onProductClick) { onSeeAllProducts(null) } }
+        item {
+            CategoryRow(
+                categories = catalog.categories,
+                onCategoryClick = onCategoryClick,
+            )
+        }
+        item {
+            ProductSection(
+                title = "Günün Ürünleri",
+                products = catalog.featured,
+                onProductClick = onProductClick,
+                onSeeAll = { onSeeAllProducts(null) },
+            )
+        }
+        item {
+            ProductSection(
+                title = "Kampanyalar",
+                products = catalog.campaigns,
+                onProductClick = onProductClick,
+                onSeeAll = onSeeAllCampaigns,
+            )
+        }
+        item {
+            ProductSection(
+                title = "En Çok Satanlar",
+                products = catalog.bestSelling,
+                onProductClick = onProductClick,
+                onSeeAll = { onSeeAllProducts(null) },
+            )
+        }
         if (catalog.brands.isNotEmpty()) {
             item { SectionHeader("Markalar") }
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = FurkanSpacing.md),
-                    horizontalArrangement = Arrangement.spacedBy(FurkanSpacing.sm),
-                ) {
-                    items(catalog.brands, key = { it.id }) { brand ->
-                        Text(
-                            brand.name,
-                            modifier = Modifier
-                                .clip(MaterialTheme.shapes.small)
-                                .background(White)
-                                .padding(horizontal = FurkanSpacing.md, vertical = FurkanSpacing.sm),
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                    }
-                }
-            }
+            item { BrandRow(catalog.brands) }
         }
         if (catalog.sectionErrors.isNotEmpty()) {
             item {
                 Text(
                     catalog.sectionErrors.joinToString("\n"),
-                    modifier = Modifier.padding(FurkanSpacing.md),
+                    modifier = Modifier.padding(horizontal = FurkanSpacing.md),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -215,20 +210,130 @@ fun HomeScreen(
 }
 
 @Composable
+private fun CategoryRow(
+    categories: List<Category>,
+    onCategoryClick: (String) -> Unit,
+) {
+    if (categories.isEmpty()) {
+        FurkanEmptyState(
+            title = "Kategori yok",
+            message = "Kategoriler şu an listelenemiyor.",
+            modifier = Modifier.height(160.dp),
+        )
+        return
+    }
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = FurkanSpacing.md),
+        horizontalArrangement = Arrangement.spacedBy(FurkanSpacing.md),
+    ) {
+        items(categories, key = { it.id }) { category ->
+            val label = category.name.trim().ifBlank { category.slug }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .width(84.dp)
+                    .clickable { onCategoryClick(category.slug) },
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .shadow(3.dp, CircleShape, clip = false)
+                        .clip(CircleShape)
+                        .background(White)
+                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        Modifier
+                            .size(60.dp)
+                            .clip(CircleShape)
+                            .background(PrimaryLight),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            label.take(1).uppercase(),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(FurkanSpacing.xs))
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrandRow(brands: List<Brand>) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = FurkanSpacing.md),
+        horizontalArrangement = Arrangement.spacedBy(FurkanSpacing.sm),
+    ) {
+        items(brands, key = { it.id }) { brand ->
+            val label = brand.name.trim().ifBlank { brand.slug }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .height(48.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(White)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium)
+                    .padding(horizontal = FurkanSpacing.md),
+            ) {
+                if (!brand.logo.isNullOrBlank()) {
+                    FurkanNetworkImage(
+                        url = brand.logo,
+                        contentDescription = label,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape),
+                    )
+                    Spacer(Modifier.width(FurkanSpacing.xs))
+                }
+                Text(
+                    label,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun SectionHeader(title: String, onSeeAll: (() -> Unit)? = null) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = FurkanSpacing.md),
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FurkanSpacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            title.uppercase(),
+            title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
         if (onSeeAll != null) {
             TextButton(onClick = onSeeAll) {
-                Text("Tümü ›", color = MaterialTheme.colorScheme.primary)
+                Text(
+                    "Tümü",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }
@@ -244,10 +349,10 @@ private fun ProductSection(
     Column {
         SectionHeader(title, onSeeAll)
         if (products.isEmpty()) {
-            Text(
-                "Henüz ürün yok",
-                modifier = Modifier.padding(horizontal = FurkanSpacing.md),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            FurkanEmptyState(
+                title = "Ürün yok",
+                message = "Bu bölümde henüz ürün bulunmuyor.",
+                modifier = Modifier.height(180.dp),
             )
         } else {
             LazyRow(

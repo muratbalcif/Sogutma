@@ -973,17 +973,21 @@ enum OutboxStatus {
 
 /// Async email delivery queue (not part of DB transactions).
 model EmailOutbox {
-  id            String    @id @default(uuid()) @db.Uuid
+  id            String       @id @default(uuid()) @db.Uuid
   event         String
   toEmail       String
   subject       String
   payload       Json
+  status        OutboxStatus @default(PENDING)
+  /// Next eligible time (backoff) or claim lease expiry while PROCESSING.
+  availableAt   DateTime     @default(now())
   processedAt   DateTime?
-  attempts      Int       @default(0)
+  attempts      Int          @default(0)
   lastError     String?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime     @default(now())
 
   @@index([processedAt])
+  @@index([status, availableAt])
   @@index([event])
   @@index([createdAt])
   @@map("email_outbox")
@@ -1169,6 +1173,8 @@ model LegalPage {
   title     String
   /// Plain text / markdown body editable from admin.
   body      String   @db.Text
+  /// Monotonic content revision; incremented on title/body change.
+  version   Int      @default(1)
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 

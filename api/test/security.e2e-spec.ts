@@ -28,6 +28,7 @@ describe('Security hardening (e2e)', () => {
   let productManagerToken: string;
   let accountingToken: string;
   let superAdminToken: string;
+  let superAdminUserId: string;
   let orderAId: string;
   let addressAId: string;
   let paymentAId: string;
@@ -120,6 +121,7 @@ describe('Security hardening (e2e)', () => {
       superAdmin.user.id,
       AdminRoleCode.SUPER_ADMIN,
     );
+    superAdminUserId = superAdmin.user.id;
     superAdminToken = (
       await authService.login({
         email: `sec.sa.${suffix}@example.com`,
@@ -678,6 +680,108 @@ describe('Security hardening (e2e)', () => {
     const body = String(csv.text ?? csv.body);
     expect(body).toContain("'=CMD()");
     expect(body).not.toMatch(/(^|,)=CMD\(\)/);
+  });
+
+  it('STOCK_MANAGER receives stock permissions and can read inventory', async () => {
+    const stockUser = await authService.register({
+      email: `sec.sm.${suffix}@example.com`,
+      password: 'Password123!',
+      firstName: 'Stock',
+      lastName: 'Manager',
+      userType: UserType.INDIVIDUAL,
+    });
+    await adminService.assignRoleToUser(
+      stockUser.user.id,
+      AdminRoleCode.STOCK_MANAGER,
+    );
+    const access = await adminService.getAccessForUser(stockUser.user.id);
+    expect(access.roles).toContain(AdminRoleCode.STOCK_MANAGER);
+    expect(access.permissions).toEqual(
+      expect.arrayContaining([
+        'stock.read',
+        'stock.update',
+        'import.read',
+        'import.create',
+        'product.read',
+      ]),
+    );
+    expect(access.permissions).not.toContain('payment.refund');
+
+    const token = (
+      await authService.login({
+        email: `sec.sm.${suffix}@example.com`,
+        password: 'Password123!',
+      })
+    ).accessToken;
+
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/inventory')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/bank-transfers')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(403);
+  });
+
+  it('rejects demoting the last SUPER_ADMIN; allows when another remains', async () => {
+    const second = await authService.register({
+      email: `sec.sa2.${suffix}@example.com`,
+      password: 'Password123!',
+      firstName: 'Super',
+      lastName: 'Two',
+      userType: UserType.INDIVIDUAL,
+    });
+    await adminService.assignRoleToUser(
+      second.user.id,
+      AdminRoleCode.SUPER_ADMIN,
+    );
+
+    await request(app.getHttpServer())
+      .delete(
+        `/api/v1/admin/rbac/users/${second.user.id}/roles/${AdminRoleCode.SUPER_ADMIN}`,
+      )
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .expect(200);
+
+    const superAdminRole = await prisma.adminRole.findUniqueOrThrow({
+      where: { code: AdminRoleCode.SUPER_ADMIN },
+    });
+    const primaryAdmin = await prisma.adminUser.findUniqueOrThrow({
+      where: { userId: superAdminUserId },
+    });
+    const otherLinks = await prisma.adminUserRole.findMany({
+      where: {
+        roleId: superAdminRole.id,
+        adminUserId: { not: primaryAdmin.id },
+      },
+    });
+
+    await prisma.adminUserRole.deleteMany({
+      where: {
+        roleId: superAdminRole.id,
+        adminUserId: { not: primaryAdmin.id },
+      },
+    });
+
+    try {
+      await request(app.getHttpServer())
+        .delete(
+          `/api/v1/admin/rbac/users/${superAdminUserId}/roles/${AdminRoleCode.SUPER_ADMIN}`,
+        )
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .expect(409);
+    } finally {
+      for (const link of otherLinks) {
+        await prisma.adminUserRole.create({
+          data: {
+            adminUserId: link.adminUserId,
+            roleId: link.roleId,
+          },
+        });
+      }
+    }
   });
 
   it('ready returns 503 when database is down; live stays 200', async () => {

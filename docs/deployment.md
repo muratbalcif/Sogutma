@@ -7,6 +7,11 @@
 - **Postgres / Redis**: managed private network
 - **R2**: Cloudflare object storage
 
+Build the API image from the **repository root** (workspaces lockfile):
+
+```bash
+docker build -f api/Dockerfile -t furkansogutma-api .
+```
 ## Safe deploy sequence
 
 1. Create encrypted DB backup

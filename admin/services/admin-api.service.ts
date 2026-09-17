@@ -269,7 +269,7 @@ export const catalogService = {
     filename: string;
     contentType: string;
     folder?: string;
-    contentLength?: number;
+    contentLength: number;
   }) {
     return apiRequest<{
       uploadUrl: string;
@@ -383,6 +383,48 @@ export const catalogService = {
       }>
     >(`/admin/categories?page=${page}&limit=${limit}`);
   },
+  createCategory(body: {
+    name: string;
+    slug: string;
+    parentId?: string;
+    image?: string;
+    sortOrder?: number;
+    active?: boolean;
+  }) {
+    return apiRequest<{
+      id: string;
+      name: string;
+      slug: string;
+      active: boolean;
+      parentId?: string | null;
+      sortOrder?: number;
+    }>("/admin/categories", { method: "POST", body });
+  },
+  updateCategory(
+    id: string,
+    body: {
+      name?: string;
+      slug?: string;
+      parentId?: string | null;
+      image?: string | null;
+      sortOrder?: number;
+      active?: boolean;
+    },
+  ) {
+    return apiRequest<{
+      id: string;
+      name: string;
+      slug: string;
+      active: boolean;
+      parentId?: string | null;
+      sortOrder?: number;
+    }>(`/admin/categories/${id}`, { method: "PATCH", body });
+  },
+  deleteCategory(id: string) {
+    return apiRequest<{ id: string }>(`/admin/categories/${id}`, {
+      method: "DELETE",
+    });
+  },
   listBrands(page = 1, limit = 20) {
     return apiRequest<
       PaginatedResponse<{
@@ -394,6 +436,48 @@ export const catalogService = {
         sortOrder?: number;
       }>
     >(`/admin/brands?page=${page}&limit=${limit}`);
+  },
+  createBrand(body: {
+    name: string;
+    slug: string;
+    logo?: string;
+    description?: string;
+    sortOrder?: number;
+    active?: boolean;
+  }) {
+    return apiRequest<{
+      id: string;
+      name: string;
+      slug: string;
+      active: boolean;
+      description?: string | null;
+      sortOrder?: number;
+    }>("/admin/brands", { method: "POST", body });
+  },
+  updateBrand(
+    id: string,
+    body: {
+      name?: string;
+      slug?: string;
+      logo?: string | null;
+      description?: string | null;
+      sortOrder?: number;
+      active?: boolean;
+    },
+  ) {
+    return apiRequest<{
+      id: string;
+      name: string;
+      slug: string;
+      active: boolean;
+      description?: string | null;
+      sortOrder?: number;
+    }>(`/admin/brands/${id}`, { method: "PATCH", body });
+  },
+  deleteBrand(id: string) {
+    return apiRequest<{ id: string }>(`/admin/brands/${id}`, {
+      method: "DELETE",
+    });
   },
 };
 
@@ -1099,6 +1183,7 @@ export type LegalPage = {
   slug: string;
   title: string;
   body: string;
+  version?: number;
   updatedAt: string;
 };
 

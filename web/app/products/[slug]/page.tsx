@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { resolveProductImageSrc } from "@/lib/product-image";
 import { notFound } from "next/navigation";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Price } from "@/components/ui/price";
@@ -100,7 +101,7 @@ export default async function ProductDetailPage({ params }: Props) {
           <div className="relative aspect-square overflow-hidden rounded-lg border bg-white">
             {primary ? (
               <Image
-                src={primary.url}
+                src={resolveProductImageSrc(primary.url)}
                 alt={primary.alt ?? product.name}
                 fill
                 priority
@@ -117,7 +118,7 @@ export default async function ProductDetailPage({ params }: Props) {
                   className="relative aspect-square rounded border bg-white"
                 >
                   <Image
-                    src={image.url}
+                    src={resolveProductImageSrc(image.url)}
                     alt={image.alt ?? product.name}
                     fill
                     className="object-contain p-1"

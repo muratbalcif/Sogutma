@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Put,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -15,9 +16,11 @@ import {
 } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { Request } from 'express';
 import { Permissions } from '../admin/decorators/permissions.decorator';
 import { PermissionsGuard } from '../admin/guards/permissions.guard';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard';
+import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { SiteService } from './site.service';
 
 class UpdateLegalPageDto {
@@ -63,7 +66,11 @@ export class AdminLegalController {
   @Put(':slug')
   @Permissions('site.update')
   @ApiOperation({ summary: 'Update legal page content' })
-  update(@Param('slug') slug: string, @Body() dto: UpdateLegalPageDto) {
-    return this.siteService.updateLegalPage(slug, dto);
+  update(
+    @Param('slug') slug: string,
+    @Body() dto: UpdateLegalPageDto,
+    @Req() request: Request & { user: AuthenticatedUser },
+  ) {
+    return this.siteService.updateLegalPage(slug, dto, request.user.id);
   }
 }

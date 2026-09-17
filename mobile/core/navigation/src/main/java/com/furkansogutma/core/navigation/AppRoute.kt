@@ -25,9 +25,6 @@ sealed interface AppRoute {
     data object Profile : AppRoute { override val route = "profile" }
     data object ProductList : AppRoute { override val route = "products" }
     data object Campaigns : AppRoute { override val route = "campaigns" }
-    data object LegalKvkk : AppRoute { override val route = "legal/kvkk" }
-    data object LegalPrivacy : AppRoute { override val route = "legal/privacy" }
-    data object LegalTerms : AppRoute { override val route = "legal/terms" }
 
     data class ProductDetail(val slug: String) : AppRoute {
         override val route = "product/$slug"

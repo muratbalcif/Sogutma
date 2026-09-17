@@ -21,10 +21,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import com.furkansogutma.core.designsystem.theme.BadgeRed
+import com.furkansogutma.core.designsystem.theme.OnSurfaceMuted
+import com.furkansogutma.core.designsystem.theme.PrimaryLight
 import com.furkansogutma.core.designsystem.theme.White
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -172,14 +174,19 @@ fun FurkanNavHost(
                                 Text(
                                     item.label,
                                     style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (selected) {
+                                        FontWeight.SemiBold
+                                    } else {
+                                        FontWeight.Medium
+                                    },
                                 )
                             },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                indicatorColor = Color.Transparent,
+                                unselectedIconColor = OnSurfaceMuted,
+                                unselectedTextColor = OnSurfaceMuted,
+                                indicatorColor = PrimaryLight,
                             ),
                         )
                     }

@@ -1,20 +1,43 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f9fc;
-  --foreground: #0f172a;
-  --navy: #0f2744;
-  --accent: #0891b2;
+  /* Brand tokens — shared visual language with Android */
+  --primary: #0f766e;
+  --primary-dark: #115e59;
+  --primary-light: #ccfbf1;
+  --accent: #f59e0b;
+  --accent-dark: #d97706;
+  --background: #f8fafc;
   --surface: #ffffff;
-  --muted: #64748b;
+  --surface-secondary: #f1f5f9;
   --border: #e2e8f0;
+  --foreground: #0f172a;
+  --text-secondary: #475569;
+  --muted: #94a3b8;
+  --success: #16a34a;
+  --error: #dc2626;
+  --warning: #d97706;
+  /* Legacy aliases used across the storefront */
+  --navy: var(--primary);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-navy: var(--navy);
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-light: var(--primary-light);
   --color-accent: var(--accent);
+  --color-accent-dark: var(--accent-dark);
+  --color-surface: var(--surface);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-border: var(--border);
+  --color-text-secondary: var(--text-secondary);
+  --color-muted: var(--muted);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-warning: var(--warning);
+  --color-navy: var(--navy);
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
 }
@@ -26,6 +49,6 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }

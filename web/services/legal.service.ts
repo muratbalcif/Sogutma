@@ -4,6 +4,7 @@ export type LegalPage = {
   slug: string;
   title: string;
   body: string;
+  version?: number;
   updatedAt: string;
 };
 

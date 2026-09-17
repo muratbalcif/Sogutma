@@ -350,6 +350,37 @@ export class AccountingService {
     return result;
   }
 
+  /** Reverse SALE debit when an unpaid order is cancelled (idempotent). */
+  async reverseSaleForCancelledOrder(input: {
+    tx: Prisma.TransactionClient;
+    userId: string;
+    orderId: string;
+    orderNumber: string;
+    actorUserId?: string | null;
+  }): Promise<void> {
+    const saleReference = `SALE:ORDER:${input.orderId}`;
+    const sale = await input.tx.accountTransaction.findUnique({
+      where: { reference: saleReference },
+    });
+    if (!sale) {
+      return;
+    }
+
+    await this.recordIfAbsent({
+      tx: input.tx,
+      userId: input.userId,
+      orderId: input.orderId,
+      type: AccountTransactionType.PAYMENT,
+      amount: sale.amount,
+      currency: sale.currency,
+      description: `Cancel reversal for order ${input.orderNumber}`,
+      reference: `REVERSAL:${saleReference}`,
+      referenceType: 'REVERSAL',
+      referenceId: sale.id,
+      createdBy: input.actorUserId ?? null,
+    });
+  }
+
   /** Reverse a prior ledger effect without mutating the original row. */
   async createReversal(input: {
     customerId: string;

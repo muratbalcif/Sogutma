@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   AdminRoleCode,
   OrderStatus,
+  OutboxStatus,
   PaymentMethod,
   PaymentStatus,
   PriceType,
@@ -14,6 +15,7 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { AdminService } from '../src/modules/admin/admin.service';
 import { AuthService } from '../src/modules/auth/auth.service';
+import { EmailOutboxService } from '../src/modules/payments/email-outbox.service';
 import { PaymentExpirationService } from '../src/modules/payments/payment-expiration.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
@@ -445,5 +447,52 @@ describe('Payments & Accounting (e2e)', () => {
     const ids = new Set(bodies.map((b) => b.id).filter(Boolean));
     expect(ids.size).toBe(1);
     expect([...ids][0]).toBe(order.payment!.id);
+  });
+
+  it('email outbox atomic claim prevents multi-worker double-send', async () => {
+    const emailOutbox = app.get(EmailOutboxService);
+    const row = await prisma.emailOutbox.create({
+      data: {
+        event: `E2E_RACE_${suffix}`,
+        toEmail: `race.${suffix}@example.com`,
+        subject: 'Concurrency test',
+        payload: { html: '<p>race</p>' },
+      },
+    });
+
+    // Defer unrelated pending rows so this race only sees our message.
+    await prisma.emailOutbox.updateMany({
+      where: { id: { not: row.id }, processedAt: null },
+      data: { availableAt: new Date('2099-01-01T00:00:00.000Z') },
+    });
+
+    const sendSpy = jest
+      .spyOn(emailOutbox, 'sendEmail')
+      .mockResolvedValue({ ok: true });
+
+    try {
+      const [a, b] = await Promise.all([
+        emailOutbox.processPending(10),
+        emailOutbox.processPending(10),
+      ]);
+
+      expect(a + b).toBe(1);
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: `race.${suffix}@example.com`,
+          subject: 'Concurrency test',
+        }),
+      );
+
+      const stored = await prisma.emailOutbox.findUniqueOrThrow({
+        where: { id: row.id },
+      });
+      expect(stored.processedAt).not.toBeNull();
+      expect(stored.status).toBe(OutboxStatus.SENT);
+      expect(stored.lastError).toBeNull();
+    } finally {
+      sendSpy.mockRestore();
+    }
   });
 });

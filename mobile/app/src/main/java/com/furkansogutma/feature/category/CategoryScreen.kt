@@ -88,15 +88,17 @@ private fun CategoryGrid(
         verticalArrangement = Arrangement.spacedBy(FurkanSpacing.sm),
     ) {
         categories.forEach { category ->
+            val parentLabel = category.name.trim().ifBlank { category.slug }
             item(span = { GridItemSpan(2) }, key = "h-${category.id}") {
                 Column(Modifier.padding(top = FurkanSpacing.sm, bottom = FurkanSpacing.xxs)) {
                     Text(
-                        category.name.uppercase(),
+                        parentLabel,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     FurkanOutlinedButton(
-                        text = "${category.name} Tümünü Göster",
+                        text = "Tümünü göster",
                         onClick = { onCategoryClick(category.slug) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -107,7 +109,7 @@ private fun CategoryGrid(
             val children = category.children.ifEmpty { listOf(category) }
             items(children, key = { it.id }) { child ->
                 FurkanCategoryTile(
-                    title = child.name,
+                    title = child.name.trim().ifBlank { child.slug },
                     onClick = { onCategoryClick(child.slug) },
                 )
             }

@@ -30,6 +30,9 @@ export default function FavoritesPage() {
         method: "POST",
         body: JSON.stringify({ productId, quantity: 1 }),
       }),
+    onSuccess: (cart) => {
+      queryClient.setQueryData(["cart"], cart);
+    },
   });
 
   if (query.isLoading) return <p>Yükleniyor…</p>;

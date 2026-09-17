@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { AdminRoleCode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -7,6 +7,7 @@ import {
   CUSTOMER_MANAGER_PERMISSION_CODES,
   ORDER_MANAGER_PERMISSION_CODES,
   PRODUCT_MANAGER_PERMISSION_CODES,
+  STOCK_MANAGER_PERMISSION_CODES,
 } from './constants/permissions';
 
 @Injectable()
@@ -187,6 +188,30 @@ export class AdminService {
         },
       });
     }
+
+    const stockManager = await this.prisma.adminRole.findUniqueOrThrow({
+      where: { code: AdminRoleCode.STOCK_MANAGER },
+    });
+
+    for (const code of STOCK_MANAGER_PERMISSION_CODES) {
+      const permission = permissionByCode.get(code);
+      if (!permission) {
+        continue;
+      }
+      await this.prisma.adminRolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: stockManager.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: stockManager.id,
+          permissionId: permission.id,
+        },
+      });
+    }
   }
 
   async assignRoleToUser(
@@ -234,6 +259,22 @@ export class AdminService {
     });
     if (!role) {
       return;
+    }
+
+    if (roleCode === AdminRoleCode.SUPER_ADMIN) {
+      const assignment = await this.prisma.adminUserRole.findFirst({
+        where: { adminUserId: adminUser.id, roleId: role.id },
+      });
+      if (assignment) {
+        const superAdminCount = await this.prisma.adminUserRole.count({
+          where: { roleId: role.id },
+        });
+        if (superAdminCount <= 1) {
+          throw new ConflictException(
+            'Cannot remove or demote the last SUPER_ADMIN',
+          );
+        }
+      }
     }
 
     await this.prisma.adminUserRole.deleteMany({

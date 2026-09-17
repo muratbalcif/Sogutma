@@ -128,7 +128,7 @@ export default function LegalAdminPage() {
               </button>
               {pageQuery.data?.updatedAt ? (
                 <span className="text-xs text-slate-500">
-                  Son güncelleme:{" "}
+                  v{pageQuery.data.version ?? 1} · Son güncelleme:{" "}
                   {new Date(pageQuery.data.updatedAt).toLocaleString("tr-TR")}
                 </span>
               ) : null}

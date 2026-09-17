@@ -1,9 +1,16 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PaymentStatus, Prisma, UserStatus, UserType } from '@prisma/client';
+import {
+  AdminRoleCode,
+  PaymentStatus,
+  Prisma,
+  UserStatus,
+  UserType,
+} from '@prisma/client';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import {
@@ -298,6 +305,26 @@ export class AdminCustomersService {
       where: { id: customerId },
     });
     if (!user) throw new NotFoundException('Customer not found');
+
+    if (status !== UserStatus.ACTIVE) {
+      const adminUser = await this.prisma.adminUser.findUnique({
+        where: { userId: customerId },
+        include: { roles: { include: { role: true } } },
+      });
+      const isSuperAdmin = adminUser?.roles.some(
+        (item) => item.role.code === AdminRoleCode.SUPER_ADMIN,
+      );
+      if (isSuperAdmin) {
+        const superAdminCount = await this.prisma.adminUserRole.count({
+          where: { role: { code: AdminRoleCode.SUPER_ADMIN } },
+        });
+        if (superAdminCount <= 1) {
+          throw new ConflictException(
+            'Cannot deactivate or block the last SUPER_ADMIN',
+          );
+        }
+      }
+    }
 
     await this.prisma.user.update({
       where: { id: customerId },

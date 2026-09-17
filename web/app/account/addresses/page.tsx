@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ApiError } from "@/lib/api/base";
 import { clientApiFetch } from "@/lib/api/client";
 import { useState } from "react";
 
@@ -48,16 +49,58 @@ export default function AddressesPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["addresses"] }),
   });
 
+  if (query.isLoading) {
+    return <p className="text-sm text-slate-600">Adresler yükleniyor…</p>;
+  }
+
+  if (query.isError) {
+    const message =
+      query.error instanceof ApiError
+        ? query.error.message
+        : "Adresler alınamadı.";
+    return (
+      <div className="space-y-4">
+        <h1 className="font-[family-name:var(--font-display)] text-3xl text-navy">
+          Adreslerim
+        </h1>
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+          <p className="font-medium text-red-900">Adresler yüklenemedi</p>
+          <p className="mt-1 text-sm text-red-800">{message}</p>
+          <Button
+            type="button"
+            className="mt-4"
+            onClick={() => void query.refetch()}
+            disabled={query.isFetching}
+          >
+            {query.isFetching ? "Yenileniyor…" : "Tekrar dene"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const addresses = query.data ?? [];
+
   return (
     <div className="space-y-6">
-      <h1 className="font-[family-name:var(--font-display)] text-3xl text-navy">
-        Adreslerim
-      </h1>
-      {!query.data?.length ? (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="font-[family-name:var(--font-display)] text-3xl text-navy">
+          Adreslerim
+        </h1>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => void query.refetch()}
+          disabled={query.isFetching}
+        >
+          {query.isFetching ? "Yenileniyor…" : "Yenile"}
+        </Button>
+      </div>
+      {addresses.length === 0 ? (
         <EmptyState title="Kayıtlı adres yok" />
       ) : (
         <ul className="space-y-2">
-          {query.data.map((address) => (
+          {addresses.map((address) => (
             <li key={address.id} className="rounded border bg-white p-3 text-sm">
               <div className="flex justify-between gap-2">
                 <div>

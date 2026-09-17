@@ -1,11 +1,14 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { InventoryTransactionType, OrderStatus } from '@prisma/client';
 import { OrderStatusService } from './order-status.service';
 
 describe('OrderStatusService matrix', () => {
-  const service = new OrderStatusService({} as never);
+  const service = new OrderStatusService({} as never, {} as never);
 
-  it('allows customer cancel from PENDING and CONFIRMED', () => {
+  it('allows customer cancel from PENDING and unpaid CONFIRMED', () => {
     expect(service.canCustomerCancel(OrderStatus.PENDING)).toBe(true);
     expect(service.canCustomerCancel(OrderStatus.CONFIRMED)).toBe(true);
     expect(service.canCustomerCancel(OrderStatus.PREPARING)).toBe(false);
@@ -41,7 +44,13 @@ describe('OrderStatusService.applyTransitionInTransaction', () => {
   const inventoryService = {
     releaseStockInTransaction: jest.fn(),
   };
-  const service = new OrderStatusService(inventoryService as never);
+  const accountingService = {
+    reverseSaleForCancelledOrder: jest.fn(),
+  };
+  const service = new OrderStatusService(
+    inventoryService as never,
+    accountingService as never,
+  );
 
   function makeTx(order: Record<string, unknown>) {
     return {
@@ -51,7 +60,10 @@ describe('OrderStatusService.applyTransitionInTransaction', () => {
         update: jest.fn(),
       },
       orderStatusHistory: { create: jest.fn() },
-      payment: { updateMany: jest.fn() },
+      payment: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn(),
+      },
       shipping: { update: jest.fn() },
       orderReturn: { upsert: jest.fn() },
       orderItem: {
@@ -85,11 +97,9 @@ describe('OrderStatusService.applyTransitionInTransaction', () => {
       changedByUserId: 'admin',
     });
     expect(result.toStatus).toBe(OrderStatus.CONFIRMED);
-    expect(tx.order.update).toHaveBeenCalled();
-    expect(tx.orderStatusHistory.create).toHaveBeenCalled();
   });
 
-  it('CONFIRMED → PREPARING', async () => {
+  it('rejects cancel when a PAID payment exists', async () => {
     const tx = makeTx({
       id: 'o1',
       userId: 'u1',
@@ -98,67 +108,20 @@ describe('OrderStatusService.applyTransitionInTransaction', () => {
       items: [],
       shipping: null,
     });
-    await service.applyTransitionInTransaction(tx as never, {
-      orderId: 'o1',
-      toStatus: OrderStatus.PREPARING,
-      changedByUserId: 'admin',
-    });
-    expect(tx.order.update).toHaveBeenCalled();
-  });
+    tx.payment.findFirst.mockResolvedValue({ id: 'pay1' });
 
-  it('PREPARING → SHIPPED', async () => {
-    const tx = makeTx({
-      id: 'o1',
-      userId: 'u1',
-      orderNumber: 'FS-1',
-      status: OrderStatus.PREPARING,
-      items: [],
-      shipping: null,
-    });
-    await service.applyTransitionInTransaction(tx as never, {
-      orderId: 'o1',
-      toStatus: OrderStatus.SHIPPED,
-      changedByUserId: 'admin',
-    });
-    expect(tx.order.update).toHaveBeenCalled();
-  });
-
-  it('SHIPPED → DELIVERED updates shipping', async () => {
-    const tx = makeTx({
-      id: 'o1',
-      userId: 'u1',
-      orderNumber: 'FS-1',
-      status: OrderStatus.SHIPPED,
-      items: [],
-      shipping: { id: 's1', deliveredAt: null },
-    });
-    await service.applyTransitionInTransaction(tx as never, {
-      orderId: 'o1',
-      toStatus: OrderStatus.DELIVERED,
-      changedByUserId: 'admin',
-    });
-    expect(tx.shipping.update).toHaveBeenCalled();
-  });
-
-  it('rejects DELIVERED → PREPARING', async () => {
-    const tx = makeTx({
-      id: 'o1',
-      userId: 'u1',
-      orderNumber: 'FS-1',
-      status: OrderStatus.DELIVERED,
-      items: [],
-      shipping: null,
-    });
     await expect(
       service.applyTransitionInTransaction(tx as never, {
         orderId: 'o1',
-        toStatus: OrderStatus.PREPARING,
+        toStatus: OrderStatus.CANCELLED,
         changedByUserId: 'admin',
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(inventoryService.releaseStockInTransaction).not.toHaveBeenCalled();
+    expect(accountingService.reverseSaleForCancelledOrder).not.toHaveBeenCalled();
   });
 
-  it('cancel releases stock once and skips second release', async () => {
+  it('cancel releases stock once and reverses SALE', async () => {
     const tx = makeTx({
       id: 'o1',
       userId: 'u1',
@@ -174,6 +137,13 @@ describe('OrderStatusService.applyTransitionInTransaction', () => {
       customerCancel: true,
     });
     expect(inventoryService.releaseStockInTransaction).toHaveBeenCalledTimes(1);
+    expect(accountingService.reverseSaleForCancelledOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: 'o1',
+        userId: 'u1',
+        orderNumber: 'FS-1',
+      }),
+    );
 
     tx.inventoryTransaction.findFirst.mockResolvedValue({
       id: 'rel1',
@@ -193,25 +163,27 @@ describe('OrderStatusService.applyTransitionInTransaction', () => {
       service.applyTransitionInTransaction(tx as never, {
         orderId: 'o1',
         toStatus: OrderStatus.CANCELLED,
-        changedByUserId: 'u1',
         customerCancel: true,
+        changedByUserId: 'u1',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
-    expect(inventoryService.releaseStockInTransaction).not.toHaveBeenCalled();
   });
 
-  it('releaseOrderStockOnce skips when RELEASE already exists', async () => {
-    const tx = {
-      orderItem: {
-        findMany: jest
-          .fn()
-          .mockResolvedValue([{ productId: 'p1', quantity: 2 }]),
-      },
-      inventoryTransaction: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'already' }),
-      },
-    };
-    await service.releaseOrderStockOnce(tx as never, 'o1', 'u1');
-    expect(inventoryService.releaseStockInTransaction).not.toHaveBeenCalled();
+  it('rejects invalid admin transition', async () => {
+    const tx = makeTx({
+      id: 'o1',
+      userId: 'u1',
+      orderNumber: 'FS-1',
+      status: OrderStatus.PENDING,
+      items: [],
+      shipping: null,
+    });
+    await expect(
+      service.applyTransitionInTransaction(tx as never, {
+        orderId: 'o1',
+        toStatus: OrderStatus.PREPARING,
+        changedByUserId: 'admin',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

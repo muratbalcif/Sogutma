@@ -10,6 +10,32 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
+function SectionHeader({
+  title,
+  href,
+  actionLabel = "Tümü",
+}: {
+  title: string;
+  href?: string;
+  actionLabel?: string;
+}) {
+  return (
+    <div className="mb-5 flex items-end justify-between gap-3">
+      <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-foreground md:text-[1.75rem]">
+        {title}
+      </h2>
+      {href ? (
+        <Link
+          href={href}
+          className="text-sm font-semibold text-primary hover:text-primary-dark"
+        >
+          {actionLabel}
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
 export default async function HomePage() {
   const [banners, categories, featured, campaigns, bestSelling, brands] =
     await Promise.all([
@@ -24,11 +50,11 @@ export default async function HomePage() {
   const hero = banners[0];
 
   return (
-    <div className="space-y-12">
-      <section className="relative overflow-hidden rounded-xl bg-navy text-white">
+    <div className="space-y-14 md:space-y-16">
+      <section className="relative overflow-hidden rounded-2xl bg-primary text-white shadow-[0_16px_40px_rgba(15,118,110,0.18)]">
         {hero ? (
           <div className="grid md:grid-cols-2">
-            <div className="relative min-h-[280px]">
+            <div className="relative min-h-[300px] md:min-h-[360px]">
               <Image
                 src={hero.imageUrl}
                 alt={hero.title}
@@ -38,15 +64,15 @@ export default async function HomePage() {
                 sizes="(max-width:768px) 100vw, 50vw"
               />
             </div>
-            <div className="flex flex-col justify-center p-8">
-              <p className="text-xs uppercase tracking-[0.2em] text-cyan-200">
+            <div className="flex flex-col justify-center p-8 md:p-12">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary-light">
                 FurkanSoğutma
               </p>
-              <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold md:text-4xl">
+              <h1 className="mt-3 font-[family-name:var(--font-display)] text-3xl font-semibold md:text-4xl">
                 {hero.title}
               </h1>
               {hero.subtitle ? (
-                <p className="mt-3 text-slate-200">{hero.subtitle}</p>
+                <p className="mt-3 max-w-md text-white/80">{hero.subtitle}</p>
               ) : null}
               <Link
                 href={
@@ -58,23 +84,23 @@ export default async function HomePage() {
                         ? hero.linkValue
                         : "/products"
                 }
-                className="mt-6 inline-flex w-fit rounded-md bg-accent px-4 py-2 text-sm font-semibold"
+                className="mt-7 inline-flex w-fit rounded-[11px] bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-dark"
               >
                 İncele
               </Link>
             </div>
           </div>
         ) : (
-          <div className="p-10">
+          <div className="p-10 md:p-14">
             <h1 className="font-[family-name:var(--font-display)] text-4xl font-semibold">
               FurkanSoğutma
             </h1>
-            <p className="mt-3 max-w-xl text-slate-200">
+            <p className="mt-3 max-w-xl text-white/80">
               Profesyonel soğutma ve iklimlendirme çözümleri.
             </p>
             <Link
               href="/products"
-              className="mt-6 inline-flex rounded-md bg-accent px-4 py-2 text-sm font-semibold"
+              className="mt-7 inline-flex rounded-[11px] bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-dark"
             >
               Ürünlere göz at
             </Link>
@@ -83,15 +109,13 @@ export default async function HomePage() {
       </section>
 
       <section>
-        <h2 className="mb-4 font-[family-name:var(--font-display)] text-2xl text-navy">
-          Kategoriler
-        </h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <SectionHeader title="Kategoriler" href="/products" />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
           {categories.slice(0, 8).map((cat) => (
             <Link
               key={cat.id}
               href={`/categories/${cat.slug}`}
-              className="rounded-lg border border-slate-200 bg-white p-4 hover:border-accent"
+              className="rounded-2xl border border-border bg-surface px-4 py-5 text-sm font-semibold text-foreground shadow-[0_4px_16px_rgba(15,23,42,0.03)] transition hover:border-primary/30 hover:bg-primary-light/40 hover:text-primary-dark"
             >
               {cat.name}
             </Link>
@@ -101,52 +125,41 @@ export default async function HomePage() {
 
       {featured.length > 0 ? (
         <section>
-          <div className="mb-4 flex items-end justify-between">
-            <h2 className="font-[family-name:var(--font-display)] text-2xl text-navy">
-              Öne Çıkan Ürünler
-            </h2>
-            <Link href="/products?sort=recommended" className="text-sm text-accent">
-              Tümü
-            </Link>
-          </div>
+          <SectionHeader
+            title="Öne Çıkan Ürünler"
+            href="/products?sort=recommended"
+          />
           <ProductGrid products={featured} />
         </section>
       ) : null}
 
       {campaigns.length > 0 ? (
         <section>
-          <div className="mb-4 flex items-end justify-between gap-3">
-            <h2 className="font-[family-name:var(--font-display)] text-2xl text-navy">
-              Kampanyalı Ürünler
-            </h2>
-            <Link href="/campaigns" className="text-sm text-accent hover:underline">
-              Tüm kampanyalar
-            </Link>
-          </div>
+          <SectionHeader
+            title="Kampanyalı Ürünler"
+            href="/campaigns"
+            actionLabel="Tüm kampanyalar"
+          />
           <ProductGrid products={campaigns} />
         </section>
       ) : null}
 
       {bestSelling.length > 0 ? (
         <section>
-          <h2 className="mb-4 font-[family-name:var(--font-display)] text-2xl text-navy">
-            Çok Satanlar
-          </h2>
+          <SectionHeader title="Çok Satanlar" href="/products" />
           <ProductGrid products={bestSelling} />
         </section>
       ) : null}
 
       {brands.length > 0 ? (
         <section>
-          <h2 className="mb-4 font-[family-name:var(--font-display)] text-2xl text-navy">
-            Markalar
-          </h2>
+          <SectionHeader title="Markalar" href="/products" />
           <div className="flex flex-wrap gap-3">
             {brands.map((brand) => (
               <Link
                 key={brand.id}
                 href={`/products?brand=${brand.slug}`}
-                className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm"
+                className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary/40 hover:bg-primary-light hover:text-primary-dark"
               >
                 {brand.name}
               </Link>
@@ -155,15 +168,15 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      <section className="grid gap-4 rounded-xl border border-slate-200 bg-white p-6 md:grid-cols-3">
+      <section className="grid gap-6 rounded-2xl border border-border bg-surface p-6 shadow-[0_8px_24px_rgba(15,23,42,0.04)] md:grid-cols-3 md:p-8">
         {[
           ["Orijinal ürün", "Yetkili ve güvenilir tedarik"],
           ["Hızlı sevkiyat", "Stoktan hızlı hazırlık"],
           ["Teknik destek", "Uzman ekip ile satış sonrası destek"],
         ].map(([title, text]) => (
           <div key={title}>
-            <h3 className="font-semibold text-navy">{title}</h3>
-            <p className="mt-1 text-sm text-slate-600">{text}</p>
+            <h3 className="font-semibold text-primary">{title}</h3>
+            <p className="mt-1.5 text-sm text-text-secondary">{text}</p>
           </div>
         ))}
       </section>

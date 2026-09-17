@@ -2,13 +2,20 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { clientApiFetch } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/base";
+import type { CartSummary } from "@/lib/cart";
 import type { ProductDetail } from "@/types/api";
+
+type CartWithItems = CartSummary & {
+  items: Array<{ quantity: number; product: { id: string } }>;
+};
 
 export function ProductActions({ product }: { product: ProductDetail }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [quantity, setQuantity] = useState(1);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -17,11 +24,15 @@ export function ProductActions({ product }: { product: ProductDetail }) {
     setLoading(true);
     setMessage(null);
     try {
-      await clientApiFetch("/cart/items", {
+      const cart = await clientApiFetch<CartWithItems>("/cart/items", {
         method: "POST",
         body: JSON.stringify({ productId: product.id, quantity }),
       });
-      setMessage("Sepete eklendi");
+      queryClient.setQueryData(["cart"], cart);
+      const qty =
+        cart.items.find((item) => item.product.id === product.id)?.quantity ??
+        quantity;
+      setMessage(`Sepete eklendi · Adet: ${qty}`);
       router.refresh();
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
