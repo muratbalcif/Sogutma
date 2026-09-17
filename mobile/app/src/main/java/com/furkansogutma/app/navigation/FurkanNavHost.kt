@@ -51,6 +51,7 @@ import com.furkansogutma.feature.account.AlertsRoute
 import com.furkansogutma.feature.account.BankTransfersRoute
 import com.furkansogutma.feature.account.CurrentAccountRoute
 import com.furkansogutma.feature.account.FavoritesRoute
+import com.furkansogutma.feature.account.LegalDocumentRoute
 import com.furkansogutma.feature.account.NotificationsRoute
 import com.furkansogutma.feature.account.OrderDetailRoute
 import com.furkansogutma.feature.account.OrdersRoute
@@ -433,7 +434,20 @@ fun FurkanNavHost(
                 )
             }
             composable(AppRoute.Settings.route) {
-                SettingsRoute(onBack = { navController.popBackStack() })
+                SettingsRoute(
+                    onBack = { navController.popBackStack() },
+                    onLegal = { navController.navigate(AppRoutes.legal(it)) },
+                )
+            }
+            composable(
+                route = AppRoutes.LEGAL,
+                arguments = listOf(navArgument("slug") { type = NavType.StringType }),
+            ) { entry ->
+                val slug = entry.arguments?.getString("slug").orEmpty()
+                LegalDocumentRoute(
+                    slug = slug,
+                    onBack = { navController.popBackStack() },
+                )
             }
         }
     }

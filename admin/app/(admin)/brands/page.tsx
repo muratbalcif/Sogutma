@@ -12,6 +12,7 @@ export default function BrandsPage() {
         permission="brand.read"
         queryKey={["admin-brands"]}
         queryFn={() => catalogService.listBrands(1, 50)}
+        emptyMessage="Marka bulunamadı."
       >
         {(data) => (
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">

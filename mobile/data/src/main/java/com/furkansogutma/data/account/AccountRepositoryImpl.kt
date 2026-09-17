@@ -15,6 +15,7 @@ import com.furkansogutma.domain.account.AddressInput
 import com.furkansogutma.domain.account.BankTransfer
 import com.furkansogutma.domain.account.CompanyBankAccount
 import com.furkansogutma.domain.account.CurrentAccount
+import com.furkansogutma.domain.account.LegalPage
 import com.furkansogutma.domain.account.ProductAlert
 import com.furkansogutma.domain.account.SiteConfig
 import javax.inject.Inject
@@ -84,6 +85,9 @@ class AccountRepositoryImpl @Inject constructor(
 
     override suspend fun getSiteConfig(): Result<SiteConfig> =
         safeApiCall { catalogApi.siteConfig().toDomain() }
+
+    override suspend fun getLegalPage(slug: String): Result<LegalPage> =
+        safeApiCall { catalogApi.legalPage(slug).toDomain() }
 
     override suspend fun getBankAccounts(): Result<List<CompanyBankAccount>> =
         safeApiCall { api.bankAccounts().map { it.toDomain() } }

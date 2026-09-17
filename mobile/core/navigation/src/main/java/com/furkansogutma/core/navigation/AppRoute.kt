@@ -25,6 +25,9 @@ sealed interface AppRoute {
     data object Profile : AppRoute { override val route = "profile" }
     data object ProductList : AppRoute { override val route = "products" }
     data object Campaigns : AppRoute { override val route = "campaigns" }
+    data object LegalKvkk : AppRoute { override val route = "legal/kvkk" }
+    data object LegalPrivacy : AppRoute { override val route = "legal/privacy" }
+    data object LegalTerms : AppRoute { override val route = "legal/terms" }
 
     data class ProductDetail(val slug: String) : AppRoute {
         override val route = "product/$slug"
@@ -51,11 +54,13 @@ object AppRoutes {
     const val PRODUCT_LIST_WITH_CATEGORY = "products?category={category}"
     const val ORDER_SUCCESS = "order_success/{orderId}?payment={payment}"
     const val BANK_TRANSFERS_WITH_ORDER = "bank_transfers?orderId={orderId}"
+    const val LEGAL = "legal/{slug}"
 
     fun productDetail(slug: String) = "product/$slug"
     fun campaignDetail(slug: String) = "campaign/$slug"
     fun categoryDetail(slug: String) = "category/$slug"
     fun orderDetail(id: String) = "order/$id"
+    fun legal(slug: String) = "legal/$slug"
     fun productList(category: String? = null) =
         if (category.isNullOrBlank()) "products" else "products?category=$category"
     fun orderSuccess(orderId: String, payment: String) =

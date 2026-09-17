@@ -481,11 +481,40 @@ async function seedBankAccounts(): Promise<void> {
   console.log('Company bank accounts ensured');
 }
 
+async function seedLegalPages(): Promise<void> {
+  const defaults: Array<{ slug: string; title: string; body: string }> = [
+    {
+      slug: 'kvkk',
+      title: 'KVKK Aydınlatma Metni',
+      body: 'FurkanSoğutma KVKK aydınlatma metni. Bu içerik yönetim panelinden düzenlenebilir.',
+    },
+    {
+      slug: 'privacy',
+      title: 'Gizlilik Politikası',
+      body: 'FurkanSoğutma gizlilik politikası. Bu içerik yönetim panelinden düzenlenebilir.',
+    },
+    {
+      slug: 'terms',
+      title: 'Kullanım Koşulları',
+      body: 'FurkanSoğutma kullanım koşulları. Bu içerik yönetim panelinden düzenlenebilir.',
+    },
+  ];
+  for (const page of defaults) {
+    await prisma.legalPage.upsert({
+      where: { slug: page.slug },
+      update: {},
+      create: page,
+    });
+  }
+  console.log('Legal pages ensured');
+}
+
 async function main(): Promise<void> {
   await ensureRbacCatalog();
   await seedAdmins();
   await seedCatalog();
   await seedBankAccounts();
+  await seedLegalPages();
 }
 
 main()

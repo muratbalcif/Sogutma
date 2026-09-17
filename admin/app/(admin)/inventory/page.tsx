@@ -57,6 +57,7 @@ export default function InventoryPage() {
           permission="stock.read"
           queryKey={["admin-inventory"]}
           queryFn={() => inventoryService.list(1, 50)}
+          emptyMessage="Stok kaydı bulunamadı."
         >
           {(data) => (
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">

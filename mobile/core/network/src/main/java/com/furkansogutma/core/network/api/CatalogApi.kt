@@ -7,6 +7,7 @@ import com.furkansogutma.core.network.dto.CampaignProductDto
 import com.furkansogutma.core.network.dto.CategoryDto
 import com.furkansogutma.core.network.dto.PaginatedDto
 import com.furkansogutma.core.network.dto.ProductDto
+import com.furkansogutma.core.network.dto.LegalPageDto
 import com.furkansogutma.core.network.dto.SiteConfigDto
 import retrofit2.http.GET
 import retrofit2.http.Path
@@ -62,4 +63,7 @@ interface CatalogApi {
 
     @GET("site/config")
     suspend fun siteConfig(): SiteConfigDto
+
+    @GET("site/legal/{slug}")
+    suspend fun legalPage(@Path("slug") slug: String): LegalPageDto
 }

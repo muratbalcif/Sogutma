@@ -19,6 +19,7 @@ import com.furkansogutma.core.network.dto.NotificationPreferenceDto
 import com.furkansogutma.core.network.dto.OrderDto
 import com.furkansogutma.core.network.dto.ProductAlertDto
 import com.furkansogutma.core.network.dto.ProductDto
+import com.furkansogutma.core.network.dto.LegalPageDto
 import com.furkansogutma.core.network.dto.SiteConfigDto
 import com.furkansogutma.core.network.dto.UnreadCountDto
 import com.furkansogutma.core.network.dto.UserDto
@@ -27,6 +28,7 @@ import com.furkansogutma.domain.account.Address
 import com.furkansogutma.domain.account.BankTransfer
 import com.furkansogutma.domain.account.CompanyBankAccount
 import com.furkansogutma.domain.account.CurrentAccount
+import com.furkansogutma.domain.account.LegalPage
 import com.furkansogutma.domain.account.ProductAlert
 import com.furkansogutma.domain.account.SiteConfig
 import com.furkansogutma.domain.auth.AuthSession
@@ -253,8 +255,23 @@ fun AccountCurrentDto.toDomain() = CurrentAccount(
 fun AccountTransactionDto.toDomain() = AccountTransaction(id, type, amount, balanceAfter, description, createdAt)
 fun BankTransferDto.toDomain() = BankTransfer(id, orderId, amount, transferDate, description, status, bankName, senderName)
 fun SiteConfigDto.toDomain() = SiteConfig(
-    siteName, supportEmail, supportPhone, address,
-    bankTransferInfo.bankName, bankTransferInfo.iban, bankTransferInfo.accountName,
+    siteName = siteName,
+    supportEmail = supportEmail,
+    supportPhone = supportPhone,
+    address = address,
+    privacyUrl = privacyUrl,
+    kvkkUrl = kvkkUrl,
+    termsUrl = termsUrl,
+    bankName = bankTransferInfo.bankName,
+    iban = bankTransferInfo.iban,
+    accountName = bankTransferInfo.accountName,
+)
+
+fun LegalPageDto.toDomain() = LegalPage(
+    slug = slug,
+    title = title,
+    body = body,
+    updatedAt = updatedAt,
 )
 
 fun CompanyBankAccountDto.toDomain() = CompanyBankAccount(

@@ -316,6 +316,13 @@ data class SiteConfigDto(
     val bankTransferInfo: BankTransferInfoDto,
 )
 
+data class LegalPageDto(
+    val slug: String,
+    val title: String,
+    val body: String,
+    val updatedAt: String,
+)
+
 data class BankTransferInfoDto(
     val bankName: String,
     val iban: String,

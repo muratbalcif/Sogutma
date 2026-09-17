@@ -23,5 +23,6 @@ interface AccountRepository {
     suspend fun registerDeviceToken(token: String): Result<Unit>
     suspend fun unregisterDeviceToken(token: String): Result<Unit>
     suspend fun getSiteConfig(): Result<SiteConfig>
+    suspend fun getLegalPage(slug: String): Result<LegalPage>
     suspend fun getBankAccounts(): Result<List<CompanyBankAccount>>
 }

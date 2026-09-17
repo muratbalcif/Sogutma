@@ -72,9 +72,19 @@ data class SiteConfig(
     val supportEmail: String,
     val supportPhone: String,
     val address: String,
+    val privacyUrl: String,
+    val kvkkUrl: String,
+    val termsUrl: String,
     val bankName: String,
     val iban: String,
     val accountName: String,
+)
+
+data class LegalPage(
+    val slug: String,
+    val title: String,
+    val body: String,
+    val updatedAt: String,
 )
 
 data class CompanyBankAccount(

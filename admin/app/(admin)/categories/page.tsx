@@ -12,6 +12,7 @@ export default function CategoriesPage() {
         permission="category.read"
         queryKey={["admin-categories"]}
         queryFn={() => catalogService.listCategories(1, 50)}
+        emptyMessage="Kategori bulunamadı."
       >
         {(data) => (
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">

@@ -55,6 +55,7 @@ import com.furkansogutma.domain.account.Address
 import com.furkansogutma.domain.account.AddressInput
 import com.furkansogutma.domain.account.BankTransfer
 import com.furkansogutma.domain.account.CurrentAccount
+import com.furkansogutma.domain.account.LegalPage
 import com.furkansogutma.domain.account.ProductAlert
 import com.furkansogutma.domain.account.SyncDeviceTokenUseCase
 import com.furkansogutma.domain.auth.AuthRepository
@@ -599,7 +600,11 @@ fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: Acc
 }
 
 @Composable
-fun SettingsRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewModel()) {
+fun SettingsRoute(
+    onBack: () -> Unit = {},
+    onLegal: (String) -> Unit = {},
+    vm: AccountDataViewModel = hiltViewModel(),
+) {
     val theme by vm.settings.themeMode.collectAsStateWithLifecycle(initialValue = "system")
     var prefs by remember { mutableStateOf<NotificationPreferences?>(null) }
     val scope = rememberCoroutineScope()
@@ -652,6 +657,52 @@ fun SettingsRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewMo
                     val updated = current.copy(systemNotifications = it)
                     prefs = updated
                     scope.launch { vm.notificationRepository.updatePreferences(updated) }
+                }
+            }
+            Spacer(Modifier.height(FurkanSpacing.lg))
+            Text("Yasal", style = MaterialTheme.typography.titleLarge)
+            listOf(
+                "kvkk" to "KVKK Aydınlatma",
+                "privacy" to "Gizlilik Politikası",
+                "terms" to "Kullanım Koşulları",
+            ).forEach { (slug, label) ->
+                Text(
+                    label,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onLegal(slug) }
+                        .padding(vertical = FurkanSpacing.sm),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun LegalDocumentRoute(slug: String, onBack: () -> Unit, vm: AccountDataViewModel = hiltViewModel()) {
+    var page by remember { mutableStateOf<LegalPage?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(slug) {
+        when (val result = vm.accountRepository.getLegalPage(slug)) {
+            is Result.Success -> page = result.data
+            is Result.Error -> error = result.error.message
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        FurkanTopBar(page?.title ?: "Yasal metin", onBack = onBack)
+        when {
+            error != null -> FurkanError(error!!)
+            page == null -> FurkanLoading()
+            else -> {
+                Column(Modifier.padding(FurkanSpacing.md)) {
+                    Text(
+                        "Son güncelleme: ${page!!.updatedAt}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(FurkanSpacing.md))
+                    Text(page!!.body)
                 }
             }
         }

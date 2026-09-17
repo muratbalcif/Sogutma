@@ -12,6 +12,7 @@ export default function NotificationsPage() {
         permission="notification.read"
         queryKey={["admin-notifications"]}
         queryFn={() => notificationsService.list(1, 50)}
+        emptyMessage="Bildirim bulunamadı."
       >
         {(data) => (
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
