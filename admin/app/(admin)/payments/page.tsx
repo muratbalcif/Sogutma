@@ -25,6 +25,12 @@ const METHOD_FILTERS = [
   "CASH_ON_DELIVERY",
 ] as const;
 
+function errorMessage(err: Error, fallback: string) {
+  return err instanceof ApiError
+    ? err.message
+    : err.message || fallback;
+}
+
 export default function PaymentsPage() {
   const { can } = usePermissions();
   const queryClient = useQueryClient();
@@ -35,7 +41,9 @@ export default function PaymentsPage() {
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [refundError, setRefundError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [adminNote, setAdminNote] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
 
   const listQuery = useQuery({
     queryKey: ["admin-payments", page, status, method, orderNumber, from, to],
@@ -55,27 +63,67 @@ export default function PaymentsPage() {
     enabled: Boolean(selectedId),
   });
 
+  const invalidatePaymentQueries = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["admin-payments"] });
+    await queryClient.invalidateQueries({
+      queryKey: ["admin-payment", selectedId],
+    });
+    await queryClient.invalidateQueries({ queryKey: ["admin-bank-transfers"] });
+  };
+
   const refundMutation = useMutation({
     mutationFn: (id: string) => paymentsService.refund(id),
     onSuccess: async () => {
-      setRefundError(null);
-      await queryClient.invalidateQueries({ queryKey: ["admin-payments"] });
-      await queryClient.invalidateQueries({
-        queryKey: ["admin-payment", selectedId],
-      });
+      setActionError(null);
+      await invalidatePaymentQueries();
     },
     onError: (err: Error) => {
-      setRefundError(
-        err instanceof ApiError
-          ? err.message
-          : err.message || "İade işlemi başarısız",
-      );
+      setActionError(errorMessage(err, "İade işlemi başarısız"));
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (transferId: string) =>
+      paymentsService.approveBankTransfer(transferId, {
+        adminNote: adminNote.trim() || undefined,
+      }),
+    onSuccess: async () => {
+      setActionError(null);
+      setAdminNote("");
+      await invalidatePaymentQueries();
+    },
+    onError: (err: Error) => {
+      setActionError(errorMessage(err, "Onay işlemi başarısız"));
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (transferId: string) =>
+      paymentsService.rejectBankTransfer(transferId, {
+        rejectionReason: rejectReason.trim(),
+        adminNote: adminNote.trim() || undefined,
+      }),
+    onSuccess: async () => {
+      setActionError(null);
+      setRejectReason("");
+      setAdminNote("");
+      await invalidatePaymentQueries();
+    },
+    onError: (err: Error) => {
+      setActionError(errorMessage(err, "Red işlemi başarısız"));
     },
   });
 
   const items = listQuery.data?.items ?? [];
   const detail = detailQuery.data;
   const canRefund = can("payment.refund");
+  const canApprove = can("bank_transfer.approve");
+  const canReject = can("bank_transfer.reject");
+  const pendingTransferId = detail?.pendingBankTransferId ?? null;
+  const canActOnTransfer =
+    detail?.status === "PENDING" &&
+    detail.method === "BANK_TRANSFER" &&
+    Boolean(pendingTransferId);
 
   return (
     <ModulePage permission="payment.read">
@@ -86,8 +134,11 @@ export default function PaymentsPage() {
               Ödemeler
             </h1>
             <p className="text-sm text-slate-600">
-              Durum / yöntem / sipariş no / tarih filtreleri. İade için{" "}
-              <code className="text-xs">payment.refund</code> gerekir.
+              Pending havale ödemelerini buradan onaylayabilir veya{" "}
+              <Link href="/bank-transfers" className="text-cyan-800 underline">
+                Havale Bildirimleri
+              </Link>{" "}
+              sayfasını kullanabilirsiniz.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -182,14 +233,23 @@ export default function PaymentsPage() {
                         selectedId === row.id ? "bg-cyan-50" : ""
                       }`}
                       onClick={() => {
-                        setRefundError(null);
+                        setActionError(null);
+                        setAdminNote("");
+                        setRejectReason("");
                         setSelectedId(row.id);
                       }}
                     >
                       <td className="px-4 py-3 font-mono text-xs">
                         {row.id.slice(0, 8)}…
                       </td>
-                      <td className="px-4 py-3">{row.status}</td>
+                      <td className="px-4 py-3">
+                        {row.status}
+                        {row.pendingBankTransferId ? (
+                          <span className="ml-1 text-xs text-amber-700">
+                            onay bekliyor
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-3">{row.method}</td>
                       <td className="px-4 py-3">
                         {row.amount} {row.currency}
@@ -306,8 +366,82 @@ export default function PaymentsPage() {
                   </div>
                 </dl>
 
-                {refundError ? (
-                  <p className="text-sm text-red-600">{refundError}</p>
+                {actionError ? (
+                  <p className="text-sm text-red-600">{actionError}</p>
+                ) : null}
+
+                {detail.status === "PENDING" &&
+                detail.method === "BANK_TRANSFER" &&
+                !pendingTransferId ? (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Müşteri henüz havale bildirimi göndermemiş. Bildirim
+                    geldikten sonra buradan veya{" "}
+                    <Link
+                      href="/bank-transfers"
+                      className="underline"
+                    >
+                      Havale Bildirimleri
+                    </Link>{" "}
+                    sayfasından onaylayabilirsiniz.
+                  </p>
+                ) : null}
+
+                {canActOnTransfer ? (
+                  <div className="space-y-2 border-t border-slate-100 pt-3">
+                    <p className="text-xs font-medium text-slate-700">
+                      Bekleyen havale bildirimi
+                    </p>
+                    <textarea
+                      className="w-full rounded-md border border-slate-300 p-2 text-sm"
+                      rows={2}
+                      placeholder="Admin notu (opsiyonel)"
+                      value={adminNote}
+                      onChange={(e) => setAdminNote(e.target.value)}
+                    />
+                    {canApprove ? (
+                      <button
+                        type="button"
+                        className="w-full rounded-md bg-emerald-700 px-3 py-2 text-sm text-white disabled:opacity-50"
+                        disabled={approveMutation.isPending}
+                        onClick={() =>
+                          approveMutation.mutate(pendingTransferId!)
+                        }
+                      >
+                        {approveMutation.isPending
+                          ? "Onaylanıyor…"
+                          : "Ödemeyi onayla"}
+                      </button>
+                    ) : (
+                      <p className="text-xs text-slate-500">
+                        Onay için bank_transfer.approve yetkisi gerekli.
+                      </p>
+                    )}
+                    {canReject ? (
+                      <>
+                        <input
+                          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                          placeholder="Red nedeni (zorunlu)"
+                          value={rejectReason}
+                          onChange={(e) => setRejectReason(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="w-full rounded-md bg-red-700 px-3 py-2 text-sm text-white disabled:opacity-50"
+                          disabled={
+                            rejectMutation.isPending ||
+                            rejectReason.trim().length < 2
+                          }
+                          onClick={() =>
+                            rejectMutation.mutate(pendingTransferId!)
+                          }
+                        >
+                          {rejectMutation.isPending
+                            ? "Reddediliyor…"
+                            : "Havale bildirimini reddet"}
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
                 ) : null}
 
                 {canRefund && detail.status === "PAID" ? (

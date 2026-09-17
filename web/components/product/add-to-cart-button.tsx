@@ -45,7 +45,7 @@ export function AddToCartButton({
   });
 
   const inCartQty =
-    cartQuery.data?.items.find((item) => item.product.id === productId)
+    cartQuery.data?.items.find((item) => item.product?.id === productId)
       ?.quantity ?? 0;
 
   async function addToCart() {
@@ -59,7 +59,7 @@ export function AddToCartButton({
       });
       queryClient.setQueryData(["cart"], cart);
       const qty =
-        cart.items.find((item) => item.product.id === productId)?.quantity ??
+        cart.items.find((item) => item.product?.id === productId)?.quantity ??
         inCartQty + 1;
       setMessage(`Sepete eklendi · Adet: ${qty}`);
       router.refresh();

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
 import { usePermissions } from "@/hooks/use-permissions";
+import { ApiError } from "@/lib/api-client";
 import { paymentsService } from "@/services/admin-api.service";
 
 const STATUS_FILTERS = ["ALL", "PENDING", "APPROVED", "REJECTED"] as const;
@@ -16,6 +17,7 @@ export default function BankTransfersPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState("");
   const [rejectReason, setRejectReason] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const listQuery = useQuery({
     queryKey: ["admin-bank-transfers", status, search],
@@ -37,10 +39,18 @@ export default function BankTransfersPage() {
       paymentsService.approveBankTransfer(selectedId!, { adminNote }),
     onSuccess: async () => {
       setAdminNote("");
+      setActionError(null);
       await queryClient.invalidateQueries({ queryKey: ["admin-bank-transfers"] });
       await queryClient.invalidateQueries({
         queryKey: ["admin-bank-transfer", selectedId],
       });
+    },
+    onError: (err: Error) => {
+      setActionError(
+        err instanceof ApiError
+          ? err.message
+          : err.message || "Onay işlemi başarısız",
+      );
     },
   });
 
@@ -53,10 +63,18 @@ export default function BankTransfersPage() {
     onSuccess: async () => {
       setRejectReason("");
       setAdminNote("");
+      setActionError(null);
       await queryClient.invalidateQueries({ queryKey: ["admin-bank-transfers"] });
       await queryClient.invalidateQueries({
         queryKey: ["admin-bank-transfer", selectedId],
       });
+    },
+    onError: (err: Error) => {
+      setActionError(
+        err instanceof ApiError
+          ? err.message
+          : err.message || "Red işlemi başarısız",
+      );
     },
   });
 
@@ -130,7 +148,10 @@ export default function BankTransfersPage() {
                     className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${
                       selectedId === row.id ? "bg-cyan-50" : ""
                     }`}
-                    onClick={() => setSelectedId(row.id)}
+                    onClick={() => {
+                      setActionError(null);
+                      setSelectedId(row.id);
+                    }}
                   >
                     <td className="px-4 py-3 font-mono text-xs">
                       {row.orderNumber ?? "—"}
@@ -236,8 +257,8 @@ export default function BankTransfersPage() {
                     ) : null}
                   </div>
                 ) : null}
-                {approve.error || reject.error ? (
-                  <p className="text-red-600">İşlem başarısız.</p>
+                {actionError ? (
+                  <p className="text-red-600">{actionError}</p>
                 ) : null}
               </div>
             ) : (

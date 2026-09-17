@@ -127,6 +127,7 @@ export type AdminPayment = {
   failureMessage: string | null;
   paidAt: string | null;
   expiresAt: string | null;
+  pendingBankTransferId?: string | null;
   createdAt: string;
   updatedAt: string;
 };

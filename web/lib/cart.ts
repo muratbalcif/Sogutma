@@ -1,5 +1,8 @@
 export type CartSummary = {
-  items: Array<{ quantity: number }>;
+  items: Array<{
+    quantity: number;
+    product?: { id: string };
+  }>;
   summary: {
     total: string;
     currency: string;
