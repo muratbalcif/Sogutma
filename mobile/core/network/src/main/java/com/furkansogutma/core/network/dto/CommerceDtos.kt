@@ -88,6 +88,46 @@ data class CreateOrderRequestDto(
     val couponCode: String? = null,
 )
 
+data class CheckoutValidateRequestDto(
+    val shippingAddressId: String,
+    val billingAddressId: String,
+    val customerNote: String? = null,
+    val couponCode: String? = null,
+)
+
+data class CheckoutValidationDto(
+    val valid: Boolean,
+    val items: List<CheckoutValidationItemDto> = emptyList(),
+    val summary: CheckoutValidationSummaryDto? = null,
+    val issues: List<CheckoutValidationIssueDto> = emptyList(),
+)
+
+data class CheckoutValidationItemDto(
+    val productId: String,
+    val productName: String,
+    val sku: String,
+    val quantity: Int,
+    val unitPrice: String,
+    val total: String? = null,
+)
+
+data class CheckoutValidationSummaryDto(
+    val subtotal: String? = null,
+    val discount: String? = null,
+    val couponDiscount: String? = null,
+    val couponCode: String? = null,
+    val tax: String? = null,
+    val shipping: String? = null,
+    val total: String? = null,
+    val currency: String? = null,
+)
+
+data class CheckoutValidationIssueDto(
+    val code: String,
+    val message: String,
+    val productId: String? = null,
+)
+
 data class CreatePaymentRequestDto(
     val method: String,
 )

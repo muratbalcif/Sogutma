@@ -57,6 +57,7 @@ Use this before every production release. Mark items after verification.
   - Do not parse untrusted XLSX outside ImportsService
   - Track replacement (`exceljs` / CSV-only) as follow-up — not applied here to avoid breaking catalog import
 - [x] Presigned R2 uploads: JPEG/PNG/WEBP MIME + extension allowlist, size cap (`R2_MAX_UPLOAD_BYTES` / `contentLength`), no SVG
+- [x] **Sharp (web/admin):** pinned `optionalDependencies.sharp@0.35.4` so Next Image Optimization does not stay on vulnerable `0.34.5`. PostCSS remains nested under Next 15.5.25 — do not jump to Next 16 without a dedicated upgrade.
 
 ## Data & ops
 

@@ -50,6 +50,7 @@ import com.furkansogutma.domain.account.CompanyBankAccount
 import com.furkansogutma.domain.cart.GetCartUseCase
 import com.furkansogutma.domain.order.CreateOrderInput
 import com.furkansogutma.domain.order.CreateOrderUseCase
+import com.furkansogutma.domain.order.ValidateCheckoutUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -77,6 +78,7 @@ sealed interface CheckoutEffect {
 class CheckoutViewModel @Inject constructor(
     private val accountRepository: AccountRepository,
     private val getCart: GetCartUseCase,
+    private val validateCheckout: ValidateCheckoutUseCase,
     private val createOrder: CreateOrderUseCase,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(CheckoutUiModel())
@@ -124,16 +126,36 @@ class CheckoutViewModel @Inject constructor(
         if (_ui.value.submitting) return
         viewModelScope.launch {
             _ui.value = _ui.value.copy(submitting = true, error = null)
-            when (
-                val result = createOrder(
-                    CreateOrderInput(
-                        shippingAddressId = addressId,
-                        billingAddressId = addressId,
-                        paymentMethod = "BANK_TRANSFER",
-                        couponCode = _ui.value.couponCode.ifBlank { null },
-                    ),
-                )
-            ) {
+            val input = CreateOrderInput(
+                shippingAddressId = addressId,
+                billingAddressId = addressId,
+                paymentMethod = "BANK_TRANSFER",
+                couponCode = _ui.value.couponCode.ifBlank { null },
+            )
+            when (val validation = validateCheckout(input)) {
+                is Result.Error -> {
+                    _ui.value = _ui.value.copy(submitting = false, error = validation.error.message)
+                    _effects.emit(CheckoutEffect.Message(validation.error.message))
+                    return@launch
+                }
+                is Result.Success -> {
+                    if (!validation.data.valid) {
+                        val detail = validation.data.issues
+                            .joinToString("\n") { it.message }
+                            .ifBlank { "Checkout doğrulaması başarısız" }
+                        _ui.value = _ui.value.copy(submitting = false, error = detail)
+                        _effects.emit(CheckoutEffect.Message(detail))
+                        return@launch
+                    }
+                    validation.data.total?.let { total ->
+                        val currency = validation.data.currency.orEmpty()
+                        _ui.value = _ui.value.copy(
+                            total = listOf(total, currency).filter { it.isNotBlank() }.joinToString(" "),
+                        )
+                    }
+                }
+            }
+            when (val result = createOrder(input)) {
                 is Result.Success -> {
                     _ui.value = _ui.value.copy(submitting = false)
                     _effects.emit(CheckoutEffect.OrderCreated(result.data.id, "BANK_TRANSFER"))

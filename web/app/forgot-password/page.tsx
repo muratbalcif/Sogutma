@@ -1,12 +1,5 @@
-import { EmptyState } from "@/components/ui/empty-state";
+import ForgotPasswordClient from "./forgot-password-client";
 
 export default function ForgotPasswordPage() {
-  return (
-    <EmptyState
-      title="Şifre sıfırlama henüz aktif değil"
-      description="Backend'de forgot-password uç noktası bulunmuyor. Destek ile iletişime geçin."
-      actionHref="/login"
-      actionLabel="Girişe dön"
-    />
-  );
+  return <ForgotPasswordClient />;
 }

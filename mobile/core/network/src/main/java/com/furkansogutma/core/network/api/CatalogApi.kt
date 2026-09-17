@@ -2,6 +2,8 @@ package com.furkansogutma.core.network.api
 
 import com.furkansogutma.core.network.dto.BannerDto
 import com.furkansogutma.core.network.dto.BrandDto
+import com.furkansogutma.core.network.dto.CampaignDto
+import com.furkansogutma.core.network.dto.CampaignProductDto
 import com.furkansogutma.core.network.dto.CategoryDto
 import com.furkansogutma.core.network.dto.PaginatedDto
 import com.furkansogutma.core.network.dto.ProductDto
@@ -23,6 +25,15 @@ interface CatalogApi {
 
     @GET("banners")
     suspend fun banners(): List<BannerDto>
+
+    @GET("campaigns")
+    suspend fun campaignList(): List<CampaignDto>
+
+    @GET("campaigns/{slug}")
+    suspend fun campaign(@Path("slug") slug: String): CampaignDto
+
+    @GET("campaigns/{slug}/products")
+    suspend fun campaignProducts(@Path("slug") slug: String): List<CampaignProductDto>
 
     @GET("products")
     suspend fun products(@QueryMap query: Map<String, String>): PaginatedDto<ProductDto>

@@ -45,6 +45,12 @@ export const authClient = {
       body: JSON.stringify(body),
     });
   },
+  forgotPassword(email: string) {
+    return bffFetch<{ message: string }>("/api/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
   logout() {
     return bffFetch<{ success: true }>("/api/auth/logout", { method: "POST" });
   },
@@ -52,3 +58,32 @@ export const authClient = {
     return bffFetch("/api/auth/me");
   },
 };
+
+/** Authenticated CSV/text download via BFF (HttpOnly cookies). */
+export async function clientApiDownload(
+  path: string,
+  filename: string,
+): Promise<void> {
+  const response = await fetch(`/api/proxy${path}`, {
+    credentials: "same-origin",
+    headers: { Accept: "text/csv, text/plain, application/json, */*" },
+  });
+  if (!response.ok) {
+    let message = `Download failed (${response.status})`;
+    try {
+      const data = (await response.json()) as { message?: string | string[] };
+      if (Array.isArray(data.message)) message = data.message.join(", ");
+      else if (data.message) message = data.message;
+    } catch {
+      // keep default
+    }
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

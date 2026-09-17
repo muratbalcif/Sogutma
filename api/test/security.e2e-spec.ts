@@ -390,6 +390,21 @@ describe('Security hardening (e2e)', () => {
     expect(saw429).toBe(true);
   }, 60_000);
 
+  it('rate-limits refresh with 429', async () => {
+    await flushTestRedis();
+    let saw429 = false;
+    for (let i = 0; i < 35; i++) {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: 'invalid-refresh-token-for-rate-limit' });
+      if (res.status === 429) {
+        saw429 = true;
+        break;
+      }
+    }
+    expect(saw429).toBe(true);
+  }, 60_000);
+
   it('rate-limits bank-transfer submissions with 429', async () => {
     await flushTestRedis();
     let saw429 = false;
@@ -610,6 +625,17 @@ describe('Security hardening (e2e)', () => {
       .set('Authorization', `Bearer ${productManagerToken}`)
       .attach('file', Buffer.from('<svg></svg>'), 'payload.svg')
       .expect(400);
+
+    const validJpeg = await request(app.getHttpServer())
+      .post('/api/v1/admin/uploads/presign')
+      .set('Authorization', `Bearer ${productManagerToken}`)
+      .send({
+        filename: 'product.jpg',
+        contentType: 'image/jpeg',
+        contentLength: 1024,
+      });
+    // 201 when R2 is configured; 503 when credentials are absent in test env.
+    expect([201, 503]).toContain(validJpeg.status);
   });
 
   it('neutralizes CSV formula injection on customer export', async () => {

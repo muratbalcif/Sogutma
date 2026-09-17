@@ -60,6 +60,8 @@ import com.furkansogutma.feature.account.SettingsRoute
 import com.furkansogutma.feature.auth.ForgotPasswordRoute
 import com.furkansogutma.feature.auth.LoginRoute
 import com.furkansogutma.feature.auth.RegisterRoute
+import com.furkansogutma.feature.campaign.CampaignDetailRoute
+import com.furkansogutma.feature.campaign.CampaignListRoute
 import com.furkansogutma.feature.cart.CartRoute
 import com.furkansogutma.feature.category.CategoryRoute
 import com.furkansogutma.feature.checkout.CheckoutRoute
@@ -233,6 +235,7 @@ fun FurkanNavHost(
                         navController.navigate(AppRoute.Cart.route) { launchSingleTop = true }
                     },
                     onSeeAllProducts = { navController.navigate(AppRoutes.productList(it)) },
+                    onSeeAllCampaigns = { navController.navigate(AppRoute.Campaigns.route) },
                 )
             }
             composable(AppRoute.Categories.route) {
@@ -257,6 +260,21 @@ fun FurkanNavHost(
             }
             composable(AppRoute.ProductList.route) {
                 ProductListRoute(
+                    onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.Campaigns.route) {
+                CampaignListRoute(
+                    onCampaignClick = { navController.navigate(AppRoutes.campaignDetail(it)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = AppRoutes.CAMPAIGN_DETAIL,
+                arguments = listOf(navArgument("slug") { type = NavType.StringType }),
+            ) {
+                CampaignDetailRoute(
                     onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
                     onBack = { navController.popBackStack() },
                 )

@@ -3,9 +3,31 @@ package com.furkansogutma.domain.order
 import com.furkansogutma.core.common.result.Result
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+
+class ValidateCheckoutUseCaseTest {
+    @Test
+    fun `returns validation from repository`() = runTest {
+        val repo = mockk<OrderRepository>()
+        val expected = CheckoutValidation(
+            valid = false,
+            issues = listOf(CheckoutIssue("EMPTY_CART", "Cart is empty")),
+        )
+        coEvery { repo.validateCheckout(any()) } returns Result.Success(expected)
+        val result = ValidateCheckoutUseCase(repo)(
+            CreateOrderInput(
+                shippingAddressId = "a1",
+                billingAddressId = "a1",
+                paymentMethod = "BANK_TRANSFER",
+            ),
+        )
+        assertThat((result as Result.Success).data.valid).isFalse()
+        assertThat(result.data.issues.first().code).isEqualTo("EMPTY_CART")
+    }
+}
 
 class CreateOrderUseCaseTest {
     @Test

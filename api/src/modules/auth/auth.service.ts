@@ -182,13 +182,14 @@ export class AuthService {
   }
 
   /**
-   * Always return a generic success message to avoid email enumeration.
-   * Actual email delivery can be wired to the notifications/mail provider later.
+   * Accepts the request without revealing whether the email exists.
+   * Mail/token delivery is not wired yet — do not claim an email was sent.
    */
   async forgotPassword(email: string): Promise<{ message: string }> {
     await this.usersService.findByEmail(email);
     return {
-      message: 'Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.',
+      message:
+        'Şifre sıfırlama talebiniz alındı. E-posta gönderimi henüz yapılandırılmadığı için bağlantı gönderilemedi; destek ile iletişime geçin.',
     };
   }
 }

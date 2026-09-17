@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import { e2eApiBase, loginViaUi, requiredEnv } from "./helpers";
 
 test.describe("Admin authenticated flows", () => {
+  let seededCustomerEmail = "";
+
   test.beforeAll(async ({ request }) => {
     const health = await request.get(`${e2eApiBase()}/health/live`);
     if (!health.ok()) {
@@ -10,9 +12,10 @@ test.describe("Admin authenticated flows", () => {
       );
     }
     const suffix = Date.now();
+    seededCustomerEmail = `e2e.customer.${suffix}@example.com`;
     const register = await request.post(`${e2eApiBase()}/auth/register`, {
       data: {
-        email: `e2e.customer.${suffix}@example.com`,
+        email: seededCustomerEmail,
         password: "Password123!",
         firstName: "E2E",
         lastName: "Customer",
@@ -42,9 +45,10 @@ test.describe("Admin authenticated flows", () => {
       page.getByRole("main").getByRole("heading", { name: "Müşteriler" }),
     ).toBeVisible();
 
-    const firstCustomer = page.locator("main table a").first();
-    await expect(firstCustomer).toBeVisible({ timeout: 15_000 });
-    await firstCustomer.click();
+    await page.getByPlaceholder(/İsim, e-posta/).fill(seededCustomerEmail);
+    const e2eCustomer = page.getByRole("link", { name: "E2E Customer" });
+    await expect(e2eCustomer).toHaveCount(1, { timeout: 15_000 });
+    await e2eCustomer.click();
     await expect(page).toHaveURL(/\/customers\/[0-9a-f-]+/i);
     await expect(page.getByRole("main").locator("h1")).toContainText("E2E");
 

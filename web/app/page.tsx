@@ -115,9 +115,14 @@ export default async function HomePage() {
 
       {campaigns.length > 0 ? (
         <section>
-          <h2 className="mb-4 font-[family-name:var(--font-display)] text-2xl text-navy">
-            Kampanyalı Ürünler
-          </h2>
+          <div className="mb-4 flex items-end justify-between gap-3">
+            <h2 className="font-[family-name:var(--font-display)] text-2xl text-navy">
+              Kampanyalı Ürünler
+            </h2>
+            <Link href="/campaigns" className="text-sm text-accent hover:underline">
+              Tüm kampanyalar
+            </Link>
+          </div>
           <ProductGrid products={campaigns} />
         </section>
       ) : null}

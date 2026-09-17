@@ -7,6 +7,8 @@ import com.furkansogutma.core.network.dto.AccountTransactionDto
 import com.furkansogutma.core.network.dto.BankTransferDto
 import com.furkansogutma.core.network.dto.CartDto
 import com.furkansogutma.core.network.dto.CartValidationDto
+import com.furkansogutma.core.network.dto.CheckoutValidateRequestDto
+import com.furkansogutma.core.network.dto.CheckoutValidationDto
 import com.furkansogutma.core.network.dto.CompanyBankAccountDto
 import com.furkansogutma.core.network.dto.CreateAddressRequestDto
 import com.furkansogutma.core.network.dto.CreateBankTransferRequestDto
@@ -73,6 +75,9 @@ interface CommerceApi {
 
     @POST("orders")
     suspend fun createOrder(@Body body: CreateOrderRequestDto): OrderDto
+
+    @POST("checkout/validate")
+    suspend fun validateCheckout(@Body body: CheckoutValidateRequestDto): CheckoutValidationDto
 
     @GET("orders")
     suspend fun orders(@Query("page") page: Int = 1, @Query("limit") limit: Int = 20): PaginatedDto<OrderDto>

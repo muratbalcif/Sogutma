@@ -71,7 +71,7 @@ async function proxy(
     fetch(`${getApiUrl()}${targetPath}`, {
       method,
       headers: {
-        Accept: "application/json",
+        Accept: request.headers.get("Accept") ?? "application/json",
         ...(body ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
@@ -90,19 +90,30 @@ async function proxy(
       };
       access = tokens.accessToken;
       upstream = await doFetch(access);
-      const text = await upstream.text();
-      const response = new NextResponse(text, {
+      const buffer = await upstream.arrayBuffer();
+      const response = new NextResponse(buffer, {
         status: upstream.status,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type":
+            upstream.headers.get("Content-Type") ?? "application/octet-stream",
+        },
       });
+      const disposition = upstream.headers.get("Content-Disposition");
+      if (disposition) response.headers.set("Content-Disposition", disposition);
       setAuthCookies(response, tokens.accessToken, tokens.refreshToken);
       return response;
     }
   }
 
-  const text = await upstream.text();
-  return new NextResponse(text, {
+  const buffer = await upstream.arrayBuffer();
+  const response = new NextResponse(buffer, {
     status: upstream.status,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type":
+        upstream.headers.get("Content-Type") ?? "application/octet-stream",
+    },
   });
+  const disposition = upstream.headers.get("Content-Disposition");
+  if (disposition) response.headers.set("Content-Disposition", disposition);
+  return response;
 }

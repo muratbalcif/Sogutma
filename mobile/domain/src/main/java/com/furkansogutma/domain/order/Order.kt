@@ -51,3 +51,16 @@ data class CreateOrderInput(
     val note: String? = null,
     val couponCode: String? = null,
 )
+
+data class CheckoutValidation(
+    val valid: Boolean,
+    val issues: List<CheckoutIssue>,
+    val total: String? = null,
+    val currency: String? = null,
+)
+
+data class CheckoutIssue(
+    val code: String,
+    val message: String,
+    val productId: String? = null,
+)

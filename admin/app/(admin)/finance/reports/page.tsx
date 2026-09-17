@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
+import { apiDownloadText } from "@/lib/api-client";
 import { accountingService } from "@/services/admin-api.service";
 
 const REPORTS = [
@@ -69,22 +70,23 @@ export default function FinanceReportsPage() {
             onChange={(e) => setDateTo(e.target.value)}
             className="rounded border px-2 py-1.5 text-sm"
           />
-          <a
-            href={`/api-proxy-not-used`}
-            onClick={(e) => {
-              e.preventDefault();
-              const q = new URLSearchParams({ format: "csv" });
-              if (dateFrom) q.set("dateFrom", dateFrom);
-              if (dateTo) q.set("dateTo", dateTo);
-              window.open(
-                `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"}/admin/finance/reports/${report}?${q}`,
-                "_blank",
-              );
+          <button
+            type="button"
+            onClick={() => {
+              void apiDownloadText(
+                accountingService.reportCsvPath(report, {
+                  dateFrom: dateFrom || undefined,
+                  dateTo: dateTo || undefined,
+                }),
+                `${report}.csv`,
+              ).catch(() => {
+                window.alert("CSV indirilemedi.");
+              });
             }}
-            className="rounded border bg-white px-3 py-1.5 text-sm"
+            className="rounded border bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
           >
             CSV
-          </a>
+          </button>
         </div>
 
         {isLoading ? (

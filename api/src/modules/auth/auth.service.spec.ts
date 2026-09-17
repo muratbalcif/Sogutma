@@ -238,4 +238,11 @@ describe('AuthService', () => {
     await expect(service.logout('refresh')).resolves.toEqual({ success: true });
     expect(tokenService.revokeRefreshToken).toHaveBeenCalledWith('refresh');
   });
+
+  it('forgotPassword returns honest message without claiming email was sent', async () => {
+    usersService.findByEmail.mockResolvedValue(user);
+    const result = await service.forgotPassword('user@example.com');
+    expect(result.message).toContain('yapılandırılmadığı');
+    expect(result.message.toLowerCase()).not.toContain('gönderildi');
+  });
 });

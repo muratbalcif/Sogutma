@@ -1,6 +1,7 @@
 import { serverApiFetch } from "@/lib/api/server";
 import type {
   Banner,
+  CampaignSummary,
   CategoryNode,
   Paginated,
   ProductListItem,
@@ -18,6 +19,7 @@ export const catalogService = {
       "/brands",
     ),
   banners: () => serverApiFetch<Banner[]>("/banners"),
+  campaigns: () => serverApiFetch<CampaignSummary[]>("/campaigns"),
   siteConfig: () => serverApiFetch<SiteConfig>("/site/config"),
   products: (query: string) =>
     serverApiFetch<Paginated<ProductListItem>>(`/products?${query}`),

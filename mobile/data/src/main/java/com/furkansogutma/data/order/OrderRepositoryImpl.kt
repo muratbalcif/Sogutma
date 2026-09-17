@@ -2,10 +2,12 @@ package com.furkansogutma.data.order
 
 import com.furkansogutma.core.common.result.Result
 import com.furkansogutma.core.network.api.CommerceApi
+import com.furkansogutma.core.network.dto.CheckoutValidateRequestDto
 import com.furkansogutma.core.network.dto.CreateOrderRequestDto
 import com.furkansogutma.core.network.dto.CreatePaymentRequestDto
 import com.furkansogutma.data.mapper.toDomain
 import com.furkansogutma.data.remote.SafeApiCall
+import com.furkansogutma.domain.order.CheckoutValidation
 import com.furkansogutma.domain.order.CreateOrderInput
 import com.furkansogutma.domain.order.Order
 import com.furkansogutma.domain.order.OrderRepository
@@ -17,6 +19,18 @@ class OrderRepositoryImpl @Inject constructor(
     private val api: CommerceApi,
     private val safeApiCall: SafeApiCall,
 ) : OrderRepository {
+    override suspend fun validateCheckout(input: CreateOrderInput): Result<CheckoutValidation> =
+        safeApiCall {
+            api.validateCheckout(
+                CheckoutValidateRequestDto(
+                    shippingAddressId = input.shippingAddressId,
+                    billingAddressId = input.billingAddressId,
+                    customerNote = input.note,
+                    couponCode = input.couponCode,
+                ),
+            ).toDomain()
+        }
+
     override suspend fun createOrder(input: CreateOrderInput): Result<Order> = safeApiCall {
         val order = api.createOrder(
             CreateOrderRequestDto(

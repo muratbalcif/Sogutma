@@ -77,3 +77,27 @@ data class Brand(
     val slug: String,
     val logo: String?,
 )
+
+data class Campaign(
+    val id: String,
+    val name: String,
+    val slug: String,
+    val description: String?,
+    val type: String,
+    val active: Boolean,
+    val priority: Int,
+    val startsAt: String,
+    val endsAt: String,
+    val status: String? = null,
+)
+
+data class CampaignProduct(
+    val id: String,
+    val productId: String,
+    val name: String,
+    val slug: String,
+    val sku: String,
+    val discountPercentage: String?,
+    val discountAmount: String?,
+    val specialPrice: String?,
+)

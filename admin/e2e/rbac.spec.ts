@@ -71,6 +71,32 @@ test.describe("Admin RBAC", () => {
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
     expect(tx.status()).toBe(200);
+
+    const suffix = Date.now();
+    const register = await request.post(`${e2eApiBase()}/auth/register`, {
+      data: {
+        email: `e2e.acc.cust.${suffix}@example.com`,
+        password: "Password123!",
+        firstName: "Acc",
+        lastName: "Cust",
+        userType: "INDIVIDUAL",
+      },
+    });
+    expect(register.ok()).toBeTruthy();
+    const customer = (await register.json()) as { user: { id: string } };
+    const manual = await request.post(
+      `${e2eApiBase()}/admin/accounting/manual`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: {
+          customerId: customer.user.id,
+          direction: "CREDIT",
+          amount: "10.00",
+          description: "e2e accounting credit",
+        },
+      },
+    );
+    expect(manual.status()).toBe(201);
   });
 
   test("SUPER_ADMIN can open required admin modules", async ({

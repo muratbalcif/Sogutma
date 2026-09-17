@@ -62,6 +62,18 @@ export type Banner = {
   sortOrder: number;
 };
 
+export type CampaignSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  type: string;
+  active: boolean;
+  priority: number;
+  startsAt: string;
+  endsAt: string;
+};
+
 export type SiteConfig = {
   siteName: string;
   supportEmail: string;

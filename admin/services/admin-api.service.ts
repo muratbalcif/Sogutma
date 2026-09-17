@@ -684,6 +684,16 @@ export const accountingService = {
     const qs = q.toString();
     return apiRequest(`/admin/finance/reports/${report}${qs ? `?${qs}` : ""}`);
   },
+  /** Path relative to NEXT_PUBLIC_API_BASE_URL (/api/v1) for authenticated CSV download. */
+  reportCsvPath(
+    report: string,
+    params?: { dateFrom?: string; dateTo?: string },
+  ): string {
+    const q = new URLSearchParams({ format: "csv" });
+    if (params?.dateFrom) q.set("dateFrom", params.dateFrom);
+    if (params?.dateTo) q.set("dateTo", params.dateTo);
+    return `/admin/finance/reports/${report}?${q}`;
+  },
 };
 
 export const customersAdminService = {
@@ -871,6 +881,7 @@ export const bannersService = {
         title: string;
         subtitle: string | null;
         imageUrl: string;
+        mobileImageUrl: string | null;
         linkType: string;
         linkValue: string | null;
         active: boolean;

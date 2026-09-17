@@ -7,9 +7,12 @@ import com.furkansogutma.core.network.dto.AuthTokensDto
 import com.furkansogutma.core.network.dto.BannerDto
 import com.furkansogutma.core.network.dto.BankTransferDto
 import com.furkansogutma.core.network.dto.BrandDto
+import com.furkansogutma.core.network.dto.CampaignDto
+import com.furkansogutma.core.network.dto.CampaignProductDto
 import com.furkansogutma.core.network.dto.CartDto
 import com.furkansogutma.core.network.dto.CartValidationDto
 import com.furkansogutma.core.network.dto.CategoryDto
+import com.furkansogutma.core.network.dto.CheckoutValidationDto
 import com.furkansogutma.core.network.dto.CompanyBankAccountDto
 import com.furkansogutma.core.network.dto.NotificationDto
 import com.furkansogutma.core.network.dto.NotificationPreferenceDto
@@ -36,12 +39,16 @@ import com.furkansogutma.domain.category.Category
 import com.furkansogutma.domain.notification.AppNotification
 import com.furkansogutma.domain.notification.NotificationPreferences
 import com.furkansogutma.domain.notification.UnreadCount
+import com.furkansogutma.domain.order.CheckoutIssue
+import com.furkansogutma.domain.order.CheckoutValidation
 import com.furkansogutma.domain.order.Order
 import com.furkansogutma.domain.order.OrderItem
 import com.furkansogutma.domain.order.OrderShipping
 import com.furkansogutma.domain.order.OrderStatusHistory
 import com.furkansogutma.domain.product.Banner
 import com.furkansogutma.domain.product.Brand
+import com.furkansogutma.domain.product.Campaign
+import com.furkansogutma.domain.product.CampaignProduct
 import com.furkansogutma.domain.product.Money
 import com.furkansogutma.domain.product.Product
 import com.furkansogutma.domain.product.ProductAttribute
@@ -99,6 +106,30 @@ fun CategoryDto.toDomain(): Category = Category(
 fun BannerDto.toDomain() = Banner(id, title, subtitle, imageUrl, linkType, linkValue)
 fun BrandDto.toDomain() = Brand(id, name, slug, logo)
 
+fun CampaignDto.toDomain() = Campaign(
+    id = id,
+    name = name,
+    slug = slug,
+    description = description,
+    type = type,
+    active = active,
+    priority = priority,
+    startsAt = startsAt,
+    endsAt = endsAt,
+    status = status,
+)
+
+fun CampaignProductDto.toDomain() = CampaignProduct(
+    id = id,
+    productId = productId,
+    name = product?.name.orEmpty(),
+    slug = product?.slug.orEmpty(),
+    sku = product?.sku.orEmpty(),
+    discountPercentage = discountPercentage,
+    discountAmount = discountAmount,
+    specialPrice = specialPrice,
+)
+
 fun CartDto.toDomain() = Cart(
     id = id,
     items = items.map {
@@ -127,6 +158,13 @@ fun CartDto.toDomain() = Cart(
 fun CartValidationDto.toDomain() = CartValidation(
     valid = valid,
     issues = issues.map { CartIssue(it.productId, it.code, it.message) },
+)
+
+fun CheckoutValidationDto.toDomain() = CheckoutValidation(
+    valid = valid,
+    issues = issues.map { CheckoutIssue(it.code, it.message, it.productId) },
+    total = summary?.total,
+    currency = summary?.currency,
 )
 
 fun OrderDto.toDomain() = Order(

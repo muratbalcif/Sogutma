@@ -6,6 +6,8 @@ import com.furkansogutma.data.mapper.toDomain
 import com.furkansogutma.data.remote.SafeApiCall
 import com.furkansogutma.domain.product.Banner
 import com.furkansogutma.domain.product.Brand
+import com.furkansogutma.domain.product.Campaign
+import com.furkansogutma.domain.product.CampaignProduct
 import com.furkansogutma.domain.product.Product
 import com.furkansogutma.domain.product.ProductPage
 import com.furkansogutma.domain.product.ProductQuery
@@ -52,6 +54,15 @@ class ProductRepositoryImpl @Inject constructor(
 
     override suspend fun getCampaignProducts(): Result<List<Product>> =
         safeApiCall { api.campaigns().map { it.toDomain() } }
+
+    override suspend fun getCampaigns(): Result<List<Campaign>> =
+        safeApiCall { api.campaignList().map { it.toDomain() } }
+
+    override suspend fun getCampaignBySlug(slug: String): Result<Campaign> =
+        safeApiCall { api.campaign(slug).toDomain() }
+
+    override suspend fun getCampaignProductsBySlug(slug: String): Result<List<CampaignProduct>> =
+        safeApiCall { api.campaignProducts(slug).map { it.toDomain() } }
 
     override suspend fun getBanners(): Result<List<Banner>> =
         safeApiCall { api.banners().map { it.toDomain() } }

@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { clientApiFetch } from "@/lib/api/client";
+import { orderService } from "@/services/order.service";
 
 type Address = {
   id: string;
@@ -52,6 +53,7 @@ export default function CheckoutPage() {
   const [couponCode, setCouponCode] = useState("");
   const [couponMessage, setCouponMessage] = useState<string | null>(null);
   const [couponDiscount, setCouponDiscount] = useState<string | null>(null);
+  const [validatedTotal, setValidatedTotal] = useState<string | null>(null);
 
   const addressesQuery = useQuery({
     queryKey: ["addresses"],
@@ -108,20 +110,47 @@ export default function CheckoutPage() {
   }
 
   async function placeOrder() {
+    if (!shippingAddressId) {
+      setError("Teslimat adresi seçin");
+      return;
+    }
     setCreating(true);
     setError(null);
+    setValidatedTotal(null);
     try {
-      const order = await clientApiFetch<{ id: string; orderNumber: string }>(
-        "/orders",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            shippingAddressId,
-            billingAddressId: billingAddressId || shippingAddressId,
-            couponCode: couponCode.trim() || undefined,
-          }),
-        },
-      );
+      const billingId = billingAddressId || shippingAddressId;
+      const validation = await orderService.validateCheckout({
+        shippingAddressId,
+        billingAddressId: billingId,
+        couponCode: couponCode.trim() || undefined,
+      }) as {
+        valid: boolean;
+        issues?: Array<{ message: string; code?: string }>;
+        summary?: { total?: string; currency?: string; couponDiscount?: string };
+      };
+
+      if (!validation.valid) {
+        const detail =
+          validation.issues?.map((i) => i.message).filter(Boolean).join(" · ") ||
+          "Checkout doğrulaması başarısız";
+        setError(detail);
+        return;
+      }
+
+      if (validation.summary?.total) {
+        setValidatedTotal(
+          `${validation.summary.total} ${validation.summary.currency ?? "TRY"}`,
+        );
+      }
+      if (validation.summary?.couponDiscount) {
+        setCouponDiscount(validation.summary.couponDiscount);
+      }
+
+      const order = (await orderService.create({
+        shippingAddressId,
+        billingAddressId: billingId,
+        couponCode: couponCode.trim() || undefined,
+      })) as { id: string; orderNumber: string };
       router.push(`/checkout/success?orderId=${order.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sipariş oluşturulamadı");
@@ -308,8 +337,9 @@ export default function CheckoutPage() {
             </p>
           ) : null}
           <p className="font-semibold">
-            Toplam: {cartQuery.data?.summary.total}{" "}
-            {cartQuery.data?.summary.currency}
+            Toplam:{" "}
+            {validatedTotal ??
+              `${cartQuery.data?.summary.total ?? ""} ${cartQuery.data?.summary.currency ?? ""}`}
           </p>
           <p className="text-sm text-slate-600">Ödeme: Havale / EFT</p>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}

@@ -1,5 +1,6 @@
 import { serverApiFetch } from "@/lib/api/server";
 import type { Paginated } from "@/types/api";
+import { StatementExportButton } from "./statement-export-button";
 
 export default async function CurrentAccountPage() {
   const summary = await serverApiFetch<{
@@ -32,12 +33,7 @@ export default async function CurrentAccountPage() {
         <h1 className="font-[family-name:var(--font-display)] text-3xl text-navy">
           Cari Hesabım
         </h1>
-        <a
-          href="/account/current-account?export=1"
-          className="text-sm text-navy underline"
-        >
-          Ekstre (API CSV: /account/statement?format=csv)
-        </a>
+        <StatementExportButton />
       </div>
       {summary ? (
         <div className="grid gap-3 sm:grid-cols-3">

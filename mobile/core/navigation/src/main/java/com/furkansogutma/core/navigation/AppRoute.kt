@@ -25,9 +25,14 @@ sealed interface AppRoute {
     data object Settings : AppRoute { override val route = "settings" }
     data object Profile : AppRoute { override val route = "profile" }
     data object ProductList : AppRoute { override val route = "products" }
+    data object Campaigns : AppRoute { override val route = "campaigns" }
 
     data class ProductDetail(val slug: String) : AppRoute {
         override val route = "product/$slug"
+    }
+
+    data class CampaignDetail(val slug: String) : AppRoute {
+        override val route = "campaign/$slug"
     }
 
     data class CategoryDetail(val slug: String) : AppRoute {
@@ -41,6 +46,7 @@ sealed interface AppRoute {
 
 object AppRoutes {
     const val PRODUCT_DETAIL = "product/{slug}"
+    const val CAMPAIGN_DETAIL = "campaign/{slug}"
     const val CATEGORY_DETAIL = "category/{slug}"
     const val ORDER_DETAIL = "order/{id}"
     const val PRODUCT_LIST_WITH_CATEGORY = "products?category={category}"
@@ -48,6 +54,7 @@ object AppRoutes {
     const val BANK_TRANSFERS_WITH_ORDER = "bank_transfers?orderId={orderId}"
 
     fun productDetail(slug: String) = "product/$slug"
+    fun campaignDetail(slug: String) = "campaign/$slug"
     fun categoryDetail(slug: String) = "category/$slug"
     fun orderDetail(id: String) = "order/$id"
     fun productList(category: String? = null) =

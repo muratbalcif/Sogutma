@@ -55,6 +55,9 @@ export function SiteHeader({
           <Link href="/products" className="whitespace-nowrap font-semibold">
             Tüm Kategoriler
           </Link>
+          <Link href="/campaigns" className="whitespace-nowrap opacity-90 hover:opacity-100">
+            Kampanyalar
+          </Link>
           {flat.map((cat) => (
             <Link
               key={cat.id}

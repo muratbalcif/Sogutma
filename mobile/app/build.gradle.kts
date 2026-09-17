@@ -112,6 +112,13 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    // AGP LintDriver crashes when analyzing unit/androidTest sources across
+    // multi-flavor Hilt/KSP outputs. App sources are still linted.
+    lint {
+        ignoreTestSources = true
+        checkReleaseBuilds = false
+    }
 }
 
 dependencies {

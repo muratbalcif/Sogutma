@@ -91,3 +91,33 @@ data class BannerDto(
     val linkValue: String? = null,
     val sortOrder: Int = 0,
 )
+
+data class CampaignDto(
+    val id: String,
+    val name: String,
+    val slug: String,
+    val description: String? = null,
+    val type: String,
+    val active: Boolean = true,
+    val priority: Int = 0,
+    val startsAt: String,
+    val endsAt: String,
+    val status: String? = null,
+)
+
+data class CampaignProductDto(
+    val id: String,
+    val campaignId: String,
+    val productId: String,
+    val discountPercentage: String? = null,
+    val discountAmount: String? = null,
+    val specialPrice: String? = null,
+    val product: CampaignProductRefDto? = null,
+)
+
+data class CampaignProductRefDto(
+    val id: String,
+    val name: String,
+    val slug: String,
+    val sku: String,
+)

@@ -36,7 +36,7 @@ GitHub Actions:
 
 - `.github/workflows/api.yml` — lint, unit, migrate, e2e (Postgres+Redis services)
 - `.github/workflows/web.yml` — lint, build, Playwright
-- `.github/workflows/admin.yml` — lint, build
+- `.github/workflows/admin.yml` — lint, build, Playwright (API + Postgres/Redis services + seed)
 - `.github/workflows/android.yml` — test, lint, assembleDebug
 
 Production promote should use a protected environment / manual approval (platform setting).

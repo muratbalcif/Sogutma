@@ -52,6 +52,7 @@ fun HomeRoute(
     onSearchClick: () -> Unit,
     onCartClick: () -> Unit,
     onSeeAllProducts: (String?) -> Unit,
+    onSeeAllCampaigns: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -69,6 +70,7 @@ fun HomeRoute(
             onSearchClick = onSearchClick,
             onCartClick = onCartClick,
             onSeeAllProducts = onSeeAllProducts,
+            onSeeAllCampaigns = onSeeAllCampaigns,
         )
     }
 }
@@ -83,6 +85,7 @@ fun HomeScreen(
     onSearchClick: () -> Unit,
     onCartClick: () -> Unit,
     onSeeAllProducts: (String?) -> Unit,
+    onSeeAllCampaigns: () -> Unit = {},
 ) {
     LazyColumn(
         Modifier
@@ -176,7 +179,7 @@ fun HomeScreen(
             }
         }
         item { ProductSection("Günün Ürünleri", catalog.featured, onProductClick) { onSeeAllProducts(null) } }
-        item { ProductSection("Kampanyalar", catalog.campaigns, onProductClick) { onSeeAllProducts(null) } }
+        item { ProductSection("Kampanyalar", catalog.campaigns, onProductClick, onSeeAllCampaigns) }
         item { ProductSection("En Çok Satanlar", catalog.bestSelling, onProductClick) { onSeeAllProducts(null) } }
         if (catalog.brands.isNotEmpty()) {
             item { SectionHeader("Markalar") }

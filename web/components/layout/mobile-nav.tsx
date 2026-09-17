@@ -43,6 +43,9 @@ export function MobileNav({ categories }: { categories: CategoryNode[] }) {
               <Link href="/products" onClick={() => setOpen(false)}>
                 Ürünler
               </Link>
+              <Link href="/campaigns" onClick={() => setOpen(false)}>
+                Kampanyalar
+              </Link>
               <hr className="my-2" />
               {categories.map((cat) => (
                 <Link
