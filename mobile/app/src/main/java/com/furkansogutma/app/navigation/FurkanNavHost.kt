@@ -49,7 +49,6 @@ import com.furkansogutma.feature.account.AddressFormRoute
 import com.furkansogutma.feature.account.AddressesRoute
 import com.furkansogutma.feature.account.AlertsRoute
 import com.furkansogutma.feature.account.BankTransfersRoute
-import com.furkansogutma.feature.account.CommentsRoute
 import com.furkansogutma.feature.account.CurrentAccountRoute
 import com.furkansogutma.feature.account.FavoritesRoute
 import com.furkansogutma.feature.account.NotificationsRoute
@@ -352,7 +351,6 @@ fun FurkanNavHost(
                     onFavorites = { navController.navigate(AppRoute.Favorites.route) },
                     onAddresses = { navController.navigate(AppRoute.Addresses.route) },
                     onAlerts = { navController.navigate(AppRoute.Alerts.route) },
-                    onComments = { navController.navigate(AppRoute.Comments.route) },
                     onCurrentAccount = { navController.navigate(AppRoute.CurrentAccount.route) },
                     onBankTransfers = { navController.navigate(AppRoute.BankTransfers.route) },
                     onSettings = { navController.navigate(AppRoute.Settings.route) },
@@ -412,9 +410,6 @@ fun FurkanNavHost(
             }
             composable(AppRoute.Alerts.route) {
                 AlertsRoute(onBack = { navController.popBackStack() })
-            }
-            composable(AppRoute.Comments.route) {
-                CommentsRoute(onBack = { navController.popBackStack() })
             }
             composable(AppRoute.CurrentAccount.route) {
                 CurrentAccountRoute(onBack = { navController.popBackStack() })

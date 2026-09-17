@@ -18,7 +18,6 @@ sealed interface AppRoute {
     data object Addresses : AppRoute { override val route = "addresses" }
     data object AddressForm : AppRoute { override val route = "address_form" }
     data object Alerts : AppRoute { override val route = "alerts" }
-    data object Comments : AppRoute { override val route = "comments" }
     data object CurrentAccount : AppRoute { override val route = "current_account" }
     data object BankTransfers : AppRoute { override val route = "bank_transfers" }
     data object Notifications : AppRoute { override val route = "notifications" }

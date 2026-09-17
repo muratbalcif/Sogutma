@@ -54,5 +54,6 @@ export const NAV_ITEMS: NavItem[] = [
     permission: "notification.read",
   },
   { href: "/audit", label: "Audit Logs", permission: "audit.read" },
+  { href: "/legal", label: "Yasal Metinler", permission: ["site.read", "site.update"] },
   { href: "/settings", label: "Ayarlar" },
 ];

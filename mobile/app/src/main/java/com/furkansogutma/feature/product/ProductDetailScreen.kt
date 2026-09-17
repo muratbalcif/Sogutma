@@ -160,7 +160,7 @@ fun ProductDetailScreen(
                 onIncrement = { onEvent(ProductDetailEvent.Increment) },
             )
             Spacer(Modifier.height(FurkanSpacing.md))
-            val tabs = listOf("Açıklama", "Teknik", "Uyumluluk", "Yorumlar")
+            val tabs = listOf("Açıklama", "Teknik", "Uyumluluk")
             TabRow(selectedTabIndex = tab) {
                 tabs.forEachIndexed { index, title ->
                     Tab(selected = tab == index, onClick = { tab = index }, text = { Text(title) })
@@ -171,9 +171,8 @@ fun ProductDetailScreen(
                 0 -> Text(product.description.orEmpty().ifBlank { "Açıklama bulunmuyor." })
                 1 -> if (product.attributes.isEmpty()) Text("Teknik özellik bulunmuyor.")
                 else product.attributes.forEach { Text("${it.name}: ${it.value}") }
-                2 -> if (product.compatibility.isEmpty()) Text("Uyumluluk bilgisi yok.")
+                else -> if (product.compatibility.isEmpty()) Text("Uyumluluk bilgisi yok.")
                 else product.compatibility.forEach { Text("${it.manufacturer} ${it.model}") }
-                else -> Text("Henüz yorum bulunmuyor.")
             }
             Spacer(Modifier.height(FurkanSpacing.lg))
             Text(

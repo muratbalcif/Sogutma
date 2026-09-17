@@ -1,7 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "@/lib/api-client";
 
 type Props<T> = {
@@ -11,7 +11,18 @@ type Props<T> = {
   queryFn: () => Promise<T>;
   children: (data: T) => ReactNode;
   emptyMessage?: string;
+  isEmpty?: (data: T) => boolean;
 };
+
+function defaultIsEmpty(data: unknown): boolean {
+  if (data == null) return true;
+  if (Array.isArray(data)) return data.length === 0;
+  if (typeof data === "object" && "items" in data) {
+    const items = (data as { items: unknown }).items;
+    return Array.isArray(items) && items.length === 0;
+  }
+  return false;
+}
 
 export function DataPageShell<T>({
   title,
@@ -20,6 +31,7 @@ export function DataPageShell<T>({
   queryFn,
   children,
   emptyMessage = "Kayıt bulunamadı.",
+  isEmpty = defaultIsEmpty as (data: T) => boolean,
 }: Props<T>) {
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey,
@@ -50,8 +62,13 @@ export function DataPageShell<T>({
             ? error.message
             : "Veri alınamadı. API erişimini kontrol edin."}
         </div>
-      ) : data === undefined || data === null ? (
-        <p className="text-slate-600">{emptyMessage}</p>
+      ) : data === undefined || data === null || isEmpty(data) ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
+          <p className="font-medium text-slate-800">{emptyMessage}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Filtreleri değiştirin veya yeni kayıt ekleyin.
+          </p>
+        </div>
       ) : (
         children(data)
       )}

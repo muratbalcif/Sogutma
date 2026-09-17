@@ -1095,6 +1095,28 @@ export const notificationsService = {
   },
 };
 
+export type LegalPage = {
+  slug: string;
+  title: string;
+  body: string;
+  updatedAt: string;
+};
+
+export const legalAdminService = {
+  list() {
+    return apiRequest<LegalPage[]>("/admin/legal");
+  },
+  get(slug: string) {
+    return apiRequest<LegalPage>(`/admin/legal/${slug}`);
+  },
+  update(slug: string, body: { title?: string; body?: string }) {
+    return apiRequest<LegalPage>(`/admin/legal/${slug}`, {
+      method: "PUT",
+      body,
+    });
+  },
+};
+
 export type AdminRbacUser = {
   userId: string;
   email: string;

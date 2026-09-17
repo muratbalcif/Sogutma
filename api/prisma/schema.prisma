@@ -1160,3 +1160,17 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+/// Editable legal documents (KVKK, privacy, terms) served to web/mobile.
+model LegalPage {
+  id        String   @id @default(uuid()) @db.Uuid
+  /// Stable public key: kvkk | privacy | terms
+  slug      String   @unique
+  title     String
+  /// Plain text / markdown body editable from admin.
+  body      String   @db.Text
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@map("legal_pages")
+}

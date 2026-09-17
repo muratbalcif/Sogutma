@@ -193,9 +193,6 @@ export default async function ProductDetailPage({ params }: Props) {
               </ul>
             </div>
           ) : null}
-          <div className="mt-8 rounded border border-dashed p-4 text-sm text-slate-600">
-            Henüz yorum bulunmuyor.
-          </div>
         </div>
       </div>
       <RelatedProductsSection slug={product.slug} />

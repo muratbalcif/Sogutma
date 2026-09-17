@@ -11,7 +11,6 @@ const links = [
   { href: "/account/favorites", label: "Favorilerim" },
   { href: "/account/addresses", label: "Adreslerim" },
   { href: "/account/alerts", label: "Stok Bildirimlerim" },
-  { href: "/account/comments", label: "Yorumlarım" },
   { href: "/account/current-account", label: "Cari Hesabım" },
   { href: "/account/bank-transfers", label: "Havale Bildirimlerim" },
   { href: "/account/settings", label: "Ayarlar" },

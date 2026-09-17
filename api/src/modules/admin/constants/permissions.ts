@@ -44,6 +44,8 @@ export const ADMIN_PERMISSION_CODES = [
   'audit.read',
   'import.read',
   'import.create',
+  'site.read',
+  'site.update',
 ] as const;
 
 export type AdminPermissionCode = (typeof ADMIN_PERMISSION_CODES)[number];

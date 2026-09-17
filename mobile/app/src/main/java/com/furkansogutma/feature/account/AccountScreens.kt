@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -124,7 +123,6 @@ fun AccountRoute(
     onFavorites: () -> Unit,
     onAddresses: () -> Unit,
     onAlerts: () -> Unit,
-    onComments: () -> Unit,
     onCurrentAccount: () -> Unit,
     onBankTransfers: () -> Unit,
     onSettings: () -> Unit,
@@ -143,7 +141,6 @@ fun AccountRoute(
         MenuItem("Favori Ürünlerim", Icons.Default.Favorite, onFavorites),
         MenuItem("Adreslerim", Icons.Default.LocationOn, onAddresses),
         MenuItem("Havale Bildirimleri", Icons.Outlined.AccountBalance, onBankTransfers),
-        MenuItem("Yorumlarım", Icons.Outlined.ChatBubbleOutline, onComments),
         MenuItem("Cari İşlemler", Icons.Outlined.AccountBalanceWallet, onCurrentAccount),
         MenuItem("Alarm Listesi", Icons.Outlined.NotificationsActive, onAlerts),
         MenuItem("Ayarlar", Icons.Default.Settings, onSettings),
@@ -457,14 +454,6 @@ fun AlertsRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewMode
                 }
             }
         }
-    }
-}
-
-@Composable
-fun CommentsRoute(onBack: () -> Unit = {}) {
-    Column(Modifier.fillMaxSize()) {
-        FurkanTopBar("Yorumlarım", onBack = onBack)
-        FurkanEmptyState("Yorum yok", "Henüz yorumunuz bulunmuyor. (Comment API backend'de yok)")
     }
 }
 
