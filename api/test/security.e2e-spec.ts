@@ -1,12 +1,14 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, Logger, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdminRoleCode, PriceType, UserType } from '@prisma/client';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { LoggingInterceptor } from '../src/common/interceptors/logging.interceptor';
 import { AdminService } from '../src/modules/admin/admin.service';
 import { AuthService } from '../src/modules/auth/auth.service';
+import { AccountingService } from '../src/modules/payments/accounting.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { flushTestRedis } from './flush-redis';
 
@@ -25,8 +27,11 @@ describe('Security hardening (e2e)', () => {
   let userBToken: string;
   let productManagerToken: string;
   let accountingToken: string;
+  let superAdminToken: string;
   let orderAId: string;
   let addressAId: string;
+  let paymentAId: string;
+  let bankTransferAId: string;
 
   beforeAll(async () => {
     await flushTestRedis();
@@ -48,6 +53,7 @@ describe('Security hardening (e2e)', () => {
       }),
     );
     app.useGlobalFilters(new HttpExceptionFilter());
+    app.useGlobalInterceptors(new LoggingInterceptor());
     await app.init();
     await adminService.ensureRbacCatalog();
 
@@ -99,6 +105,24 @@ describe('Security hardening (e2e)', () => {
     accountingToken = (
       await authService.login({
         email: `sec.acc.${suffix}@example.com`,
+        password: 'Password123!',
+      })
+    ).accessToken;
+
+    const superAdmin = await authService.register({
+      email: `sec.sa.${suffix}@example.com`,
+      password: 'Password123!',
+      firstName: 'Super',
+      lastName: 'Admin',
+      userType: UserType.INDIVIDUAL,
+    });
+    await adminService.assignRoleToUser(
+      superAdmin.user.id,
+      AdminRoleCode.SUPER_ADMIN,
+    );
+    superAdminToken = (
+      await authService.login({
+        email: `sec.sa.${suffix}@example.com`,
         password: 'Password123!',
       })
     ).accessToken;
@@ -165,6 +189,22 @@ describe('Security hardening (e2e)', () => {
       })
       .expect(201);
     orderAId = (order.body as { id: string }).id;
+
+    const payment = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${orderAId}/payment`)
+      .set('Authorization', `Bearer ${userAToken}`)
+      .expect(200);
+    paymentAId = (payment.body as { id: string }).id;
+
+    const transfer = await request(app.getHttpServer())
+      .post(`/api/v1/orders/${orderAId}/bank-transfer`)
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({
+        senderName: 'Sec A',
+        transferDate: '2026-09-17',
+      })
+      .expect(201);
+    bankTransferAId = (transfer.body as { id: string }).id;
   }, 120_000);
 
   afterAll(async () => {
@@ -334,4 +374,288 @@ describe('Security hardening (e2e)', () => {
     }
     expect(saw429).toBe(true);
   }, 60_000);
+
+  it('rate-limits forgot-password with 429', async () => {
+    await flushTestRedis();
+    let saw429 = false;
+    for (let i = 0; i < 8; i++) {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/forgot-password')
+        .send({ email: `sec.a.${suffix}@example.com` });
+      if (res.status === 429) {
+        saw429 = true;
+        break;
+      }
+    }
+    expect(saw429).toBe(true);
+  }, 60_000);
+
+  it('rate-limits bank-transfer submissions with 429', async () => {
+    await flushTestRedis();
+    let saw429 = false;
+    for (let i = 0; i < 12; i++) {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/orders/${orderAId}/bank-transfer`)
+        .set('Authorization', `Bearer ${userAToken}`)
+        .send({
+          senderName: 'Sec A',
+          transferDate: '2026-09-17',
+        });
+      if (res.status === 429) {
+        saw429 = true;
+        break;
+      }
+    }
+    expect(saw429).toBe(true);
+  }, 60_000);
+
+  it('blocks IDOR on payment, bank transfer, and account of another user', async () => {
+    await request(app.getHttpServer())
+      .get(`/api/v1/orders/${orderAId}/payment`)
+      .set('Authorization', `Bearer ${userBToken}`)
+      .expect((res) => {
+        expect([403, 404]).toContain(res.status);
+      });
+
+    await request(app.getHttpServer())
+      .get(`/api/v1/bank-transfers/${bankTransferAId}`)
+      .set('Authorization', `Bearer ${userBToken}`)
+      .expect((res) => {
+        expect([403, 404]).toContain(res.status);
+      });
+
+    const accountB = await request(app.getHttpServer())
+      .get('/api/v1/account/current')
+      .set('Authorization', `Bearer ${userBToken}`)
+      .expect(200);
+    const accountA = await request(app.getHttpServer())
+      .get('/api/v1/account/current')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .expect(200);
+    expect(accountB.body).not.toEqual(accountA.body);
+
+    await request(app.getHttpServer())
+      .get(`/api/v1/admin/customers/${userAId}`)
+      .set('Authorization', `Bearer ${userBToken}`)
+      .expect(403);
+  });
+
+  it('rejects client-supplied order total and cart price', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({
+        shippingAddressId: addressAId,
+        billingAddressId: addressAId,
+        totalAmount: '1.00',
+        price: '1.00',
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/cart/items')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({
+        productId: (
+          await prisma.product.findFirstOrThrow({
+            where: { sku: `SEC-${suffix}` },
+          })
+        ).id,
+        quantity: 1,
+        price: '1.00',
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${orderAId}/payment`)
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({ method: 'BANK_TRANSFER', amount: '1.00' })
+      .expect(400);
+
+    const payment = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${orderAId}/payment`)
+      .set('Authorization', `Bearer ${userAToken}`)
+      .expect(200);
+    const orderDetail = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${orderAId}`)
+      .set('Authorization', `Bearer ${userAToken}`)
+      .expect(200);
+    expect((payment.body as { amount: string }).amount).toBe(
+      (orderDetail.body as { totalAmount: string }).totalAmount,
+    );
+    expect(Number((payment.body as { amount: string }).amount)).toBeGreaterThan(
+      1,
+    );
+  });
+
+  it('records a single CREDIT on double payment approval', async () => {
+    await request(app.getHttpServer())
+      .post(`/api/v1/admin/bank-transfers/${bankTransferAId}/approve`)
+      .set('Authorization', `Bearer ${accountingToken}`)
+      .send({})
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/admin/bank-transfers/${bankTransferAId}/approve`)
+      .set('Authorization', `Bearer ${accountingToken}`)
+      .send({})
+      .expect(201);
+
+    const credits = await prisma.accountTransaction.count({
+      where: { reference: `PAYMENT:${paymentAId}` },
+    });
+    expect(credits).toBe(1);
+  });
+
+  it('records a single DEBIT when the same order accounting event runs twice', async () => {
+    const accounting = app.get(AccountingService);
+    const reference = `SALE:ORDER:${orderAId}`;
+    await accounting.recordIfAbsent({
+      userId: userAId,
+      orderId: orderAId,
+      type: 'SALE',
+      amount: '250.00',
+      currency: 'TRY',
+      description: 'order sale',
+      reference,
+      referenceType: 'ORDER',
+      referenceId: orderAId,
+    });
+    await accounting.recordIfAbsent({
+      userId: userAId,
+      orderId: orderAId,
+      type: 'SALE',
+      amount: '250.00',
+      currency: 'TRY',
+      description: 'order sale retry',
+      reference,
+      referenceType: 'ORDER',
+      referenceId: orderAId,
+    });
+    const count = await prisma.accountTransaction.count({
+      where: { reference },
+    });
+    expect(count).toBe(1);
+  });
+
+  it('PRODUCT_MANAGER cannot mutate finance; ACCOUNTING and SUPER_ADMIN can', async () => {
+    await request(app.getHttpServer())
+      .post(`/api/v1/admin/bank-transfers/${bankTransferAId}/approve`)
+      .set('Authorization', `Bearer ${productManagerToken}`)
+      .send({})
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/admin/accounting/manual')
+      .set('Authorization', `Bearer ${productManagerToken}`)
+      .send({
+        customerId: userAId,
+        direction: 'CREDIT',
+        amount: '5.00',
+        description: 'pm blocked',
+      })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/products')
+      .set('Authorization', `Bearer ${productManagerToken}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/accounting/transactions')
+      .set('Authorization', `Bearer ${accountingToken}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/products')
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/orders')
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/bank-transfers')
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .expect(200);
+  });
+
+  it('rejects invalid upload MIME, extension, and oversized presign', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/admin/uploads/presign')
+      .set('Authorization', `Bearer ${productManagerToken}`)
+      .send({ filename: 'xss.svg', contentType: 'image/svg+xml' })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/admin/uploads/presign')
+      .set('Authorization', `Bearer ${productManagerToken}`)
+      .send({ filename: 'payload.exe', contentType: 'image/jpeg' })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/admin/uploads/presign')
+      .set('Authorization', `Bearer ${productManagerToken}`)
+      .send({
+        filename: 'huge.jpg',
+        contentType: 'image/jpeg',
+        contentLength: 50 * 1024 * 1024,
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/admin/imports/products/preview')
+      .set('Authorization', `Bearer ${productManagerToken}`)
+      .attach('file', Buffer.from('<svg></svg>'), 'payload.svg')
+      .expect(400);
+  });
+
+  it('neutralizes CSV formula injection on customer export', async () => {
+    await prisma.user.update({
+      where: { id: userAId },
+      data: { firstName: '=CMD()' },
+    });
+    const csv = await request(app.getHttpServer())
+      .get('/api/v1/admin/customers/export')
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .expect(200);
+    const body = String(csv.text ?? csv.body);
+    expect(body).toContain("'=CMD()");
+    expect(body).not.toMatch(/(^|,)=CMD\(\)/);
+  });
+
+  it('ready returns 503 when database is down; live stays 200', async () => {
+    const spy = jest
+      .spyOn(prisma, '$queryRaw')
+      .mockRejectedValue(new Error('database down'));
+    try {
+      await request(app.getHttpServer()).get('/api/v1/health/live').expect(200);
+      await request(app.getHttpServer())
+        .get('/api/v1/health/ready')
+        .expect(503);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('HTTP logs include the response X-Request-Id', async () => {
+    const chunks: string[] = [];
+    const spy = jest
+      .spyOn(Logger.prototype, 'log')
+      .mockImplementation((message: unknown) => {
+        chunks.push(String(message));
+      });
+    try {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/health/live')
+        .expect(200);
+      const requestId = res.headers['x-request-id'];
+      expect(requestId).toBeTruthy();
+      expect(chunks.some((line) => line.includes(requestId))).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });

@@ -83,6 +83,32 @@ export class R2StorageService {
     }
   }
 
+  assertSafeImageFilename(filename: string): void {
+    const lower = (filename || '').toLowerCase();
+    if (
+      lower.includes('.svg') ||
+      lower.includes('.html') ||
+      lower.includes('.js')
+    ) {
+      throw new BadRequestException(
+        'Only JPEG, PNG, and WEBP filenames are allowed',
+      );
+    }
+    if (!/\.(jpe?g|png|webp)$/.test(lower)) {
+      throw new BadRequestException(
+        'Only JPEG, PNG, and WEBP filenames are allowed',
+      );
+    }
+  }
+
+  assertUploadSize(contentLength?: number): void {
+    if (contentLength != null && contentLength > this.maxBytes) {
+      throw new BadRequestException(
+        `File exceeds max upload size (${this.maxBytes} bytes)`,
+      );
+    }
+  }
+
   buildObjectKey(
     folder: string,
     filename: string,
@@ -113,6 +139,7 @@ export class R2StorageService {
     filename: string;
     contentType: string;
     folder: string;
+    contentLength?: number;
   }): Promise<{
     uploadUrl: string;
     objectKey: string;
@@ -120,6 +147,8 @@ export class R2StorageService {
     maxBytes: number;
   }> {
     this.assertImageContentType(input.contentType);
+    this.assertSafeImageFilename(input.filename);
+    this.assertUploadSize(input.contentLength);
     if (!this.client || !this.bucket) {
       throw new ServiceUnavailableException('Object storage is not configured');
     }

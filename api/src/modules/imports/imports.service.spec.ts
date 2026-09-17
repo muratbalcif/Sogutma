@@ -44,4 +44,10 @@ describe('ImportsService validation helpers', () => {
     expect(rows[0].sku).toBe('SKU1');
     expect(rows[0].name).toBe('Klima');
   });
+
+  it('rejects xlsx buffers that are not zip/PK files', () => {
+    expect(() =>
+      service.parseSpreadsheet(Buffer.from('not-a-xlsx'), 'evil.xlsx'),
+    ).toThrow(BadRequestException);
+  });
 });

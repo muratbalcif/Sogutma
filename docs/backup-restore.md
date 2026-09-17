@@ -18,7 +18,7 @@ export BACKUP_RETENTION_DAYS=14
 ./scripts/backup.sh
 ```
 
-Exit code must be 0; output file must be non-empty.
+Exit code must be 0; output file must be non-empty, `chmod 600`, and start with OpenSSL `Salted__`. `pg_dump` / encryption failures exit non-zero and do not leave a partial artifact.
 
 ## Restore test
 

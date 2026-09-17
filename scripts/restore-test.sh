@@ -16,6 +16,17 @@ if [[ -z "$BACKUP_FILE" || ! -f "$BACKUP_FILE" ]]; then
   exit 1
 fi
 
+if [[ ! -s "$BACKUP_FILE" ]]; then
+  echo "ERROR: backup file is empty" >&2
+  exit 1
+fi
+
+header="$(head -c 8 "$BACKUP_FILE" | tr -d '\0')"
+if [[ "$header" != "Salted__" ]]; then
+  echo "ERROR: backup is not openssl encrypted (expected Salted__ header)" >&2
+  exit 1
+fi
+
 if [[ -z "${BACKUP_PASSPHRASE:-}" ]]; then
   echo "ERROR: BACKUP_PASSPHRASE is required" >&2
   exit 1
@@ -45,8 +56,9 @@ docker run -d --name "$CONTAINER" \
   postgres:16-alpine >/dev/null
 
 ready=0
-for i in $(seq 1 30); do
-  if docker exec "$CONTAINER" pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
+for i in $(seq 1 40); do
+  if docker exec "$CONTAINER" pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1 \
+    && docker exec "$CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -c "SELECT 1;" >/dev/null 2>&1; then
     ready=1
     break
   fi
@@ -57,10 +69,28 @@ if [[ "$ready" -ne 1 ]]; then
   exit 1
 fi
 
+echo "Verifying connection to restored instance..."
+docker exec "$CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -c "SELECT 1;" >/dev/null
+
 echo "Decrypting and restoring..."
+set +e
 openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_PASSPHRASE -in "$BACKUP_FILE" \
   | gunzip \
+  | grep -v '^SET transaction_timeout' \
   | docker exec -i "$CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1 >/dev/null
+pipe_status=("${PIPESTATUS[@]}")
+set -e
+
+restore_status=${pipe_status[0]:-1}
+gunzip_status=${pipe_status[1]:-1}
+# grep may be 0 or 1 (no matches); treat 2 as error
+filter_status=${pipe_status[2]:-1}
+psql_status=${pipe_status[3]:-1}
+
+if [[ "$restore_status" -ne 0 || "$gunzip_status" -ne 0 || "$filter_status" -gt 1 || "$psql_status" -ne 0 ]]; then
+  echo "ERROR: decrypt/restore failed" >&2
+  exit 1
+fi
 
 echo "Validating core tables exist..."
 docker exec "$CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1 -c \

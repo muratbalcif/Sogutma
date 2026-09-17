@@ -7,11 +7,14 @@ import {
   ApiPropertyOptional,
   ApiTags,
 } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 import { Permissions } from '../admin/decorators/permissions.decorator';
@@ -36,6 +39,13 @@ class PresignUploadDto {
   @IsString()
   @MaxLength(120)
   folder?: string;
+
+  @ApiPropertyOptional({ example: 102400 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  contentLength?: number;
 }
 
 class PresignUploadResponseDto {
@@ -74,6 +84,7 @@ export class AdminUploadsController {
       filename: dto.filename,
       contentType: dto.contentType,
       folder: dto.folder ?? 'products',
+      contentLength: dto.contentLength,
     });
     return {
       ...result,

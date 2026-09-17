@@ -15,6 +15,7 @@ Never put real secrets in this document or in git.
 | `R2_*` | optional | optional/mock | required | required |
 | `FIREBASE_*` | optional | optional | required if push | required if push |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | optional seed | optional | seed once then rotate | **do not** leave default |
+| `E2E_*_EMAIL` / `E2E_*_PASSWORD` | unused | Admin Playwright RBAC seed | unused | **never** set in production |
 | `BACKUP_PASSPHRASE` | n/a | restore-test | backup job secret | backup job secret (≠ DB password) |
 | `BUSINESS_TIMEZONE` | Europe/Istanbul | Europe/Istanbul | Europe/Istanbul | Europe/Istanbul |
 

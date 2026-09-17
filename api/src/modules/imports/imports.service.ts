@@ -89,6 +89,12 @@ export class ImportsService {
       return records;
     }
     if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+      if (
+        lower.endsWith('.xlsx') &&
+        (buffer[0] !== 0x50 || buffer[1] !== 0x4b)
+      ) {
+        throw new BadRequestException('Invalid XLSX file content');
+      }
       const workbook = XLSX.read(buffer, { type: 'buffer' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       return XLSX.utils.sheet_to_json<Record<string, string>>(sheet, {

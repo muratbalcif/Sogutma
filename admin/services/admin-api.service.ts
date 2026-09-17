@@ -238,6 +238,7 @@ export const catalogService = {
     filename: string;
     contentType: string;
     folder?: string;
+    contentLength?: number;
   }) {
     return apiRequest<{
       uploadUrl: string;

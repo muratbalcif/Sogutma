@@ -6,54 +6,39 @@ import {
   UserType,
 } from '@prisma/client';
 import * as argon2 from 'argon2';
+import {
+  ACCOUNTING_PERMISSION_CODES,
+  ADMIN_PERMISSION_CODES,
+  CUSTOMER_MANAGER_PERMISSION_CODES,
+  ORDER_MANAGER_PERMISSION_CODES,
+  PRODUCT_MANAGER_PERMISSION_CODES,
+} from '../src/modules/admin/constants/permissions';
 
 const prisma = new PrismaClient();
 
-  const ADMIN_PERMISSION_CODES = [
-  'product.read',
-  'product.create',
-  'product.update',
-  'product.delete',
-  'category.read',
-  'category.create',
-  'category.update',
-  'category.delete',
-  'brand.read',
-  'brand.create',
-  'brand.update',
-  'brand.delete',
-  'stock.read',
-  'stock.update',
-  'pricing.read',
-  'pricing.create',
-  'pricing.update',
-  'pricing.delete',
-  'order.read',
-  'order.update',
-  'customer.read',
-  'customer.update',
-] as const;
-
-const PRODUCT_MANAGER_PERMISSION_CODES = [
-  'product.read',
-  'product.create',
-  'product.update',
-  'product.delete',
-  'category.read',
-  'category.create',
-  'category.update',
-  'category.delete',
-  'brand.read',
-  'brand.create',
-  'brand.update',
-  'brand.delete',
-  'stock.read',
-  'stock.update',
-  'pricing.read',
-  'pricing.create',
-  'pricing.update',
-  'pricing.delete',
-] as const;
+async function assignRolePermissions(
+  roleCode: AdminRoleCode,
+  codes: readonly string[],
+  permissionByCode: Map<string, { id: string }>,
+): Promise<void> {
+  const role = await prisma.adminRole.findUniqueOrThrow({
+    where: { code: roleCode },
+  });
+  for (const code of codes) {
+    const permission = permissionByCode.get(code);
+    if (!permission) continue;
+    await prisma.adminRolePermission.upsert({
+      where: {
+        roleId_permissionId: {
+          roleId: role.id,
+          permissionId: permission.id,
+        },
+      },
+      update: {},
+      create: { roleId: role.id, permissionId: permission.id },
+    });
+  }
+}
 
 async function ensureRbacCatalog(): Promise<void> {
   for (const code of ADMIN_PERMISSION_CODES) {
@@ -91,53 +76,61 @@ async function ensureRbacCatalog(): Promise<void> {
     });
   }
 
-  const productManager = await prisma.adminRole.findUniqueOrThrow({
-    where: { code: AdminRoleCode.PRODUCT_MANAGER },
-  });
-  for (const code of PRODUCT_MANAGER_PERMISSION_CODES) {
-    const permission = permissionByCode.get(code);
-    if (!permission) continue;
-    await prisma.adminRolePermission.upsert({
-      where: {
-        roleId_permissionId: {
-          roleId: productManager.id,
-          permissionId: permission.id,
-        },
-      },
-      update: {},
-      create: { roleId: productManager.id, permissionId: permission.id },
-    });
-  }
+  await assignRolePermissions(
+    AdminRoleCode.PRODUCT_MANAGER,
+    PRODUCT_MANAGER_PERMISSION_CODES,
+    permissionByCode,
+  );
+  await assignRolePermissions(
+    AdminRoleCode.ORDER_MANAGER,
+    ORDER_MANAGER_PERMISSION_CODES,
+    permissionByCode,
+  );
+  await assignRolePermissions(
+    AdminRoleCode.ACCOUNTING,
+    ACCOUNTING_PERMISSION_CODES,
+    permissionByCode,
+  );
+  await assignRolePermissions(
+    AdminRoleCode.CUSTOMER_MANAGER,
+    CUSTOMER_MANAGER_PERMISSION_CODES,
+    permissionByCode,
+  );
 }
 
-async function seedSuperAdmin(): Promise<void> {
-  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-  const password = process.env.ADMIN_PASSWORD;
+async function seedAdminWithRole(
+  emailEnv: string,
+  passwordEnv: string,
+  roleCode: AdminRoleCode,
+  firstName: string,
+): Promise<void> {
+  const email = process.env[emailEnv]?.trim().toLowerCase();
+  const password = process.env[passwordEnv];
   if (!email || !password) {
     console.log(
-      'Skipping SUPER_ADMIN user seed (set ADMIN_EMAIL and ADMIN_PASSWORD to enable).',
+      `Skipping ${roleCode} user seed (set ${emailEnv} and ${passwordEnv} to enable).`,
     );
     return;
   }
   if (password.length < 8) {
-    throw new Error('ADMIN_PASSWORD must be at least 8 characters');
+    throw new Error(`${passwordEnv} must be at least 8 characters`);
   }
 
   const passwordHash = await argon2.hash(password);
   const user = await prisma.user.upsert({
     where: { email },
-    update: { passwordHash, firstName: 'Super', lastName: 'Admin' },
+    update: { passwordHash, firstName, lastName: 'Admin' },
     create: {
       email,
       passwordHash,
-      firstName: 'Super',
+      firstName,
       lastName: 'Admin',
       userType: UserType.INDIVIDUAL,
     },
   });
 
   const role = await prisma.adminRole.findUniqueOrThrow({
-    where: { code: AdminRoleCode.SUPER_ADMIN },
+    where: { code: roleCode },
   });
   const adminUser = await prisma.adminUser.upsert({
     where: { userId: user.id },
@@ -151,7 +144,28 @@ async function seedSuperAdmin(): Promise<void> {
     update: {},
     create: { adminUserId: adminUser.id, roleId: role.id },
   });
-  console.log(`SUPER_ADMIN ensured for ${email}`);
+  console.log(`${roleCode} ensured for ${email}`);
+}
+
+async function seedAdmins(): Promise<void> {
+  await seedAdminWithRole(
+    'ADMIN_EMAIL',
+    'ADMIN_PASSWORD',
+    AdminRoleCode.SUPER_ADMIN,
+    'Super',
+  );
+  await seedAdminWithRole(
+    'E2E_PRODUCT_MANAGER_EMAIL',
+    'E2E_PRODUCT_MANAGER_PASSWORD',
+    AdminRoleCode.PRODUCT_MANAGER,
+    'PM',
+  );
+  await seedAdminWithRole(
+    'E2E_ACCOUNTING_EMAIL',
+    'E2E_ACCOUNTING_PASSWORD',
+    AdminRoleCode.ACCOUNTING,
+    'Acc',
+  );
 }
 
 async function upsertCategory(data: {
@@ -469,7 +483,7 @@ async function seedBankAccounts(): Promise<void> {
 
 async function main(): Promise<void> {
   await ensureRbacCatalog();
-  await seedSuperAdmin();
+  await seedAdmins();
   await seedCatalog();
   await seedBankAccounts();
 }

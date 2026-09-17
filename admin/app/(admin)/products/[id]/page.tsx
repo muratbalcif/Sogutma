@@ -185,11 +185,18 @@ export default function ProductDetailPage() {
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const contentType = file.type || "image/jpeg";
+      if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+        throw new Error("Only JPEG, PNG, and WEBP images are allowed");
+      }
       const presign = await catalogService.presignUpload({
         filename: file.name,
         contentType,
         folder: `products/${id}`,
+        contentLength: file.size,
       });
+      if (file.size > presign.maxBytes) {
+        throw new Error(`Dosya boyutu limiti aşıldı (${presign.maxBytes} bayt)`);
+      }
       const put = await fetch(presign.uploadUrl, {
         method: "PUT",
         headers: { "Content-Type": contentType },

@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - 'admin/**'
+      - 'api/**'
       - '.github/workflows/admin.yml'
       - 'package-lock.json'
   push:
     branches: [main, master]
     paths:
       - 'admin/**'
+      - 'api/**'
       - '.github/workflows/admin.yml'
 
 jobs:
@@ -18,8 +20,38 @@ jobs:
     defaults:
       run:
         working-directory: admin
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: furkansogutma
+          POSTGRES_PASSWORD: furkansogutma
+          POSTGRES_DB: furkansogutma
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U furkansogutma -d furkansogutma"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:3000/api/v1
+      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:3000/api/v1
+      E2E_API_BASE_URL: http://127.0.0.1:3000/api/v1
+      E2E_ADMIN_EMAIL: e2e.super@example.com
+      E2E_ADMIN_PASSWORD: E2eSuperAdmin123!
+      E2E_PRODUCT_MANAGER_EMAIL: e2e.pm@example.com
+      E2E_PRODUCT_MANAGER_PASSWORD: E2eProductMgr123!
+      E2E_ACCOUNTING_EMAIL: e2e.acc@example.com
+      E2E_ACCOUNTING_PASSWORD: E2eAccounting123!
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,11 +61,51 @@ jobs:
       - name: Install
         run: npm ci
         working-directory: .
+      - name: Migrate and seed API
+        working-directory: api
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://furkansogutma:furkansogutma@localhost:5434/furkansogutma
+          REDIS_URL: redis://localhost:6379
+          JWT_ACCESS_SECRET: ci-access-secret-min-16
+          JWT_REFRESH_SECRET: ci-refresh-secret-min-16
+          CORS_ORIGINS: http://localhost:3001,http://127.0.0.1:3001
+          ADMIN_EMAIL: e2e.super@example.com
+          ADMIN_PASSWORD: E2eSuperAdmin123!
+          E2E_PRODUCT_MANAGER_EMAIL: e2e.pm@example.com
+          E2E_PRODUCT_MANAGER_PASSWORD: E2eProductMgr123!
+          E2E_ACCOUNTING_EMAIL: e2e.acc@example.com
+          E2E_ACCOUNTING_PASSWORD: E2eAccounting123!
+        run: |
+          npx prisma migrate deploy
+          npx prisma db seed
+      - name: Build API
+        working-directory: api
+        run: npm run build
+      - name: Start API
+        working-directory: api
+        env:
+          NODE_ENV: test
+          PORT: 3000
+          DATABASE_URL: postgresql://furkansogutma:furkansogutma@localhost:5434/furkansogutma
+          REDIS_URL: redis://localhost:6379
+          JWT_ACCESS_SECRET: ci-access-secret-min-16
+          JWT_REFRESH_SECRET: ci-refresh-secret-min-16
+          CORS_ORIGINS: http://localhost:3001,http://127.0.0.1:3001
+        run: |
+          npm run start:prod &
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:3000/api/v1/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API failed to become live"
+          exit 1
       - name: Lint
         run: npm run lint
       - name: Build
         run: npm run build
-      # Admin UI smoke e2e (guest guards). Authenticated RBAC is covered by API e2e.
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
       - name: E2E

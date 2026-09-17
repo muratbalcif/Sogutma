@@ -1,6 +1,9 @@
 # Local development dependencies only — NOT a production compose file.
 # Passwords come from env (.env) with unsafe local defaults for DX.
 # Production must use managed Postgres/Redis on a private network with strong secrets.
+# Host ports come from POSTGRES_PORT / REDIS_PORT (.env.example defaults 5432 / 6379).
+# If those host ports are already taken, set POSTGRES_PORT/REDIS_PORT and matching
+# DATABASE_URL/REDIS_URL — do not hardcode alternate ports in tests.
 
 services:
   postgres:

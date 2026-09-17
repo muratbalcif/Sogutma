@@ -29,6 +29,7 @@
     "admin:build": "npm run build -w furkansogutma-admin",
     "admin:lint": "npm run lint -w furkansogutma-admin",
     "admin:start": "npm run start -w furkansogutma-admin",
+    "admin:test:e2e": "npm run test:e2e -w furkansogutma-admin",
     "web:dev": "npm run dev -w furkansogutma-web",
     "web:build": "npm run build -w furkansogutma-web",
     "web:lint": "npm run lint -w furkansogutma-web",
