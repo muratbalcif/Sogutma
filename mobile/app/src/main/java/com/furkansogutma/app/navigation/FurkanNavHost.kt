@@ -10,15 +10,22 @@ import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import com.furkansogutma.core.designsystem.theme.BadgeRed
+import com.furkansogutma.core.designsystem.theme.White
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -101,11 +108,11 @@ fun FurkanNavHost(
     }
 
     val topLevel = listOf(
-        TopLevel(AppRoute.Home.route, "Ana Sayfa", Icons.Default.Home),
+        TopLevel(AppRoute.Home.route, "Anasayfa", Icons.Default.Home),
         TopLevel(AppRoute.Categories.route, "Kategoriler", Icons.Outlined.Category),
-        TopLevel(AppRoute.Search.route, "Arama", Icons.Default.Search),
+        TopLevel(AppRoute.Search.route, "Ara", Icons.Default.Search),
         TopLevel(AppRoute.Cart.route, "Sepet", Icons.Default.ShoppingCart),
-        TopLevel(AppRoute.Account.route, "Hesap", Icons.Default.Person),
+        TopLevel(AppRoute.Account.route, "Hesabım", Icons.Default.Person),
     )
     val showBottomBar = topLevel.any { it.route == current }
 
@@ -126,10 +133,15 @@ fun FurkanNavHost(
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar {
+                NavigationBar(
+                    containerColor = White,
+                    tonalElevation = 0.dp,
+                    windowInsets = NavigationBarDefaults.windowInsets,
+                ) {
                     topLevel.forEach { item ->
+                        val selected = current == item.route
                         NavigationBarItem(
-                            selected = current == item.route,
+                            selected = selected,
                             onClick = {
                                 navController.navigate(item.route) {
                                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -142,7 +154,9 @@ fun FurkanNavHost(
                                     BadgedBox(
                                         badge = {
                                             if (cartCount > 0) {
-                                                Badge { Text(if (cartCount > 99) "99+" else "$cartCount") }
+                                                Badge(containerColor = BadgeRed) {
+                                                    Text(if (cartCount > 99) "99+" else "$cartCount")
+                                                }
                                             }
                                         },
                                     ) {
@@ -152,7 +166,19 @@ fun FurkanNavHost(
                                     Icon(item.icon, contentDescription = item.label)
                                 }
                             },
-                            label = { Text(item.label) },
+                            label = {
+                                Text(
+                                    item.label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                indicatorColor = Color.Transparent,
+                            ),
                         )
                     }
                 }
@@ -226,11 +252,13 @@ fun FurkanNavHost(
             ) {
                 ProductListRoute(
                     onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(AppRoute.ProductList.route) {
                 ProductListRoute(
                     onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(
@@ -247,6 +275,7 @@ fun FurkanNavHost(
             ) {
                 ProductListRoute(
                     onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(AppRoute.Search.route) {

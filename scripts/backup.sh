@@ -29,8 +29,11 @@ pg_dump --no-owner --format=plain "$DATABASE_URL" \
 
 if [[ ! -s "$OUT_FILE" ]]; then
   echo "ERROR: backup file missing or empty" >&2
+  rm -f "$OUT_FILE"
   exit 1
 fi
+
+chmod 600 "$OUT_FILE" || true
 
 SIZE="$(wc -c < "$OUT_FILE" | tr -d ' ')"
 echo "OK: backup size=${SIZE} bytes"

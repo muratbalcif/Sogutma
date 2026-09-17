@@ -1,6 +1,7 @@
 package com.furkansogutma.feature.account
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +10,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.outlined.AccountBalance
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,8 +32,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
-import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -30,10 +44,12 @@ import com.furkansogutma.core.designsystem.components.FurkanButton
 import com.furkansogutma.core.designsystem.components.FurkanEmptyState
 import com.furkansogutma.core.designsystem.components.FurkanError
 import com.furkansogutma.core.designsystem.components.FurkanLoading
+import com.furkansogutma.core.designsystem.components.FurkanMenuRow
 import com.furkansogutma.core.designsystem.components.FurkanOutlinedButton
 import com.furkansogutma.core.designsystem.components.FurkanTextField
 import com.furkansogutma.core.designsystem.components.FurkanTopBar
 import com.furkansogutma.core.designsystem.theme.FurkanSpacing
+import com.furkansogutma.core.designsystem.theme.OnSurfaceFaint
 import com.furkansogutma.domain.account.AccountRepository
 import com.furkansogutma.domain.account.AccountTransaction
 import com.furkansogutma.domain.account.Address
@@ -41,12 +57,12 @@ import com.furkansogutma.domain.account.AddressInput
 import com.furkansogutma.domain.account.BankTransfer
 import com.furkansogutma.domain.account.CurrentAccount
 import com.furkansogutma.domain.account.ProductAlert
+import com.furkansogutma.domain.account.SyncDeviceTokenUseCase
 import com.furkansogutma.domain.auth.AuthRepository
 import com.furkansogutma.domain.auth.AuthState
 import com.furkansogutma.domain.auth.AuthUser
 import com.furkansogutma.domain.auth.LogoutUseCase
 import com.furkansogutma.domain.cart.CartBadgeStore
-import com.furkansogutma.domain.account.SyncDeviceTokenUseCase
 import com.furkansogutma.domain.favorite.FavoriteRepository
 import com.furkansogutma.domain.notification.NotificationPreferences
 import com.furkansogutma.domain.notification.NotificationRepository
@@ -118,42 +134,62 @@ fun AccountRoute(
     val auth by viewModel.authState.collectAsStateWithLifecycle()
     val user = (auth as? AuthState.Authenticated)?.user
     val unread = viewModel.unreadNotifications
+    data class MenuItem(val label: String, val icon: ImageVector, val action: () -> Unit)
     val items = listOf(
-        "Profilim" to onProfile,
-        "Siparişlerim" to onOrders,
-        (if (unread > 0) "Bildirimler ($unread)" else "Bildirimler") to onNotifications,
-        "Favorilerim" to onFavorites,
-        "Adreslerim" to onAddresses,
-        "Stok Bildirimlerim" to onAlerts,
-        "Yorumlarım" to onComments,
-        "Cari Hesabım" to onCurrentAccount,
-        "Havale Bildirimlerim" to onBankTransfers,
-        "Ayarlar" to onSettings,
+        MenuItem("Profilim", Icons.Default.Person, onProfile),
+        MenuItem("Siparişlerim", Icons.Default.ShoppingBag, onOrders),
+        MenuItem(if (unread > 0) "Bildirimler ($unread)" else "Bildirimler", Icons.Default.Notifications, onNotifications),
+        MenuItem("Favori Ürünlerim", Icons.Default.Favorite, onFavorites),
+        MenuItem("Adreslerim", Icons.Default.LocationOn, onAddresses),
+        MenuItem("Havale Bildirimleri", Icons.Outlined.AccountBalance, onBankTransfers),
+        MenuItem("Yorumlarım", Icons.Outlined.ChatBubbleOutline, onComments),
+        MenuItem("Cari İşlemler", Icons.Outlined.AccountBalanceWallet, onCurrentAccount),
+        MenuItem("Alarm Listesi", Icons.Outlined.NotificationsActive, onAlerts),
+        MenuItem("Ayarlar", Icons.Default.Settings, onSettings),
     )
-    Column(Modifier.fillMaxSize().padding(FurkanSpacing.md)) {
-        Text("Hesabım", style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(FurkanSpacing.md))
-        if (user != null) {
-            Text("${user.firstName} ${user.lastName}", style = MaterialTheme.typography.titleLarge)
-            Text(user.email, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (user.userType == "CORPORATE") {
-                Text("Kurumsal müşteri", color = MaterialTheme.colorScheme.primary)
+    Column(Modifier.fillMaxSize()) {
+        FurkanTopBar(title = "Hesabım")
+        LazyColumn(
+            Modifier
+                .weight(1f)
+                .padding(horizontal = FurkanSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(FurkanSpacing.xs),
+        ) {
+            item {
+                Spacer(Modifier.height(FurkanSpacing.sm))
+                if (user != null) {
+                    Text(
+                        "${user.firstName} ${user.lastName}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(user.email, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (user.userType == "CORPORATE") {
+                        Text("Kurumsal müşteri", color = MaterialTheme.colorScheme.primary)
+                    }
+                    Spacer(Modifier.height(FurkanSpacing.md))
+                }
             }
-        }
-        Spacer(Modifier.height(FurkanSpacing.lg))
-        LazyColumn(Modifier.weight(1f)) {
-            items(items) { (label, action) ->
+            items(items) { item ->
+                FurkanMenuRow(title = item.label, icon = item.icon, onClick = item.action)
+            }
+            item {
+                Spacer(Modifier.height(FurkanSpacing.sm))
+                FurkanMenuRow(
+                    title = "Çıkış Yap",
+                    icon = Icons.AutoMirrored.Filled.Logout,
+                    onClick = { viewModel.logout(onLoggedOut) },
+                )
                 Text(
-                    label,
+                    "v0.1.0",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(onClick = action)
                         .padding(vertical = FurkanSpacing.md),
-                    style = MaterialTheme.typography.titleMedium,
+                    color = OnSurfaceFaint,
+                    style = MaterialTheme.typography.labelSmall,
                 )
             }
         }
-        FurkanButton("Çıkış yap") { viewModel.logout(onLoggedOut) }
     }
 }
 

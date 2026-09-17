@@ -1,23 +1,30 @@
 package com.furkansogutma.feature.category
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import com.furkansogutma.core.common.result.Result
+import com.furkansogutma.core.designsystem.components.FurkanCategoryTile
 import com.furkansogutma.core.designsystem.components.FurkanError
 import com.furkansogutma.core.designsystem.components.FurkanLoading
+import com.furkansogutma.core.designsystem.components.FurkanOutlinedButton
 import com.furkansogutma.core.designsystem.components.FurkanTopBar
 import com.furkansogutma.core.designsystem.theme.FurkanSpacing
 import com.furkansogutma.domain.category.Category
@@ -63,24 +70,46 @@ fun CategoryRoute(
         when (val s = state) {
             CategoryUiState.Loading -> FurkanLoading()
             is CategoryUiState.Error -> FurkanError(s.message, onRetry = viewModel::load)
-            is CategoryUiState.Success -> LazyColumn(Modifier.padding(FurkanSpacing.md)) {
-                items(s.categories, key = { it.id }) { category ->
+            is CategoryUiState.Success -> CategoryGrid(s.categories, onCategoryClick)
+        }
+    }
+}
+
+@Composable
+private fun CategoryGrid(
+    categories: List<Category>,
+    onCategoryClick: (String) -> Unit,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(FurkanSpacing.md),
+        horizontalArrangement = Arrangement.spacedBy(FurkanSpacing.sm),
+        verticalArrangement = Arrangement.spacedBy(FurkanSpacing.sm),
+    ) {
+        categories.forEach { category ->
+            item(span = { GridItemSpan(2) }, key = "h-${category.id}") {
+                Column(Modifier.padding(top = FurkanSpacing.sm, bottom = FurkanSpacing.xxs)) {
                     Text(
-                        category.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier
-                            .clickable { onCategoryClick(category.slug) }
-                            .padding(vertical = FurkanSpacing.sm),
+                        category.name.uppercase(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
                     )
-                    category.children.forEach { child ->
-                        Text(
-                            "  ${child.name}",
-                            modifier = Modifier
-                                .clickable { onCategoryClick(child.slug) }
-                                .padding(vertical = FurkanSpacing.xs),
-                        )
-                    }
+                    FurkanOutlinedButton(
+                        text = "${category.name} Tümünü Göster",
+                        onClick = { onCategoryClick(category.slug) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = FurkanSpacing.xs),
+                    )
                 }
+            }
+            val children = category.children.ifEmpty { listOf(category) }
+            items(children, key = { it.id }) { child ->
+                FurkanCategoryTile(
+                    title = child.name,
+                    onClick = { onCategoryClick(child.slug) },
+                )
             }
         }
     }

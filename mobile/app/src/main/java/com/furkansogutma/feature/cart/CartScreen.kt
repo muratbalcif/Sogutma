@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -55,7 +57,7 @@ fun CartRoute(
         }
     }
     Scaffold(
-        topBar = { FurkanTopBar(title = "Sepetim") },
+        topBar = { FurkanTopBar(title = "Sepet") },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             val success = state as? CartUiState.Success
@@ -73,7 +75,14 @@ fun CartRoute(
             is CartUiState.Error -> FurkanError(s.message, Modifier.padding(padding)) { viewModel.onEvent(CartEvent.Retry) }
             is CartUiState.Success -> {
                 if (s.cart.items.isEmpty()) {
-                    FurkanEmptyState("Sepetiniz boş", "Alışverişe başlamak için ürünlere göz atın.", "Alışverişe Başla", onBrowse, Modifier.padding(padding))
+                    FurkanEmptyState(
+                        title = "Sepetinizde hiç ürün yok",
+                        message = "",
+                        actionLabel = "Alışverişe başla",
+                        onAction = onBrowse,
+                        modifier = Modifier.padding(padding),
+                        icon = Icons.Default.ShoppingCart,
+                    )
                 } else {
                     CartScreen(s, viewModel::onEvent, Modifier.padding(padding))
                 }
