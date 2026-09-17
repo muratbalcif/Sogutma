@@ -5,7 +5,7 @@ Production-oriented Android client for the FurkanSoğutma NestJS API (`/api/v1`)
 ## Stack
 
 - Kotlin, Jetpack Compose, Material 3
-- MVVM + Clean Architecture (domain / data / feature)
+- MVVM + Clean Architecture (domain / data; UI features live under `app`)
 - Hilt, Retrofit, OkHttp, Moshi
 - Coroutines + Flow
 - Encrypted token storage (Android Keystore)
@@ -26,7 +26,9 @@ Production-oriented Android client for the FurkanSoğutma NestJS API (`/api/v1`)
 
 ```text
 mobile/
-├── app/                 # Application, NavHost, FCM, BuildConfig flavors
+├── app/                 # Application, NavHost, screens/ViewModels, FCM, flavors
+│   └── …/feature/       # splash, home, auth, category, product, search,
+│                        # cart, checkout, account (packages, not Gradle modules)
 ├── core/
 │   ├── common/          # Result, AppError, money display helpers (JVM)
 │   ├── network/         # Retrofit APIs, AuthInterceptor, TokenAuthenticator
@@ -34,9 +36,7 @@ mobile/
 │   ├── designsystem/    # Theme + shared Compose components
 │   └── navigation/      # AppRoute + deep link helpers
 ├── domain/              # Entities, repository interfaces, use cases (JVM)
-├── data/                # DTO mappers + repository implementations
-└── feature/             # splash, home, auth, category, product, search,
-                         # cart, checkout, account (+ orders/favorites/…)
+└── data/                # DTO mappers + repository implementations
 ```
 
 ## Environment / API URL
@@ -82,7 +82,7 @@ Physical device: use your machine LAN IP instead of `10.0.2.2`.
 ```bash
 ./gradlew test
 ./gradlew lint
-./gradlew :feature:auth:connectedDevDebugAndroidTest   # device/emulator required
+./gradlew :app:connectedDevDebugAndroidTest   # device/emulator required
 ```
 
 ## Auth
