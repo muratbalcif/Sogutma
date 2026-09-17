@@ -31,9 +31,7 @@ class CheckoutViewModelTest {
         val account = mockk<AccountRepository>()
         val getCart = mockk<GetCartUseCase>()
         coEvery { account.getAddresses() } returns Result.Success(emptyList())
-        coEvery { account.getSiteConfig() } returns Result.Error(
-            com.furkansogutma.core.common.result.AppError.Network(),
-        )
+        coEvery { account.getBankAccounts() } returns Result.Success(emptyList())
         coEvery { getCart() } returns Result.Success(Cart("1", emptyList(), "0", "0", "0", "TRY"))
         val vm = CheckoutViewModel(account, getCart, mockk(relaxed = true))
         advanceUntilIdle()

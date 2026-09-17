@@ -100,4 +100,6 @@ Auth, RBAC-aware navigation, live dashboard totals from existing admin APIs, mod
 
 ## Next milestones
 
-Admin CRUD UX depth, public web storefront, Android client, real FCM/payment/shipping.
+Admin CRUD UX depth, public web storefront, Android client, real FCM/shipping.
+
+**Initial payment method: Bank Transfer / EFT** (online card providers not enabled in v1 — see [docs/payment-flow.md](docs/payment-flow.md)).

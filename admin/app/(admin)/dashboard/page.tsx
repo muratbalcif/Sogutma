@@ -53,6 +53,26 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <StatCard
+            label="Bekleyen havale bildirimleri"
+            value={data?.pendingBankTransfers ?? null}
+          />
+          <StatCard
+            label="Bekleyen ödemeler"
+            value={data?.pendingPayments ?? null}
+          />
+          <StatCard
+            label="Onaylanan ödemeler"
+            value={data?.paidPayments ?? null}
+          />
+          <StatCard
+            label="Bugünkü havale tutarı"
+            value={data?.todayTransferAmount ?? null}
+          />
+          <StatCard
+            label="Bekleyen siparişler"
+            value={data?.pendingOrders ?? null}
+          />
           <StatCard label="Ürünler" value={data?.products ?? null} />
           <StatCard label="Siparişler" value={data?.orders ?? null} />
           <StatCard label="Ödemeler" value={data?.payments ?? null} />

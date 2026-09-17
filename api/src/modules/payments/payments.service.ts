@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   AccountTransactionType,
   OrderStatus,
@@ -17,6 +18,7 @@ import {
   buildPaginatedResponse,
 } from '../../common/dto/pagination.dto';
 import { toMoneyString } from '../../common/utils/money.util';
+import { EnvironmentVariables } from '../../config/env.validation';
 import { OrderStatusService } from '../orders/order-status.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountingService } from './accounting.service';
@@ -26,16 +28,14 @@ import {
   PaymentResponseDto,
 } from './dto/payment.dto';
 import { PaymentStatusService } from './payment-status.service';
-import {
-  DEVELOPMENT_PAYMENT_PROVIDER,
-  PaymentProvider,
-} from './providers/payment-provider.interface';
+import { PaymentProvider } from './providers/payment-provider.interface';
 import { DevelopmentPaymentProvider } from './providers/development.payment-provider';
 
 /**
- * Business decision: when payment becomes PAID and order is PENDING,
- * order transitions to CONFIRMED (payment required before fulfillment).
- * Payment failure does NOT cancel the order.
+ * v1 active provider path: BANK_TRANSFER only.
+ * Online provider abstraction is retained for a future release but not activated.
+ * When payment becomes PAID and order is PENDING, order → CONFIRMED.
+ * Payment failure/rejection does NOT cancel the order.
  */
 @Injectable()
 export class PaymentsService {
@@ -46,9 +46,16 @@ export class PaymentsService {
     private readonly accountingService: AccountingService,
     private readonly paymentStatusService: PaymentStatusService,
     private readonly orderStatusService: OrderStatusService,
+    private readonly config: ConfigService<EnvironmentVariables, true>,
     developmentProvider: DevelopmentPaymentProvider,
   ) {
     this.providers = new Map([[developmentProvider.name, developmentProvider]]);
+  }
+
+  paymentExpiryDate(from = new Date()): Date {
+    const hours =
+      this.config.get('PAYMENT_EXPIRY_HOURS', { infer: true }) ?? 24;
+    return new Date(from.getTime() + hours * 60 * 60 * 1000);
   }
 
   async createForOrder(
@@ -57,6 +64,12 @@ export class PaymentsService {
     dto: CreatePaymentDto,
     idempotencyKey?: string,
   ): Promise<PaymentResponseDto> {
+    if (dto.method !== PaymentMethod.BANK_TRANSFER) {
+      throw new BadRequestException(
+        'Only BANK_TRANSFER is supported in the current release',
+      );
+    }
+
     if (idempotencyKey) {
       const existing = await this.prisma.payment.findUnique({
         where: { idempotencyKey },
@@ -73,8 +86,8 @@ export class PaymentsService {
       where: { id: orderId },
       include: {
         payments: {
-          where: { status: PaymentStatus.PAID },
-          take: 1,
+          orderBy: { createdAt: 'desc' },
+          take: 5,
         },
       },
     });
@@ -90,64 +103,32 @@ export class PaymentsService {
     ) {
       throw new ConflictException('Order is not payable');
     }
-    if (order.payments.length > 0) {
+    if (order.payments.some((p) => p.status === PaymentStatus.PAID)) {
       throw new ConflictException('Order is already paid');
     }
 
-    const providerName =
-      dto.method === PaymentMethod.CREDIT_CARD
-        ? DEVELOPMENT_PAYMENT_PROVIDER
-        : null;
+    const existingPending = order.payments.find(
+      (p) =>
+        p.method === PaymentMethod.BANK_TRANSFER &&
+        p.status === PaymentStatus.PENDING,
+    );
+    if (existingPending) {
+      return this.toResponse(existingPending);
+    }
 
     try {
       const payment = await this.prisma.payment.create({
         data: {
           orderId,
-          method: dto.method,
+          method: PaymentMethod.BANK_TRANSFER,
           status: PaymentStatus.PENDING,
           amount: order.totalAmount,
           currency: order.currency,
-          provider: providerName,
+          provider: null,
           idempotencyKey: idempotencyKey ?? null,
+          expiresAt: this.paymentExpiryDate(),
         },
       });
-
-      if (dto.method === PaymentMethod.CREDIT_CARD && providerName) {
-        const provider = this.requireProvider(providerName);
-        const intent = await provider.createPayment({
-          paymentId: payment.id,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          amount: toMoneyString(order.totalAmount),
-          currency: order.currency,
-          method: dto.method,
-        });
-
-        const updated = await this.prisma.payment.update({
-          where: { id: payment.id },
-          data: {
-            providerPaymentId: intent.providerPaymentId,
-            status:
-              intent.status === 'FAILED'
-                ? PaymentStatus.FAILED
-                : intent.status === 'PAID'
-                  ? PaymentStatus.PAID
-                  : intent.status === 'AUTHORIZED'
-                    ? PaymentStatus.AUTHORIZED
-                    : PaymentStatus.PENDING,
-            failureCode: intent.failureCode,
-            failureMessage: intent.failureMessage,
-            paidAt: intent.status === 'PAID' ? new Date() : null,
-          },
-        });
-
-        if (updated.status === PaymentStatus.PAID) {
-          await this.onPaymentPaid(updated.id);
-          return this.getById(updated.id);
-        }
-        return this.toResponse(updated);
-      }
-
       return this.toResponse(payment);
     } catch (error) {
       if (
@@ -240,42 +221,18 @@ export class PaymentsService {
     );
   }
 
-  async handleWebhook(
+  handleWebhook(
     providerName: string,
-    headers: Record<string, string | string[] | undefined>,
-    body: unknown,
+    _headers: Record<string, string | string[] | undefined>,
+    _body: unknown,
   ): Promise<{ processed: boolean; paymentId?: string }> {
-    const provider = this.requireProvider(providerName);
-    const event = await provider.verifyWebhook({ headers, rawBody: body });
-
-    const existingEvent = await this.prisma.processedWebhookEvent.findUnique({
-      where: {
-        provider_eventKey: {
-          provider: providerName,
-          eventKey: event.eventKey,
-        },
-      },
-    });
-    if (existingEvent) {
-      return {
-        processed: false,
-        paymentId: existingEvent.paymentId ?? undefined,
-      };
-    }
-
-    const payment = await this.prisma.payment.findFirst({
-      where: { providerPaymentId: event.providerPaymentId },
-    });
-    if (!payment) {
-      throw new NotFoundException('Payment not found for webhook');
-    }
-
-    const targetStatus = this.mapProviderStatus(event.status);
-    await this.applyPaymentStatus(payment.id, targetStatus, {
-      webhook: { provider: providerName, eventKey: event.eventKey },
-    });
-
-    return { processed: true, paymentId: payment.id };
+    void _headers;
+    void _body;
+    return Promise.reject(
+      new BadRequestException(
+        `Online payment provider "${providerName}" is not enabled in this release`,
+      ),
+    );
   }
 
   async refundPayment(paymentId: string): Promise<PaymentResponseDto> {
@@ -361,7 +318,11 @@ export class PaymentsService {
     });
   }
 
-  async markFailedFromBankTransfer(
+  /**
+   * Rejection keeps payment PENDING so customer can submit another transfer.
+   * Order stays PENDING (never auto-cancelled).
+   */
+  async markRejectedKeepPending(
     paymentId: string,
     reason: string,
     tx: Prisma.TransactionClient,
@@ -370,101 +331,27 @@ export class PaymentsService {
     if (!payment) {
       throw new NotFoundException('Payment not found');
     }
-    if (
-      payment.status === PaymentStatus.FAILED ||
-      payment.status === PaymentStatus.PAID
-    ) {
-      return;
+    if (payment.status === PaymentStatus.PAID) {
+      throw new ConflictException('Paid payment cannot be rejected');
     }
-    this.paymentStatusService.assertTransition(
-      payment.status,
-      PaymentStatus.FAILED,
-    );
-    await tx.payment.update({
-      where: { id: paymentId },
-      data: {
-        status: PaymentStatus.FAILED,
-        failureCode: 'BANK_TRANSFER_REJECTED',
-        failureMessage: reason,
-      },
-    });
-  }
-
-  private async applyPaymentStatus(
-    paymentId: string,
-    toStatus: PaymentStatus,
-    options?: {
-      webhook?: { provider: string; eventKey: string };
-    },
-  ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      if (options?.webhook) {
-        try {
-          await tx.processedWebhookEvent.create({
-            data: {
-              provider: options.webhook.provider,
-              eventKey: options.webhook.eventKey,
-              paymentId,
-            },
-          });
-        } catch (error) {
-          if (
-            error instanceof Prisma.PrismaClientKnownRequestError &&
-            error.code === 'P2002'
-          ) {
-            return;
-          }
-          throw error;
-        }
-      }
-
-      const payment = await tx.payment.findUnique({
-        where: { id: paymentId },
-        include: { order: true },
-      });
-      if (!payment) {
-        throw new NotFoundException('Payment not found');
-      }
-      if (payment.status === toStatus) {
-        return;
-      }
-      this.paymentStatusService.assertTransition(payment.status, toStatus);
-
+    if (payment.status === PaymentStatus.PENDING) {
       await tx.payment.update({
         where: { id: paymentId },
         data: {
-          status: toStatus,
-          paidAt: toStatus === PaymentStatus.PAID ? new Date() : payment.paidAt,
-          failureCode:
-            toStatus === PaymentStatus.FAILED
-              ? 'PROVIDER_FAILED'
-              : payment.failureCode,
-          failureMessage:
-            toStatus === PaymentStatus.FAILED
-              ? 'Provider reported failure'
-              : payment.failureMessage,
+          failureCode: 'BANK_TRANSFER_REJECTED',
+          failureMessage: reason,
         },
       });
-
-      if (toStatus === PaymentStatus.PAID) {
-        await this.syncOrderOnPaid(tx, payment.orderId, payment.order.userId);
-        await this.accountingService.recordIfAbsent({
-          tx,
-          userId: payment.order.userId,
-          orderId: payment.orderId,
-          paymentId: payment.id,
-          type: AccountTransactionType.PAYMENT,
-          amount: payment.amount,
-          currency: payment.currency,
-          description: `Payment received for order ${payment.order.orderNumber}`,
-          reference: `PAYMENT:${payment.id}`,
-        });
-      }
-    });
+    }
   }
 
-  private async onPaymentPaid(paymentId: string): Promise<void> {
-    await this.applyPaymentStatus(paymentId, PaymentStatus.PAID);
+  /** @deprecated Prefer markRejectedKeepPending for v1 bank-transfer flow */
+  async markFailedFromBankTransfer(
+    paymentId: string,
+    reason: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await this.markRejectedKeepPending(paymentId, reason, tx);
   }
 
   private async syncOrderOnPaid(
@@ -498,25 +385,6 @@ export class PaymentsService {
     });
   }
 
-  private mapProviderStatus(
-    status: 'PAID' | 'FAILED' | 'AUTHORIZED' | 'CANCELLED' | 'REFUNDED',
-  ): PaymentStatus {
-    switch (status) {
-      case 'PAID':
-        return PaymentStatus.PAID;
-      case 'FAILED':
-        return PaymentStatus.FAILED;
-      case 'AUTHORIZED':
-        return PaymentStatus.AUTHORIZED;
-      case 'CANCELLED':
-        return PaymentStatus.CANCELLED;
-      case 'REFUNDED':
-        return PaymentStatus.REFUNDED;
-      default:
-        throw new BadRequestException('Unsupported provider status');
-    }
-  }
-
   private requireProvider(name: string): PaymentProvider {
     const provider = this.providers.get(name);
     if (!provider) {
@@ -538,6 +406,7 @@ export class PaymentsService {
     failureCode: string | null;
     failureMessage: string | null;
     paidAt: Date | null;
+    expiresAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
   }): PaymentResponseDto {
@@ -554,6 +423,7 @@ export class PaymentsService {
       failureCode: payment.failureCode,
       failureMessage: payment.failureMessage,
       paidAt: payment.paidAt,
+      expiresAt: payment.expiresAt ?? null,
       createdAt: payment.createdAt,
       updatedAt: payment.updatedAt,
     };

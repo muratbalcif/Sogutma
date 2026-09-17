@@ -1,4 +1,9 @@
-import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
+import {
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+  Prisma,
+} from '@prisma/client';
 import { toMoneyString } from '../../common/utils/money.util';
 import { AddressSnapshot } from '../addresses/dto/address.dto';
 import { OrderResponseDto } from './dto/order.dto';
@@ -41,9 +46,11 @@ export type OrderWithRelations = {
   payments: Array<{
     id: string;
     status: PaymentStatus;
+    method: PaymentMethod;
     amount: Prisma.Decimal;
     currency: string;
     provider: string | null;
+    expiresAt: Date | null;
   }>;
 };
 
@@ -89,9 +96,11 @@ export function mapOrderToResponse(
       ? {
           id: latestPayment.id,
           status: latestPayment.status,
+          method: latestPayment.method,
           amount: toMoneyString(latestPayment.amount),
           currency: latestPayment.currency,
           provider: latestPayment.provider,
+          expiresAt: latestPayment.expiresAt,
         }
       : null,
     createdAt: order.createdAt,

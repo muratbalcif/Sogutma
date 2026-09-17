@@ -13,6 +13,7 @@ import com.furkansogutma.domain.account.AccountTransaction
 import com.furkansogutma.domain.account.Address
 import com.furkansogutma.domain.account.AddressInput
 import com.furkansogutma.domain.account.BankTransfer
+import com.furkansogutma.domain.account.CompanyBankAccount
 import com.furkansogutma.domain.account.CurrentAccount
 import com.furkansogutma.domain.account.ProductAlert
 import com.furkansogutma.domain.account.SiteConfig
@@ -66,8 +67,11 @@ class AccountRepositoryImpl @Inject constructor(
             orderId,
             CreateBankTransferRequestDto(
                 senderName = description?.takeIf { it.length >= 2 } ?: "FurkanSoğutma Müşteri",
-                transferDate = transferDate ?: "",
-                note = listOfNotNull(amount, bankName, description).joinToString(" · ").ifBlank { null },
+                transferDate = transferDate ?: java.time.LocalDate.now().toString(),
+                referenceNumber = null,
+                note = listOfNotNull(bankName, description).joinToString(" · ").ifBlank { null },
+                amount = amount.ifBlank { null },
+                bankAccountId = null,
             ),
         ).toDomain()
     }
@@ -80,6 +84,9 @@ class AccountRepositoryImpl @Inject constructor(
 
     override suspend fun getSiteConfig(): Result<SiteConfig> =
         safeApiCall { catalogApi.siteConfig().toDomain() }
+
+    override suspend fun getBankAccounts(): Result<List<CompanyBankAccount>> =
+        safeApiCall { api.bankAccounts().map { it.toDomain() } }
 
     private fun AddressInput.toDto() = CreateAddressRequestDto(
         title = title,

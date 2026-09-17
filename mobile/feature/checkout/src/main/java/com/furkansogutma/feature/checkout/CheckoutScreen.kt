@@ -46,7 +46,7 @@ import com.furkansogutma.core.designsystem.theme.FurkanSpacing
 import com.furkansogutma.domain.account.AccountRepository
 import com.furkansogutma.domain.account.Address
 import com.furkansogutma.domain.account.AddressInput
-import com.furkansogutma.domain.account.SiteConfig
+import com.furkansogutma.domain.account.CompanyBankAccount
 import com.furkansogutma.domain.cart.GetCartUseCase
 import com.furkansogutma.domain.order.CreateOrderInput
 import com.furkansogutma.domain.order.CreateOrderUseCase
@@ -61,7 +61,7 @@ import kotlinx.coroutines.launch
 data class CheckoutUiModel(
     val addresses: List<Address> = emptyList(),
     val total: String? = null,
-    val siteConfig: SiteConfig? = null,
+    val bankAccounts: List<CompanyBankAccount> = emptyList(),
     val loading: Boolean = true,
     val submitting: Boolean = false,
     val error: String? = null,
@@ -87,11 +87,11 @@ class CheckoutViewModel @Inject constructor(
         viewModelScope.launch {
             val addresses = accountRepository.getAddresses()
             val cart = getCart()
-            val config = accountRepository.getSiteConfig()
+            val banks = accountRepository.getBankAccounts()
             _ui.value = CheckoutUiModel(
                 addresses = (addresses as? Result.Success)?.data.orEmpty(),
                 total = (cart as? Result.Success)?.let { "${it.data.total} ${it.data.currency}" },
-                siteConfig = (config as? Result.Success)?.data,
+                bankAccounts = (banks as? Result.Success)?.data.orEmpty(),
                 loading = false,
                 error = listOf(addresses, cart)
                     .filterIsInstance<Result.Error>()
@@ -115,7 +115,7 @@ class CheckoutViewModel @Inject constructor(
         }
     }
 
-    fun placeOrder(addressId: String, paymentMethod: String) {
+    fun placeOrder(addressId: String) {
         if (_ui.value.submitting) return
         viewModelScope.launch {
             _ui.value = _ui.value.copy(submitting = true, error = null)
@@ -124,13 +124,13 @@ class CheckoutViewModel @Inject constructor(
                     CreateOrderInput(
                         shippingAddressId = addressId,
                         billingAddressId = addressId,
-                        paymentMethod = paymentMethod,
+                        paymentMethod = "BANK_TRANSFER",
                     ),
                 )
             ) {
                 is Result.Success -> {
                     _ui.value = _ui.value.copy(submitting = false)
-                    _effects.emit(CheckoutEffect.OrderCreated(result.data.id, paymentMethod))
+                    _effects.emit(CheckoutEffect.OrderCreated(result.data.id, "BANK_TRANSFER"))
                 }
                 is Result.Error -> {
                     _ui.value = _ui.value.copy(submitting = false, error = result.error.message)
@@ -140,7 +140,6 @@ class CheckoutViewModel @Inject constructor(
         }
     }
 }
-
 @Composable
 fun CheckoutRoute(
     onOrderCreated: (orderId: String, paymentMethod: String) -> Unit,
@@ -151,7 +150,6 @@ fun CheckoutRoute(
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     var step by remember { mutableIntStateOf(1) }
     var selectedAddress by remember { mutableStateOf<String?>(null) }
-    var paymentMethod by remember { mutableStateOf("BANK_TRANSFER") }
     var showNewAddress by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -187,7 +185,7 @@ fun CheckoutRoute(
                         modifier = Modifier.fillMaxWidth(),
                         loading = ui.submitting,
                     ) {
-                        selectedAddress?.let { viewModel.placeOrder(it, paymentMethod) }
+                        selectedAddress?.let { viewModel.placeOrder(it) }
                     }
                 }
             }
@@ -228,28 +226,33 @@ fun CheckoutRoute(
                 }
                 2 -> {
                     Text("Ödeme yöntemi", style = MaterialTheme.typography.titleLarge)
-                    PaymentOption("Havale / EFT", paymentMethod == "BANK_TRANSFER") {
-                        paymentMethod = "BANK_TRANSFER"
-                    }
-                    PaymentOption("Online ödeme", paymentMethod == "CREDIT_CARD") {
-                        paymentMethod = "CREDIT_CARD"
-                    }
-                    if (paymentMethod == "BANK_TRANSFER" && ui.siteConfig != null) {
-                        Spacer(Modifier.height(FurkanSpacing.md))
-                        Text("Banka bilgileri", style = MaterialTheme.typography.titleMedium)
-                        Text(ui.siteConfig!!.bankName)
-                        Text(ui.siteConfig!!.accountName)
-                        Text(ui.siteConfig!!.iban)
-                        FurkanOutlinedButton("IBAN Kopyala", Modifier.fillMaxWidth()) {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("IBAN", ui.siteConfig!!.iban))
+                    PaymentOption("Havale / EFT", selected = true) {}
+                    Text(
+                        "İlk sürümde tek ödeme yöntemi havale/EFT'dir.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(FurkanSpacing.md))
+                    Text("Banka bilgileri", style = MaterialTheme.typography.titleMedium)
+                    if (ui.bankAccounts.isEmpty()) {
+                        Text("Aktif banka hesabı bulunamadı.")
+                    } else {
+                        ui.bankAccounts.forEach { bank ->
+                            Spacer(Modifier.height(FurkanSpacing.sm))
+                            Text(bank.bankName, style = MaterialTheme.typography.titleSmall)
+                            Text(bank.accountName)
+                            Text(bank.iban)
+                            FurkanOutlinedButton("IBAN Kopyala", Modifier.fillMaxWidth()) {
+                                val clipboard =
+                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("IBAN", bank.iban))
+                            }
                         }
                     }
                 }
                 else -> {
                     Text("Sipariş onayı", style = MaterialTheme.typography.titleLarge)
                     Text("Adres: ${ui.addresses.firstOrNull { it.id == selectedAddress }?.fullName.orEmpty()}")
-                    Text("Ödeme: $paymentMethod")
+                    Text("Ödeme: Havale / EFT")
                     Text("Toplam: ${ui.total.orEmpty()}", style = MaterialTheme.typography.titleMedium)
                     ui.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
@@ -340,6 +343,8 @@ fun OrderSuccessRoute(
         Text("Siparişiniz oluşturuldu.", style = MaterialTheme.typography.headlineLarge)
         Spacer(Modifier.height(FurkanSpacing.sm))
         Text("Sipariş No: $orderId")
+        Text("Ödeme yöntemi: Havale / EFT")
+        Text("Ödeme durumu: Ödeme bekleniyor")
         Spacer(Modifier.height(FurkanSpacing.lg))
         FurkanButton("Siparişi Görüntüle", Modifier.fillMaxWidth()) { onViewOrder(orderId) }
         Spacer(Modifier.height(FurkanSpacing.sm))

@@ -10,18 +10,24 @@ import {
 import {
   AccountTransactionType,
   OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
   Prisma,
   UserType,
 } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import {
   PaginatedResponseDto,
   PaginationQueryDto,
   buildPaginatedResponse,
 } from '../../common/dto/pagination.dto';
 import { sumMoney } from '../../common/utils/money.util';
+import { EnvironmentVariables } from '../../config/env.validation';
 import { AddressesService } from '../addresses/addresses.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { BankAccountsService } from '../payments/bank-accounts.service';
+import { EmailOutboxService } from '../payments/email-outbox.service';
 import { PriceService } from '../pricing/pricing.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -41,6 +47,9 @@ export class OrdersService {
     private readonly inventoryService: InventoryService,
     private readonly addressesService: AddressesService,
     private readonly orderStatusService: OrderStatusService,
+    private readonly config: ConfigService<EnvironmentVariables, true>,
+    private readonly bankAccountsService: BankAccountsService,
+    private readonly emailOutbox: EmailOutboxService,
     @Optional()
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService?: NotificationsService,
@@ -226,6 +235,19 @@ export class OrdersService {
             );
           }
 
+          const expiryHours =
+            this.config.get('PAYMENT_EXPIRY_HOURS', { infer: true }) ?? 24;
+          await tx.payment.create({
+            data: {
+              orderId: order.id,
+              method: PaymentMethod.BANK_TRANSFER,
+              status: PaymentStatus.PENDING,
+              amount: totalAmount,
+              currency,
+              expiresAt: new Date(Date.now() + expiryHours * 60 * 60 * 1000),
+            },
+          });
+
           if (cart) {
             await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
           }
@@ -244,7 +266,25 @@ export class OrdersService {
         );
       }
 
-      return this.getByIdForUser(userId, created.orderId);
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+      if (user?.email) {
+        await this.emailOutbox.enqueue({
+          event: 'OrderCreated',
+          toEmail: user.email,
+          subject: `Siparişiniz oluşturuldu — ${created.orderNumber}`,
+          payload: {
+            orderId: created.orderId,
+            orderNumber: created.orderNumber,
+          },
+        });
+      }
+
+      const response = await this.getByIdForUser(userId, created.orderId);
+      const bankAccounts = await this.bankAccountsService.listPublic();
+      return { ...response, bankAccounts };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -440,6 +480,18 @@ export class OrdersService {
       }
 
       await this.releaseOrderStock(tx, orderId, options.actorUserId);
+
+      await tx.payment.updateMany({
+        where: {
+          orderId,
+          status: PaymentStatus.PENDING,
+        },
+        data: {
+          status: PaymentStatus.CANCELLED,
+          failureCode: 'ORDER_CANCELLED',
+          failureMessage: 'Order cancelled',
+        },
+      });
 
       await tx.order.update({
         where: { id: orderId },

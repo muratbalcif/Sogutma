@@ -10,6 +10,7 @@ import com.furkansogutma.core.network.dto.BrandDto
 import com.furkansogutma.core.network.dto.CartDto
 import com.furkansogutma.core.network.dto.CartValidationDto
 import com.furkansogutma.core.network.dto.CategoryDto
+import com.furkansogutma.core.network.dto.CompanyBankAccountDto
 import com.furkansogutma.core.network.dto.OrderDto
 import com.furkansogutma.core.network.dto.ProductAlertDto
 import com.furkansogutma.core.network.dto.ProductDto
@@ -18,6 +19,7 @@ import com.furkansogutma.core.network.dto.UserDto
 import com.furkansogutma.domain.account.AccountTransaction
 import com.furkansogutma.domain.account.Address
 import com.furkansogutma.domain.account.BankTransfer
+import com.furkansogutma.domain.account.CompanyBankAccount
 import com.furkansogutma.domain.account.CurrentAccount
 import com.furkansogutma.domain.account.ProductAlert
 import com.furkansogutma.domain.account.SiteConfig
@@ -159,4 +161,14 @@ fun BankTransferDto.toDomain() = BankTransfer(id, orderId, amount, transferDate,
 fun SiteConfigDto.toDomain() = SiteConfig(
     siteName, supportEmail, supportPhone, address,
     bankTransferInfo.bankName, bankTransferInfo.iban, bankTransferInfo.accountName,
+)
+
+fun CompanyBankAccountDto.toDomain() = CompanyBankAccount(
+    id = id,
+    bankName = bankName,
+    accountName = accountName,
+    iban = iban,
+    branch = branch,
+    currency = currency,
+    description = description,
 )

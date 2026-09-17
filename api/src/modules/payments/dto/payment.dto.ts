@@ -6,17 +6,23 @@ import {
 } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
 
 export class CreatePaymentDto {
-  @ApiProperty({ enum: PaymentMethod })
+  @ApiProperty({
+    enum: PaymentMethod,
+    description: 'v1 supports BANK_TRANSFER only',
+  })
   @IsEnum(PaymentMethod)
   method!: PaymentMethod;
 }
@@ -40,6 +46,21 @@ export class CreateBankTransferDto {
   @IsDateString()
   transferDate!: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Reported transfer amount. Compared to order total; mismatch stays PENDING for admin review.',
+    example: '1000.00',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d+(\.\d{1,2})?$/, { message: 'amount must be a decimal string' })
+  amount?: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  bankAccountId?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -59,6 +80,100 @@ export class RejectBankTransferDto {
   @MinLength(2)
   @MaxLength(500)
   rejectionReason!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  adminNote?: string;
+}
+
+export class ApproveBankTransferDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  adminNote?: string;
+}
+
+export class PublicBankAccountDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  bankName!: string;
+
+  @ApiProperty()
+  accountName!: string;
+
+  @ApiProperty()
+  iban!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  branch!: string | null;
+
+  @ApiProperty()
+  currency!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  description!: string | null;
+
+  @ApiProperty()
+  sortOrder!: number;
+}
+
+export class AdminUpsertBankAccountDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  bankName!: string;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(200)
+  accountName!: string;
+
+  @ApiProperty({ example: 'TR330006100519786457841326' })
+  @IsString()
+  @Matches(/^TR[0-9]{24}$/i)
+  iban!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  branch?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  accountNumber?: string;
+
+  @ApiPropertyOptional({ default: 'TRY' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(3)
+  currency?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  sortOrder?: number;
 }
 
 export class PaymentResponseDto {
@@ -98,6 +213,9 @@ export class PaymentResponseDto {
   @ApiPropertyOptional({ nullable: true })
   paidAt!: Date | null;
 
+  @ApiPropertyOptional({ nullable: true })
+  expiresAt!: Date | null;
+
   @ApiProperty()
   createdAt!: Date;
 
@@ -115,11 +233,20 @@ export class BankTransferResponseDto {
   @ApiProperty()
   paymentId!: string;
 
+  @ApiPropertyOptional({ nullable: true })
+  bankAccountId!: string | null;
+
   @ApiProperty()
   amount!: string;
 
   @ApiProperty()
   currency!: string;
+
+  @ApiProperty()
+  amountMismatch!: boolean;
+
+  @ApiProperty()
+  orderTotal!: string;
 
   @ApiProperty()
   senderName!: string;
@@ -143,10 +270,22 @@ export class BankTransferResponseDto {
   rejectionReason!: string | null;
 
   @ApiPropertyOptional({ nullable: true })
+  adminNote!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
   verifiedAt!: Date | null;
 
   @ApiProperty()
   createdAt!: Date;
+
+  @ApiPropertyOptional()
+  orderNumber?: string;
+
+  @ApiPropertyOptional()
+  customerName?: string;
+
+  @ApiPropertyOptional()
+  bankName?: string | null;
 }
 
 export class CurrentAccountResponseDto {
@@ -220,6 +359,13 @@ export class AdminBankTransferListQueryDto {
   @IsOptional()
   @IsString()
   orderNumber?: string;
+
+  @ApiPropertyOptional({
+    description: 'Search order number, customer, or reference',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

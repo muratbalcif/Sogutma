@@ -13,9 +13,30 @@ type Transfer = {
   id: string;
   status: string;
   amount: string;
+  amountMismatch?: boolean;
   referenceNumber: string | null;
   createdAt: string;
 };
+
+type BankAccount = {
+  id: string;
+  bankName: string;
+  accountName: string;
+  iban: string;
+};
+
+function statusLabel(status: string) {
+  switch (status) {
+    case "PENDING":
+      return "İnceleniyor";
+    case "APPROVED":
+      return "Onaylandı";
+    case "REJECTED":
+      return "Reddedildi";
+    default:
+      return status;
+  }
+}
 
 export default function BankTransfersClient() {
   const searchParams = useSearchParams();
@@ -26,22 +47,40 @@ export default function BankTransfersClient() {
     queryFn: () =>
       clientApiFetch<Paginated<Transfer>>("/bank-transfers?page=1&limit=50"),
   });
+  const banks = useQuery({
+    queryKey: ["bank-accounts"],
+    queryFn: () => clientApiFetch<BankAccount[]>("/payment/bank-accounts"),
+  });
   const [form, setForm] = useState({
     senderName: "",
     senderIban: "",
     transferDate: new Date().toISOString().slice(0, 10),
     referenceNumber: "",
     note: "",
+    amount: "",
+    bankAccountId: "",
   });
+  const [error, setError] = useState<string | null>(null);
 
   const create = useMutation({
     mutationFn: () =>
       clientApiFetch(`/orders/${orderId}/bank-transfer`, {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          senderName: form.senderName,
+          senderIban: form.senderIban || undefined,
+          transferDate: form.transferDate,
+          referenceNumber: form.referenceNumber || undefined,
+          note: form.note || undefined,
+          amount: form.amount || undefined,
+          bankAccountId: form.bankAccountId || undefined,
+        }),
       }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["bank-transfers"] }),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["bank-transfers"] });
+    },
+    onError: (err: Error) => setError(err.message),
   });
 
   return (
@@ -66,14 +105,27 @@ export default function BankTransfersClient() {
             onChange={(e) =>
               setForm((s) => ({ ...s, senderName: e.target.value }))
             }
+            required
           />
           <Input
-            placeholder="IBAN (opsiyonel)"
-            value={form.senderIban}
-            onChange={(e) =>
-              setForm((s) => ({ ...s, senderIban: e.target.value }))
-            }
+            placeholder="Tutar (opsiyonel)"
+            value={form.amount}
+            onChange={(e) => setForm((s) => ({ ...s, amount: e.target.value }))}
           />
+          <select
+            className="rounded-md border px-3 py-2 text-sm"
+            value={form.bankAccountId}
+            onChange={(e) =>
+              setForm((s) => ({ ...s, bankAccountId: e.target.value }))
+            }
+          >
+            <option value="">Banka seçin</option>
+            {(banks.data ?? []).map((bank) => (
+              <option key={bank.id} value={bank.id}>
+                {bank.bankName} — {bank.iban}
+              </option>
+            ))}
+          </select>
           <Input
             type="date"
             value={form.transferDate}
@@ -82,14 +134,22 @@ export default function BankTransfersClient() {
             }
           />
           <Input
-            placeholder="Referans"
+            placeholder="Dekont referans no"
             value={form.referenceNumber}
             onChange={(e) =>
               setForm((s) => ({ ...s, referenceNumber: e.target.value }))
             }
           />
-          <Button type="submit" className="sm:col-span-2">
-            Bildirim gönder
+          <Input
+            placeholder="Açıklama"
+            value={form.note}
+            onChange={(e) => setForm((s) => ({ ...s, note: e.target.value }))}
+          />
+          {error ? (
+            <p className="sm:col-span-2 text-sm text-red-600">{error}</p>
+          ) : null}
+          <Button type="submit" className="sm:col-span-2" disabled={create.isPending}>
+            {create.isPending ? "Gönderiliyor…" : "Bildirim gönder"}
           </Button>
         </form>
       ) : null}
@@ -100,8 +160,11 @@ export default function BankTransfersClient() {
           {list.data.items.map((item) => (
             <li key={item.id} className="rounded border bg-white p-3 text-sm">
               <div className="flex justify-between">
-                <span>{item.status}</span>
-                <span className="font-medium">{item.amount}</span>
+                <span>{statusLabel(item.status)}</span>
+                <span className="font-medium">
+                  {item.amount}
+                  {item.amountMismatch ? " (tutar uyuşmazlığı)" : ""}
+                </span>
               </div>
               <p className="text-slate-500">
                 {item.referenceNumber ?? "—"} ·{" "}

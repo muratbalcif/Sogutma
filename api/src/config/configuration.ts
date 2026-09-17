@@ -26,4 +26,5 @@ export default (): EnvironmentVariables => ({
   BANK_TRANSFER_BANK_NAME: process.env.BANK_TRANSFER_BANK_NAME,
   BANK_TRANSFER_IBAN: process.env.BANK_TRANSFER_IBAN,
   BANK_TRANSFER_ACCOUNT_NAME: process.env.BANK_TRANSFER_ACCOUNT_NAME,
+  PAYMENT_EXPIRY_HOURS: parseInt(process.env.PAYMENT_EXPIRY_HOURS ?? '24', 10),
 });

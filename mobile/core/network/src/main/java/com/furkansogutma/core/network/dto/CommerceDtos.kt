@@ -185,6 +185,8 @@ data class CreateBankTransferRequestDto(
     val senderIban: String? = null,
     val transferDate: String,
     val amount: String? = null,
+    val bankAccountId: String? = null,
+    val referenceNumber: String? = null,
     val note: String? = null,
 )
 
@@ -208,6 +210,17 @@ data class BankTransferInfoDto(
     val bankName: String,
     val iban: String,
     val accountName: String,
+)
+
+data class CompanyBankAccountDto(
+    val id: String,
+    val bankName: String,
+    val accountName: String,
+    val iban: String,
+    val branch: String? = null,
+    val currency: String = "TRY",
+    val description: String? = null,
+    val sortOrder: Int = 0,
 )
 
 data class ForgotPasswordRequestDto(

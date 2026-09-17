@@ -29,7 +29,7 @@ type OrderBody = {
   }>;
   shippingAddress: { title: string; city: string };
   statusHistory: Array<{ toStatus: OrderStatus }>;
-  payment: { status: string } | null;
+  payment: { status: string; method?: string } | null;
 };
 
 describe('Orders & Checkout (e2e)', () => {
@@ -336,7 +336,9 @@ describe('Orders & Checkout (e2e)', () => {
     expect(order.items[0].sku).toBe(`ORD-${suffix}`);
     expect(order.shippingAddress.city).toBe('Mersin');
     expect(order.statusHistory[0].toStatus).toBe(OrderStatus.PENDING);
-    expect(order.payment).toBeNull();
+    expect(order.payment).not.toBeNull();
+    expect(order.payment?.method).toBe('BANK_TRANSFER');
+    expect(order.payment?.status).toBe('PENDING');
 
     const cart = await request(app.getHttpServer())
       .get('/api/v1/cart')

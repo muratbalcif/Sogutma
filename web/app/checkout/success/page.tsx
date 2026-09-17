@@ -1,8 +1,43 @@
 import Link from "next/link";
-import { catalogService } from "@/services/catalog.service";
 import { serverApiFetch } from "@/lib/api/server";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+type BankAccount = {
+  id: string;
+  bankName: string;
+  accountName: string;
+  iban: string;
+};
+
+type Order = {
+  id: string;
+  orderNumber: string;
+  totalAmount: string;
+  currency: string;
+  status: string;
+  payment: {
+    status: string;
+    method: string;
+    amount: string;
+  } | null;
+  bankAccounts?: BankAccount[];
+};
+
+function paymentStatusLabel(status?: string | null) {
+  switch (status) {
+    case "PENDING":
+      return "Ödeme bekleniyor";
+    case "PAID":
+      return "Ödeme alındı";
+    case "FAILED":
+      return "Ödeme doğrulanamadı";
+    case "CANCELLED":
+      return "Ödeme iptal edildi";
+    default:
+      return status ?? "—";
+  }
+}
 
 export default async function CheckoutSuccessPage({
   searchParams,
@@ -14,28 +49,30 @@ export default async function CheckoutSuccessPage({
     ? params.orderId[0]
     : params.orderId;
 
-  let order: {
-    id: string;
-    orderNumber: string;
-    totalAmount: string;
-    currency: string;
-    status: string;
-  } | null = null;
+  let order: Order | null = null;
+  let banks: BankAccount[] = [];
 
   if (orderId) {
     try {
-      order = await serverApiFetch(`/orders/${orderId}`);
+      order = await serverApiFetch<Order>(`/orders/${orderId}`);
+      banks = order.bankAccounts ?? [];
     } catch {
       order = null;
     }
   }
 
-  const config = await catalogService.siteConfig().catch(() => null);
+  if (banks.length === 0) {
+    try {
+      banks = await serverApiFetch<BankAccount[]>("/payment/bank-accounts");
+    } catch {
+      banks = [];
+    }
+  }
 
   return (
     <div className="mx-auto max-w-xl rounded-xl border bg-white p-8 text-center">
       <h1 className="font-[family-name:var(--font-display)] text-3xl text-navy">
-        Siparişiniz başarıyla oluşturuldu
+        Siparişiniz oluşturuldu.
       </h1>
       {order ? (
         <div className="mt-4 space-y-1 text-sm text-slate-700">
@@ -43,23 +80,28 @@ export default async function CheckoutSuccessPage({
             Sipariş no: <strong>{order.orderNumber}</strong>
           </p>
           <p>
-            Toplam: {order.totalAmount} {order.currency}
+            Toplam tutar: {order.totalAmount} {order.currency}
           </p>
-          <p>Durum: {order.status}</p>
+          <p>Ödeme yöntemi: Havale / EFT</p>
+          <p>Ödeme durumu: {paymentStatusLabel(order.payment?.status)}</p>
         </div>
       ) : null}
-      {config?.bankTransferInfo.iban ? (
-        <div className="mt-6 rounded border border-dashed p-4 text-left text-sm">
-          <p className="font-semibold">Havale bilgileri</p>
-          <p>{config.bankTransferInfo.bankName}</p>
-          <p>{config.bankTransferInfo.accountName}</p>
-          <p className="font-mono">{config.bankTransferInfo.iban}</p>
+      {banks.length > 0 ? (
+        <div className="mt-6 space-y-3 text-left text-sm">
+          <p className="font-semibold">Banka bilgileri</p>
+          {banks.map((bank) => (
+            <div key={bank.id} className="rounded border border-dashed p-4">
+              <p>{bank.bankName}</p>
+              <p>{bank.accountName}</p>
+              <p className="font-mono">{bank.iban}</p>
+            </div>
+          ))}
           {orderId ? (
             <Link
               href={`/account/bank-transfers?orderId=${orderId}`}
-              className="mt-3 inline-flex text-accent"
+              className="inline-flex rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
             >
-              Havale bildirimi yap
+              Havale Bildirimi Yap
             </Link>
           ) : null}
         </div>
@@ -68,16 +110,16 @@ export default async function CheckoutSuccessPage({
         {orderId ? (
           <Link
             href={`/account/orders/${orderId}`}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
+            className="rounded-md border px-4 py-2 text-sm font-semibold"
           >
-            Sipariş detayı
+            Siparişi Görüntüle
           </Link>
         ) : null}
         <Link
           href="/products"
           className="rounded-md border px-4 py-2 text-sm font-semibold"
         >
-          Alışverişe devam et
+          Alışverişe Devam Et
         </Link>
       </div>
     </div>

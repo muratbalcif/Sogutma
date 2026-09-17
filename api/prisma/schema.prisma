@@ -558,7 +558,7 @@ model OrderStatusHistory {
 }
 
 /// Payment attempts are separate from Order lifecycle.
-/// Multiple attempts per order are allowed. Amount always comes from Order.totalAmount.
+/// v1 active method: BANK_TRANSFER only. Provider abstraction kept for future online payments.
 /// Never store card PAN/CVV — only provider tokens/hosted flows when real providers are added.
 model Payment {
   id                String        @id @default(uuid()) @db.Uuid
@@ -573,6 +573,8 @@ model Payment {
   failureCode       String?
   failureMessage    String?
   paidAt            DateTime?
+  /// Bank-transfer reservation window; expired PENDING payments cancel order + release stock.
+  expiresAt         DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -584,6 +586,7 @@ model Payment {
   @@index([status])
   @@index([method])
   @@index([providerPaymentId])
+  @@index([expiresAt])
   @@index([createdAt])
   @@map("payments")
 }
@@ -612,8 +615,11 @@ model BankTransferNotification {
   orderId          String             @db.Uuid
   userId           String             @db.Uuid
   paymentId        String             @db.Uuid
+  bankAccountId    String?            @db.Uuid
   amount           Decimal            @db.Decimal(12, 2)
   currency         String             @default("TRY") @db.Char(3)
+  /// True when reported amount differs from order.totalAmount — never auto-approves.
+  amountMismatch   Boolean            @default(false)
   senderName       String
   senderIban       String?
   transferDate     DateTime           @db.Date
@@ -623,16 +629,19 @@ model BankTransferNotification {
   verifiedBy       String?            @db.Uuid
   verifiedAt       DateTime?
   rejectionReason  String?
+  adminNote        String?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
-  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  order       Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user        User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  payment     Payment             @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  bankAccount CompanyBankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([userId])
   @@index([paymentId])
+  @@index([bankAccountId])
   @@index([status])
   @@index([createdAt])
   @@map("bank_transfer_notifications")
@@ -669,11 +678,17 @@ model CompanyBankAccount {
   iban          String
   branch        String?
   accountNumber String?
+  currency      String   @default("TRY") @db.Char(3)
+  description   String?
   active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  bankTransfers BankTransferNotification[]
+
   @@index([active])
+  @@index([sortOrder])
   @@map("company_bank_accounts")
 }
 
@@ -783,9 +798,30 @@ enum NotificationType {
   ORDER_CANCELLED
   PAYMENT_PAID
   PAYMENT_FAILED
+  BANK_TRANSFER_SUBMITTED
+  BANK_TRANSFER_APPROVED
+  BANK_TRANSFER_REJECTED
   PRODUCT_BACK_IN_STOCK
   CAMPAIGN
   SYSTEM
+}
+
+/// Async email delivery queue (not part of DB transactions).
+model EmailOutbox {
+  id            String    @id @default(uuid()) @db.Uuid
+  event         String
+  toEmail       String
+  subject       String
+  payload       Json
+  processedAt   DateTime?
+  attempts      Int       @default(0)
+  lastError     String?
+  createdAt     DateTime  @default(now())
+
+  @@index([processedAt])
+  @@index([event])
+  @@index([createdAt])
+  @@map("email_outbox")
 }
 
 model Notification {

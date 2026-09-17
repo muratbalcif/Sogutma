@@ -25,7 +25,8 @@ class OrderRepositoryImpl @Inject constructor(
                 customerNote = input.note,
             ),
         )
-        api.createPayment(order.id, CreatePaymentRequestDto(method = input.paymentMethod))
+        // v1: payment is created with the order as BANK_TRANSFER; this call is idempotent.
+        api.createPayment(order.id, CreatePaymentRequestDto(method = "BANK_TRANSFER"))
         api.order(order.id).toDomain()
     }
 

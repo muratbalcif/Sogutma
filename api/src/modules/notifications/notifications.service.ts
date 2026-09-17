@@ -275,6 +275,41 @@ export class NotificationsService {
     await this.processPendingOutbox(20);
   }
 
+  async enqueuePaymentEvent(input: {
+    userId: string;
+    type:
+      | 'BANK_TRANSFER_SUBMITTED'
+      | 'BANK_TRANSFER_APPROVED'
+      | 'BANK_TRANSFER_REJECTED'
+      | 'PAYMENT_PAID'
+      | 'PAYMENT_FAILED';
+    title: string;
+    body: string;
+    data?: Record<string, unknown>;
+  }): Promise<void> {
+    await this.prisma.notificationOutbox.create({
+      data: {
+        type: input.type,
+        aggregateType: 'PAYMENT',
+        aggregateId:
+          (typeof input.data?.transferId === 'string'
+            ? input.data.transferId
+            : undefined) ??
+          (typeof input.data?.orderId === 'string'
+            ? input.data.orderId
+            : undefined) ??
+          input.userId,
+        payload: {
+          userId: input.userId,
+          title: input.title,
+          body: input.body,
+          ...input.data,
+        },
+      },
+    });
+    await this.processPendingOutbox(20);
+  }
+
   async notifyProductBackInStock(productId: string): Promise<void> {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -327,11 +362,16 @@ export class NotificationsService {
           campaignId?: string;
         };
 
-        if (item.type.startsWith('ORDER_') && payload.userId) {
+        if (
+          (item.type.startsWith('ORDER_') ||
+            item.type.startsWith('PAYMENT_') ||
+            item.type.startsWith('BANK_TRANSFER_')) &&
+          payload.userId
+        ) {
           await this.createNotification({
             userId: payload.userId,
             type: item.type as NotificationType,
-            title: payload.title ?? 'Sipariş güncellemesi',
+            title: payload.title ?? 'Bildirim',
             body: payload.body ?? '',
             data: {
               orderId: payload.orderId,
@@ -411,7 +451,8 @@ export class NotificationsService {
     type: NotificationType,
   ): boolean {
     if (type.startsWith('ORDER_')) return prefs.orderNotifications;
-    if (type.startsWith('PAYMENT_')) return prefs.paymentNotifications;
+    if (type.startsWith('PAYMENT_') || type.startsWith('BANK_TRANSFER_'))
+      return prefs.paymentNotifications;
     if (type === NotificationType.PRODUCT_BACK_IN_STOCK)
       return prefs.stockAlerts;
     if (type === NotificationType.CAMPAIGN) return prefs.campaignNotifications;

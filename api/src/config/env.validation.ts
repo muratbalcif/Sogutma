@@ -39,6 +39,7 @@ export const envValidationSchema = Joi.object({
   BANK_TRANSFER_BANK_NAME: Joi.string().allow('').optional(),
   BANK_TRANSFER_IBAN: Joi.string().allow('').optional(),
   BANK_TRANSFER_ACCOUNT_NAME: Joi.string().allow('').optional(),
+  PAYMENT_EXPIRY_HOURS: Joi.number().integer().min(1).max(168).default(24),
 });
 
 export interface EnvironmentVariables {
@@ -66,4 +67,5 @@ export interface EnvironmentVariables {
   BANK_TRANSFER_BANK_NAME?: string;
   BANK_TRANSFER_IBAN?: string;
   BANK_TRANSFER_ACCOUNT_NAME?: string;
+  PAYMENT_EXPIRY_HOURS?: number;
 }

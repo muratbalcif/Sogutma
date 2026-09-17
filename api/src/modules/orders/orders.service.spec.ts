@@ -40,12 +40,19 @@ describe('OrdersService', () => {
     assertTransition: jest.fn(),
   };
 
+  const config = { get: jest.fn().mockReturnValue(24) };
+  const bankAccountsService = { listPublic: jest.fn().mockResolvedValue([]) };
+  const emailOutbox = { enqueue: jest.fn() };
+
   const service = new OrdersService(
     prisma as never,
     priceService as never,
     inventoryService as never,
     addressesService as never,
     orderStatusService as never,
+    config as never,
+    bankAccountsService as never,
+    emailOutbox as never,
   );
 
   beforeEach(() => {

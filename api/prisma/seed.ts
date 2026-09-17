@@ -413,10 +413,65 @@ async function seedProduct(input: {
   });
 }
 
+async function seedBankAccounts(): Promise<void> {
+  const accounts = [
+    {
+      bankName: 'Ziraat Bankası',
+      accountName: 'Furkan Soğutma',
+      iban: 'TR330006100519786457841326',
+      branch: 'Merkez',
+      sortOrder: 1,
+      description: 'Havale/EFT için ana hesap',
+    },
+    {
+      bankName: 'İş Bankası',
+      accountName: 'Furkan Soğutma',
+      iban: 'TR120006400000111111111111',
+      branch: 'Merkez',
+      sortOrder: 2,
+      description: null,
+    },
+    {
+      bankName: 'Garanti BBVA',
+      accountName: 'Furkan Soğutma',
+      iban: 'TR650006200000222222222222',
+      branch: 'Merkez',
+      sortOrder: 3,
+      description: null,
+    },
+  ];
+
+  for (const account of accounts) {
+    const existing = await prisma.companyBankAccount.findFirst({
+      where: { iban: account.iban },
+    });
+    if (existing) {
+      await prisma.companyBankAccount.update({
+        where: { id: existing.id },
+        data: {
+          ...account,
+          currency: 'TRY',
+          active: true,
+        },
+      });
+    } else {
+      await prisma.companyBankAccount.create({
+        data: {
+          ...account,
+          currency: 'TRY',
+          active: true,
+        },
+      });
+    }
+  }
+  console.log('Company bank accounts ensured');
+}
+
 async function main(): Promise<void> {
   await ensureRbacCatalog();
   await seedSuperAdmin();
   await seedCatalog();
+  await seedBankAccounts();
 }
 
 main()

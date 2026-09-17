@@ -7,6 +7,7 @@ import com.furkansogutma.core.network.dto.AccountTransactionDto
 import com.furkansogutma.core.network.dto.BankTransferDto
 import com.furkansogutma.core.network.dto.CartDto
 import com.furkansogutma.core.network.dto.CartValidationDto
+import com.furkansogutma.core.network.dto.CompanyBankAccountDto
 import com.furkansogutma.core.network.dto.CreateAddressRequestDto
 import com.furkansogutma.core.network.dto.CreateBankTransferRequestDto
 import com.furkansogutma.core.network.dto.CreateOrderRequestDto
@@ -104,6 +105,9 @@ interface CommerceApi {
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 50,
     ): PaginatedDto<BankTransferDto>
+
+    @GET("payment/bank-accounts")
+    suspend fun bankAccounts(): List<CompanyBankAccountDto>
 
     @POST("orders/{orderId}/bank-transfer")
     suspend fun createBankTransfer(

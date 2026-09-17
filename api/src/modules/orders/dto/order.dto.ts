@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { OrderStatus, PaymentStatus } from '@prisma/client';
+import { OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
@@ -9,6 +9,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { AddressSnapshot } from '../../addresses/dto/address.dto';
+import { PublicBankAccountDto } from '../../payments/dto/payment.dto';
 
 export class CreateOrderDto {
   @ApiProperty({ format: 'uuid' })
@@ -190,6 +191,9 @@ export class PaymentResponseDto {
   @ApiProperty({ enum: PaymentStatus })
   status!: PaymentStatus;
 
+  @ApiProperty({ enum: PaymentMethod })
+  method!: PaymentMethod;
+
   @ApiProperty()
   amount!: string;
 
@@ -198,6 +202,9 @@ export class PaymentResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   provider!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  expiresAt!: Date | null;
 }
 
 export class OrderResponseDto {
@@ -245,6 +252,9 @@ export class OrderResponseDto {
 
   @ApiPropertyOptional({ type: PaymentResponseDto, nullable: true })
   payment!: PaymentResponseDto | null;
+
+  @ApiPropertyOptional({ type: [PublicBankAccountDto] })
+  bankAccounts?: PublicBankAccountDto[];
 
   @ApiProperty()
   createdAt!: Date;

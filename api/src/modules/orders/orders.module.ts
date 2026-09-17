@@ -4,6 +4,7 @@ import { AdminModule } from '../admin/admin.module';
 import { AuthModule } from '../auth/auth.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { PricingModule } from '../pricing/pricing.module';
 import { AdminOrdersController } from './admin-orders.controller';
 import { CheckoutController } from './checkout.controller';
@@ -20,6 +21,7 @@ import { OrdersService } from './orders.service';
     PricingModule,
     InventoryModule,
     forwardRef(() => NotificationsModule),
+    forwardRef(() => PaymentsModule),
   ],
   controllers: [CheckoutController, OrdersController, AdminOrdersController],
   providers: [CheckoutService, OrdersService, OrderStatusService],

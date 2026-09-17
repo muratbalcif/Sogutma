@@ -76,3 +76,13 @@ data class SiteConfig(
     val iban: String,
     val accountName: String,
 )
+
+data class CompanyBankAccount(
+    val id: String,
+    val bankName: String,
+    val accountName: String,
+    val iban: String,
+    val branch: String?,
+    val currency: String,
+    val description: String?,
+)

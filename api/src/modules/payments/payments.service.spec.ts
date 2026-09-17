@@ -1,4 +1,8 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import {
   OrderStatus,
   PaymentMethod,
@@ -24,6 +28,7 @@ describe('PaymentsService', () => {
   const accountingService = { recordIfAbsent: jest.fn() };
   const paymentStatusService = { assertTransition: jest.fn() };
   const orderStatusService = { assertTransition: jest.fn() };
+  const config = { get: jest.fn().mockReturnValue(24) };
   const developmentProvider = {
     name: 'development',
     createPayment: jest.fn(),
@@ -36,27 +41,30 @@ describe('PaymentsService', () => {
     accountingService as never,
     paymentStatusService,
     orderStatusService as never,
+    config as never,
     developmentProvider as never,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    config.get.mockReturnValue(24);
   });
 
   it('returns existing payment for idempotency key', async () => {
     prisma.payment.findUnique.mockResolvedValue({
       id: 'pay1',
       orderId: 'ord1',
-      method: PaymentMethod.CREDIT_CARD,
+      method: PaymentMethod.BANK_TRANSFER,
       status: PaymentStatus.PENDING,
       amount: new Prisma.Decimal('100.00'),
       currency: 'TRY',
-      provider: 'development',
-      providerPaymentId: 'dev_1',
+      provider: null,
+      providerPaymentId: null,
       idempotencyKey: 'key-1',
       failureCode: null,
       failureMessage: null,
       paidAt: null,
+      expiresAt: new Date(),
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -64,12 +72,20 @@ describe('PaymentsService', () => {
     const result = await service.createForOrder(
       'u1',
       'ord1',
-      { method: PaymentMethod.CREDIT_CARD },
+      { method: PaymentMethod.BANK_TRANSFER },
       'key-1',
     );
     expect(result.id).toBe('pay1');
     expect(result.amount).toBe('100.00');
     expect(prisma.payment.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-bank-transfer methods in v1', async () => {
+    await expect(
+      service.createForOrder('u1', 'ord1', {
+        method: PaymentMethod.CREDIT_CARD,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects payment for another user order', async () => {
@@ -98,13 +114,48 @@ describe('PaymentsService', () => {
       status: OrderStatus.PENDING,
       totalAmount: new Prisma.Decimal('100.00'),
       currency: 'TRY',
-      payments: [{ id: 'paid' }],
+      payments: [{ id: 'paid', status: PaymentStatus.PAID }],
     });
 
     await expect(
       service.createForOrder('u1', 'ord1', {
-        method: PaymentMethod.CREDIT_CARD,
+        method: PaymentMethod.BANK_TRANSFER,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('returns existing pending bank transfer payment', async () => {
+    prisma.payment.findUnique.mockResolvedValue(null);
+    const pending = {
+      id: 'pay-existing',
+      orderId: 'ord1',
+      method: PaymentMethod.BANK_TRANSFER,
+      status: PaymentStatus.PENDING,
+      amount: new Prisma.Decimal('100.00'),
+      currency: 'TRY',
+      provider: null,
+      providerPaymentId: null,
+      idempotencyKey: null,
+      failureCode: null,
+      failureMessage: null,
+      paidAt: null,
+      expiresAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    prisma.order.findUnique.mockResolvedValue({
+      id: 'ord1',
+      userId: 'u1',
+      status: OrderStatus.PENDING,
+      totalAmount: new Prisma.Decimal('100.00'),
+      currency: 'TRY',
+      payments: [pending],
+    });
+
+    const result = await service.createForOrder('u1', 'ord1', {
+      method: PaymentMethod.BANK_TRANSFER,
+    });
+    expect(result.id).toBe('pay-existing');
+    expect(prisma.payment.create).not.toHaveBeenCalled();
   });
 });

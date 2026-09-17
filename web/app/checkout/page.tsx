@@ -21,16 +21,24 @@ type Cart = {
   summary: { total: string; currency: string; subtotal: string };
 };
 
+type BankAccount = {
+  id: string;
+  bankName: string;
+  accountName: string;
+  iban: string;
+  branch: string | null;
+  currency: string;
+  description: string | null;
+};
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [shippingAddressId, setShippingAddressId] = useState("");
   const [billingAddressId, setBillingAddressId] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<
-    "BANK_TRANSFER" | "CREDIT_CARD"
-  >("BANK_TRANSFER");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [copiedIban, setCopiedIban] = useState<string | null>(null);
   const [newAddress, setNewAddress] = useState({
     title: "Ev",
     firstName: "",
@@ -49,8 +57,13 @@ export default function CheckoutPage() {
     queryKey: ["cart"],
     queryFn: () => clientApiFetch<Cart>("/cart"),
   });
+  const banksQuery = useQuery({
+    queryKey: ["bank-accounts"],
+    queryFn: () => clientApiFetch<BankAccount[]>("/payment/bank-accounts"),
+  });
 
   const addresses = useMemo(() => addressesQuery.data ?? [], [addressesQuery.data]);
+  const banks = banksQuery.data ?? [];
 
   async function saveAddress() {
     const created = await clientApiFetch<Address>("/addresses", {
@@ -60,6 +73,11 @@ export default function CheckoutPage() {
     await addressesQuery.refetch();
     setShippingAddressId(created.id);
     setBillingAddressId(created.id);
+  }
+
+  async function copyIban(iban: string) {
+    await navigator.clipboard.writeText(iban);
+    setCopiedIban(iban);
   }
 
   async function placeOrder() {
@@ -76,10 +94,6 @@ export default function CheckoutPage() {
           }),
         },
       );
-      await clientApiFetch(`/orders/${order.id}/payment`, {
-        method: "POST",
-        body: JSON.stringify({ method: paymentMethod }),
-      });
       router.push(`/checkout/success?orderId=${order.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sipariş oluşturulamadı");
@@ -181,22 +195,46 @@ export default function CheckoutPage() {
       {step === 2 ? (
         <section className="space-y-4 rounded-lg border bg-white p-4">
           <h2 className="font-semibold">Ödeme yöntemi</h2>
-          <label className="flex gap-2 text-sm">
-            <input
-              type="radio"
-              checked={paymentMethod === "BANK_TRANSFER"}
-              onChange={() => setPaymentMethod("BANK_TRANSFER")}
-            />
+          <label className="flex gap-2 text-sm font-medium">
+            <input type="radio" checked readOnly />
             Havale / EFT
           </label>
-          <label className="flex gap-2 text-sm">
-            <input
-              type="radio"
-              checked={paymentMethod === "CREDIT_CARD"}
-              onChange={() => setPaymentMethod("CREDIT_CARD")}
-            />
-            Online ödeme (kart bilgisi saklanmaz)
-          </label>
+          <p className="text-sm text-slate-600">
+            İlk sürümde tek ödeme yöntemi havale/EFT&apos;dir. Online kart ödeme
+            aktif değildir.
+          </p>
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold">Banka bilgileri</h3>
+            {banksQuery.isLoading ? (
+              <p className="text-sm text-slate-500">Hesaplar yükleniyor…</p>
+            ) : banks.length === 0 ? (
+              <p className="text-sm text-amber-700">
+                Aktif banka hesabı bulunamadı. Lütfen destek ile iletişime geçin.
+              </p>
+            ) : (
+              banks.map((bank) => (
+                <div key={bank.id} className="rounded border border-dashed p-3 text-sm">
+                  <p>
+                    <strong>Banka:</strong> {bank.bankName}
+                  </p>
+                  <p>
+                    <strong>Hesap sahibi:</strong> {bank.accountName}
+                  </p>
+                  <p className="font-mono">
+                    <strong>IBAN:</strong> {bank.iban}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="mt-2"
+                    onClick={() => void copyIban(bank.iban)}
+                  >
+                    {copiedIban === bank.iban ? "Kopyalandı" : "IBAN Kopyala"}
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
           <div className="flex gap-2">
             <Button type="button" variant="secondary" onClick={() => setStep(1)}>
               Geri
@@ -222,7 +260,7 @@ export default function CheckoutPage() {
             Toplam: {cartQuery.data?.summary.total}{" "}
             {cartQuery.data?.summary.currency}
           </p>
-          <p className="text-sm text-slate-600">Ödeme: {paymentMethod}</p>
+          <p className="text-sm text-slate-600">Ödeme: Havale / EFT</p>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <div className="flex gap-2">
             <Button type="button" variant="secondary" onClick={() => setStep(2)}>

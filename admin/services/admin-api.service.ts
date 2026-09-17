@@ -37,9 +37,14 @@ export const catalogService = {
 };
 
 export const ordersService = {
-  list(page = 1, limit = 20) {
+  list(page = 1, limit = 20, params?: { status?: string }) {
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (params?.status) query.set("status", params.status);
     return apiRequest<PaginatedResponse<AdminOrder>>(
-      `/admin/orders?page=${page}&limit=${limit}`,
+      `/admin/orders?${query.toString()}`,
     );
   },
 };
@@ -57,22 +62,79 @@ export const inventoryService = {
 };
 
 export const paymentsService = {
-  list(page = 1, limit = 20) {
+  list(page = 1, limit = 20, params?: { status?: string }) {
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (params?.status) query.set("status", params.status);
     return apiRequest<PaginatedResponse<{
       id: string;
       status: string;
       amount: string;
       currency: string;
-      provider: string;
-    }>>(`/admin/payments?page=${page}&limit=${limit}`);
+      provider: string | null;
+      method: string;
+    }>>(`/admin/payments?${query.toString()}`);
   },
-  listBankTransfers(page = 1, limit = 20) {
+  listBankTransfers(
+    page = 1,
+    limit = 20,
+    params?: { status?: string; search?: string },
+  ) {
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (params?.status) query.set("status", params.status);
+    if (params?.search) query.set("search", params.search);
     return apiRequest<PaginatedResponse<{
       id: string;
       status: string;
       amount: string;
+      orderTotal?: string;
+      amountMismatch?: boolean;
       referenceNumber: string | null;
-    }>>(`/admin/bank-transfers?page=${page}&limit=${limit}`);
+      orderNumber?: string;
+      customerName?: string;
+      bankName?: string | null;
+      createdAt: string;
+      transferDate: string;
+      note: string | null;
+    }>>(`/admin/bank-transfers?${query.toString()}`);
+  },
+  getBankTransfer(id: string) {
+    return apiRequest<{
+      id: string;
+      status: string;
+      amount: string;
+      orderTotal?: string;
+      amountMismatch?: boolean;
+      referenceNumber: string | null;
+      orderNumber?: string;
+      customerName?: string;
+      bankName?: string | null;
+      createdAt: string;
+      transferDate: string;
+      note: string | null;
+      rejectionReason: string | null;
+      adminNote: string | null;
+    }>(`/admin/bank-transfers/${id}`);
+  },
+  approveBankTransfer(id: string, body: { adminNote?: string }) {
+    return apiRequest(`/admin/bank-transfers/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  rejectBankTransfer(
+    id: string,
+    body: { rejectionReason: string; adminNote?: string },
+  ) {
+    return apiRequest(`/admin/bank-transfers/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   },
 };
 

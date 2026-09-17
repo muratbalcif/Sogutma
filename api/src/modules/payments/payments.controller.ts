@@ -26,12 +26,14 @@ import {
 } from '../../common/dto/pagination.dto';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { BankAccountsService } from './bank-accounts.service';
 import { BankTransferService } from './bank-transfer.service';
 import {
   BankTransferResponseDto,
   CreateBankTransferDto,
   CreatePaymentDto,
   PaymentResponseDto,
+  PublicBankAccountDto,
 } from './dto/payment.dto';
 import { PaymentsService } from './payments.service';
 
@@ -41,7 +43,17 @@ export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
     private readonly bankTransferService: BankTransferService,
+    private readonly bankAccountsService: BankAccountsService,
   ) {}
+
+  @Get('payment/bank-accounts')
+  @ApiOperation({
+    summary: 'List active company bank accounts for checkout',
+  })
+  @ApiOkResponse({ type: [PublicBankAccountDto] })
+  listBankAccounts(): Promise<PublicBankAccountDto[]> {
+    return this.bankAccountsService.listPublic();
+  }
 
   @Post('orders/:orderId/payment')
   @UseGuards(JwtAccessGuard)
@@ -52,9 +64,9 @@ export class PaymentsController {
     description: 'Prevents duplicate payment attempts',
   })
   @ApiOperation({
-    summary: 'Create a payment attempt for an order',
+    summary: 'Create a BANK_TRANSFER payment for an order (v1)',
     description:
-      'Amount/currency always taken from the order. Never send amount from the client.',
+      'Amount/currency always taken from the order. Online card methods are disabled.',
   })
   @ApiOkResponse({ type: PaymentResponseDto })
   createPayment(
@@ -89,7 +101,7 @@ export class PaymentsController {
   @ApiOperation({
     summary: 'Submit bank transfer notification',
     description:
-      'Amount always equals order.totalAmount. Payment stays PENDING until admin approval.',
+      'Reported amount may differ from order total (amountMismatch). Never auto-approved.',
   })
   @ApiOkResponse({ type: BankTransferResponseDto })
   createBankTransfer(
@@ -127,12 +139,22 @@ export class PaymentsController {
     return this.bankTransferService.listForUser(request.user.id, query);
   }
 
+  @Get('bank-transfers/:id')
+  @UseGuards(JwtAccessGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get a bank transfer notification owned by user' })
+  getBankTransferById(
+    @Req() request: Request & { user: AuthenticatedUser },
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<BankTransferResponseDto> {
+    return this.bankTransferService.getForUserById(request.user.id, id);
+  }
+
   @Post('payments/webhook/:provider')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Provider webhook callback foundation',
-    description:
-      'Requires provider-specific verification. Development provider uses x-dev-webhook-secret.',
+    summary: 'Provider webhook callback (disabled in v1)',
+    description: 'Online payment providers are not enabled in this release.',
   })
   handleWebhook(
     @Param('provider') provider: string,

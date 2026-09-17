@@ -13,6 +13,11 @@ export default async function OrderDetailPage({ params }: Props) {
     totalAmount: string;
     currency: string;
     createdAt: string;
+    payment: {
+      status: string;
+      method: string;
+      amount: string;
+    } | null;
     items: Array<{
       productName: string;
       quantity: number;
@@ -25,7 +30,7 @@ export default async function OrderDetailPage({ params }: Props) {
       createdAt: string;
       note: string | null;
     }>;
-    shippingAddressSnapshot?: Record<string, string>;
+    shippingAddress?: Record<string, string>;
   };
 
   let order: Order;
@@ -35,18 +40,43 @@ export default async function OrderDetailPage({ params }: Props) {
     notFound();
   }
 
+  const paymentStatusLabel = (status?: string | null) => {
+    switch (status) {
+      case "PENDING":
+        return "Ödeme bekleniyor";
+      case "PAID":
+        return "Ödeme alındı";
+      case "FAILED":
+        return "Ödeme doğrulanamadı";
+      case "CANCELLED":
+        return "Ödeme iptal edildi";
+      default:
+        return status ?? "—";
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-[family-name:var(--font-display)] text-3xl text-navy">
           {order.orderNumber}
         </h1>
-        <div className="mt-2 flex items-center gap-2 text-sm">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
           <Badge>{order.status}</Badge>
+          <Badge>{paymentStatusLabel(order.payment?.status)}</Badge>
           <span className="text-slate-500">
             {new Date(order.createdAt).toLocaleString("tr-TR")}
           </span>
         </div>
+        {order.payment?.method === "BANK_TRANSFER" &&
+        order.payment.status === "PENDING" ? (
+          <a
+            href={`/account/bank-transfers?orderId=${order.id}`}
+            className="mt-3 inline-flex text-sm font-semibold text-accent"
+          >
+            Havale Bildirimi Yap
+          </a>
+        ) : null}
       </div>
       <section className="rounded-lg border bg-white p-4">
         <h2 className="font-semibold">Ürünler</h2>
@@ -65,18 +95,19 @@ export default async function OrderDetailPage({ params }: Props) {
         <p className="mt-4 border-t pt-3 font-semibold">
           Toplam: {order.totalAmount} {order.currency}
         </p>
+        <p className="mt-1 text-sm text-slate-600">
+          Ödeme: Havale / EFT · {paymentStatusLabel(order.payment?.status)}
+        </p>
       </section>
-      {order.shippingAddressSnapshot ? (
+      {order.shippingAddress ? (
         <section className="rounded-lg border bg-white p-4 text-sm">
           <h2 className="font-semibold">Teslimat adresi</h2>
           <p className="mt-2">
-            {order.shippingAddressSnapshot.firstName}{" "}
-            {order.shippingAddressSnapshot.lastName}
+            {order.shippingAddress.firstName} {order.shippingAddress.lastName}
           </p>
-          <p>{order.shippingAddressSnapshot.addressLine}</p>
+          <p>{order.shippingAddress.addressLine}</p>
           <p>
-            {order.shippingAddressSnapshot.district}/
-            {order.shippingAddressSnapshot.city}
+            {order.shippingAddress.district}/{order.shippingAddress.city}
           </p>
         </section>
       ) : null}
