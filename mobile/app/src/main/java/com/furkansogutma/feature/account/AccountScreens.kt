@@ -362,15 +362,26 @@ fun FavoritesRoute(
 @Composable
 fun AddressesRoute(onBack: () -> Unit = {}, onCreate: () -> Unit = {}, vm: AccountDataViewModel = hiltViewModel()) {
     var addresses by remember { mutableStateOf<List<Address>?>(null) }
-    LaunchedEffect(Unit) {
-        when (val result = vm.accountRepository.getAddresses()) {
-            is Result.Success -> addresses = result.data
-            is Result.Error -> addresses = emptyList()
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    fun load() {
+        scope.launch {
+            addresses = null
+            error = null
+            when (val result = vm.accountRepository.getAddresses()) {
+                is Result.Success -> addresses = result.data
+                is Result.Error -> error = result.error.message
+            }
         }
     }
+
+    LaunchedEffect(Unit) { load() }
+
     Column(Modifier.fillMaxSize()) {
         FurkanTopBar("Adreslerim", onBack = onBack)
         when {
+            error != null && addresses == null -> FurkanError(error!!) { load() }
             addresses == null -> FurkanLoading()
             addresses!!.isEmpty() -> FurkanEmptyState("Adres yok", "Teslimat adresi ekleyin.", "Yeni adres", onCreate)
             else -> {

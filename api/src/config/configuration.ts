@@ -31,6 +31,12 @@ export default (): EnvironmentVariables => ({
     process.env.NOTIFICATION_OUTBOX_MAX_ATTEMPTS ?? '4',
     10,
   ),
+  EMAIL_OUTBOX_MAX_ATTEMPTS: parseInt(
+    process.env.EMAIL_OUTBOX_MAX_ATTEMPTS ?? '8',
+    10,
+  ),
+  RESEND_API_KEY: process.env.RESEND_API_KEY,
+  EMAIL_FROM: process.env.EMAIL_FROM,
   R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
   R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
   R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,

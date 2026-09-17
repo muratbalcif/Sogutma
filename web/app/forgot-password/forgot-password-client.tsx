@@ -44,8 +44,9 @@ export default function ForgotPasswordClient() {
         Şifremi unuttum
       </h1>
       <p className="mt-2 text-sm text-slate-600">
-        E-posta adresinizi girin. Talep API üzerinden kaydedilir; e-posta
-        gönderimi henüz yapılandırılmamış olabilir.
+        E-posta adresinizi girin. Talep kaydedilir; sıfırlama bağlantısı ancak
+        e-posta altyapısı yapılandırıldığında gönderilir. Yapılandırma yoksa
+        e-posta gitmez.
       </p>
       <form className="mt-6 space-y-4" onSubmit={onSubmit} noValidate>
         <div>
@@ -63,9 +64,13 @@ export default function ForgotPasswordClient() {
           ) : null}
         </div>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        {message ? <p className="text-sm text-slate-700">{message}</p> : null}
+        {message ? (
+          <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            {message}
+          </p>
+        ) : null}
         <Button type="submit" disabled={isSubmitting} className="w-full">
-          {isSubmitting ? "Gönderiliyor…" : "Şifre sıfırlama talebi gönder"}
+          {isSubmitting ? "Gönderiliyor…" : "Talep gönder"}
         </Button>
       </form>
       <p className="mt-4 text-sm">

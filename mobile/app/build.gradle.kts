@@ -4,8 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
-    // Google Services applied only when google-services.json is present.
-    // alias(libs.plugins.google.services)
+    alias(libs.plugins.google.services)
 }
 
 import java.util.Properties

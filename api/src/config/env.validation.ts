@@ -49,6 +49,9 @@ export const envValidationSchema = Joi.object({
     .min(1)
     .max(20)
     .default(4),
+  EMAIL_OUTBOX_MAX_ATTEMPTS: Joi.number().integer().min(1).max(30).default(8),
+  RESEND_API_KEY: Joi.string().allow('').optional(),
+  EMAIL_FROM: Joi.string().allow('').optional(),
   R2_ACCOUNT_ID: Joi.string().allow('').optional(),
   R2_ACCESS_KEY_ID: Joi.string().allow('').optional(),
   R2_SECRET_ACCESS_KEY: Joi.string().allow('').optional(),
@@ -96,6 +99,9 @@ export interface EnvironmentVariables {
   BANK_TRANSFER_ACCOUNT_NAME?: string;
   PAYMENT_EXPIRY_HOURS?: number;
   NOTIFICATION_OUTBOX_MAX_ATTEMPTS?: number;
+  EMAIL_OUTBOX_MAX_ATTEMPTS?: number;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
   R2_ACCOUNT_ID?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;

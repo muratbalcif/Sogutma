@@ -10,20 +10,29 @@ import { EnvironmentVariables } from '../../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { renderOrderEmailHtml } from './email-templates';
 
+type SendResult =
+  | { ok: true }
+  | { ok: false; error: string; retryable: boolean };
+
 /**
  * Email delivery is intentionally outside order/payment DB transactions.
- * Current implementation records outbox rows and marks them processed after a
- * best-effort send (log stub until Resend/SMTP is configured).
+ * Rows are only marked processed after a successful provider send.
+ * Without RESEND_API_KEY + EMAIL_FROM, delivery fails (retryable) and
+ * processedAt is never set.
  */
 @Injectable()
 export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EmailOutboxService.name);
   private timer: NodeJS.Timeout | null = null;
+  private readonly maxAttempts: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<EnvironmentVariables, true>,
-  ) {}
+  ) {
+    this.maxAttempts =
+      this.config.get('EMAIL_OUTBOX_MAX_ATTEMPTS', { infer: true }) ?? 8;
+  }
 
   onModuleInit(): void {
     this.timer = setInterval(() => {
@@ -36,6 +45,12 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
       clearInterval(this.timer);
       this.timer = null;
     }
+  }
+
+  isProviderConfigured(): boolean {
+    const apiKey = this.config.get('RESEND_API_KEY', { infer: true });
+    const from = this.config.get('EMAIL_FROM', { infer: true });
+    return Boolean(apiKey?.trim() && from?.trim());
   }
 
   async enqueue(input: {
@@ -101,23 +116,56 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
 
   async processPending(limit = 30): Promise<number> {
     const pending = await this.prisma.emailOutbox.findMany({
-      where: { processedAt: null },
+      where: {
+        processedAt: null,
+        attempts: { lt: this.maxAttempts },
+      },
       orderBy: { createdAt: 'asc' },
       take: limit,
     });
 
     let processed = 0;
     for (const item of pending) {
+      const html =
+        item.payload &&
+        typeof item.payload === 'object' &&
+        'html' in item.payload &&
+        typeof (item.payload as { html?: unknown }).html === 'string'
+          ? (item.payload as { html: string }).html
+          : undefined;
+
       try {
-        // Provider hook: replace with Resend/SMTP when credentials are present.
-        this.logger.log(
-          `[email:${item.event}] to=${item.toEmail} subject=${item.subject}`,
-        );
+        const result = await this.sendEmail({
+          to: item.toEmail,
+          subject: item.subject,
+          html:
+            html ??
+            `<p>${item.subject}</p><p>Event: ${item.event}</p>`,
+        });
+
+        if (result.ok) {
+          await this.prisma.emailOutbox.update({
+            where: { id: item.id },
+            data: {
+              processedAt: new Date(),
+              attempts: item.attempts + 1,
+              lastError: null,
+            },
+          });
+          processed += 1;
+          continue;
+        }
+
         await this.prisma.emailOutbox.update({
           where: { id: item.id },
-          data: { processedAt: new Date(), attempts: item.attempts + 1 },
+          data: {
+            attempts: item.attempts + 1,
+            lastError: result.error.slice(0, 500),
+          },
         });
-        processed += 1;
+        this.logger.warn(
+          `Email outbox ${item.id} not delivered (attempt ${item.attempts + 1}): ${result.error}`,
+        );
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown email error';
@@ -128,8 +176,55 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
             lastError: message.slice(0, 500),
           },
         });
+        this.logger.warn(
+          `Email outbox ${item.id} failed (attempt ${item.attempts + 1}): ${message}`,
+        );
       }
     }
     return processed;
+  }
+
+  /** Exposed for tests — sends via Resend when configured. */
+  async sendEmail(input: {
+    to: string;
+    subject: string;
+    html: string;
+  }): Promise<SendResult> {
+    const apiKey = this.config.get('RESEND_API_KEY', { infer: true })?.trim();
+    const from = this.config.get('EMAIL_FROM', { infer: true })?.trim();
+
+    if (!apiKey || !from) {
+      return {
+        ok: false,
+        error: 'Email provider not configured (RESEND_API_KEY / EMAIL_FROM)',
+        retryable: true,
+      };
+    }
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [input.to],
+        subject: input.subject,
+        html: input.html,
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      return {
+        ok: false,
+        error: `Resend HTTP ${response.status}: ${text.slice(0, 300)}`,
+        retryable: response.status >= 500 || response.status === 429,
+      };
+    }
+
+    return { ok: true };
   }
 }
