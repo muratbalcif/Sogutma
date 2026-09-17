@@ -26,7 +26,10 @@
     "postinstall": "prisma generate",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f"
+    "docker:logs": "docker compose logs -f",
+    "backup": "bash ../scripts/backup.sh",
+    "backup:restore-test": "bash ../scripts/restore-test.sh",
+    "ledger:check": "bash ../scripts/ledger-consistency-check.sh"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

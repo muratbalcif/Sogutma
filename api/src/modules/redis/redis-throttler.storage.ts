@@ -1,9 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ThrottlerStorage } from '@nestjs/throttler';
 import { ThrottlerStorageRecord } from '@nestjs/throttler/dist/throttler-storage-record.interface';
 import Redis from 'ioredis';
-import { Inject } from '@nestjs/common';
-import { REDIS_CLIENT } from '../redis/redis.module';
+import { REDIS_CLIENT } from './redis.constants';
 
 /**
  * Redis-backed throttler storage for multi-instance rate limiting.
@@ -12,7 +11,10 @@ import { REDIS_CLIENT } from '../redis/redis.module';
 @Injectable()
 export class RedisThrottlerStorage implements ThrottlerStorage {
   private readonly logger = new Logger(RedisThrottlerStorage.name);
-  private readonly local = new Map<string, { totalHits: number; expiresAt: number }>();
+  private readonly local = new Map<
+    string,
+    { totalHits: number; expiresAt: number }
+  >();
 
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 

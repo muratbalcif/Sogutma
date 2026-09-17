@@ -98,6 +98,7 @@ export class PaymentsController {
 
   @Post('orders/:orderId/bank-transfer')
   @UseGuards(JwtAccessGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Submit bank transfer notification',

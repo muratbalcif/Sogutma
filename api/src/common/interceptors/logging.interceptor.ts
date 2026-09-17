@@ -19,7 +19,6 @@ export class LoggingInterceptor implements NestInterceptor {
     const request = http.getRequest<
       RequestWithId & { user?: AuthenticatedUser }
     >();
-    const { method, originalUrl } = request;
     const startedAt = Date.now();
 
     return next.handle().pipe(

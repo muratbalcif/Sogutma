@@ -54,8 +54,7 @@ import { EnvironmentVariables } from './config/env.validation';
         config: ConfigService<EnvironmentVariables, true>,
         storage: RedisThrottlerStorage,
       ) => {
-        const isProd =
-          config.get('NODE_ENV', { infer: true }) === 'production';
+        const isProd = config.get('NODE_ENV', { infer: true }) === 'production';
         return {
           throttlers: [
             {
