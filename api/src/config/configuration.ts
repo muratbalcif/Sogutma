@@ -1,0 +1,29 @@
+import { EnvironmentVariables } from './env.validation';
+
+export default (): EnvironmentVariables => ({
+  NODE_ENV:
+    (process.env.NODE_ENV as EnvironmentVariables['NODE_ENV']) ?? 'development',
+  PORT: parseInt(process.env.PORT ?? '3000', 10),
+  DATABASE_URL: process.env.DATABASE_URL ?? '',
+  JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? '',
+  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? '',
+  ACCESS_TOKEN_EXPIRES_IN: process.env.ACCESS_TOKEN_EXPIRES_IN ?? '15m',
+  REFRESH_TOKEN_EXPIRES_IN: process.env.REFRESH_TOKEN_EXPIRES_IN ?? '30d',
+  REDIS_URL: process.env.REDIS_URL ?? '',
+  ADMIN_EMAIL: process.env.ADMIN_EMAIL,
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
+  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
+  FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
+  FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  CORS_ORIGINS: process.env.CORS_ORIGINS,
+  SITE_NAME: process.env.SITE_NAME,
+  SITE_SUPPORT_EMAIL: process.env.SITE_SUPPORT_EMAIL,
+  SITE_SUPPORT_PHONE: process.env.SITE_SUPPORT_PHONE,
+  SITE_ADDRESS: process.env.SITE_ADDRESS,
+  SITE_PRIVACY_URL: process.env.SITE_PRIVACY_URL,
+  SITE_KVKK_URL: process.env.SITE_KVKK_URL,
+  SITE_TERMS_URL: process.env.SITE_TERMS_URL,
+  BANK_TRANSFER_BANK_NAME: process.env.BANK_TRANSFER_BANK_NAME,
+  BANK_TRANSFER_IBAN: process.env.BANK_TRANSFER_IBAN,
+  BANK_TRANSFER_ACCOUNT_NAME: process.env.BANK_TRANSFER_ACCOUNT_NAME,
+});

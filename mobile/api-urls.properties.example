@@ -1,0 +1,6 @@
+# Copy to local.properties (already gitignored by Android) or set via CI secrets.
+# Do not commit real production secrets.
+#
+# API_BASE_URL_DEV=http://10.0.2.2:3000/api/v1
+# API_BASE_URL_STAGING=https://staging-api.furkansogutma.com/api/v1
+# API_BASE_URL_PRODUCTION=https://api.furkansogutma.com/api/v1

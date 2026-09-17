@@ -1,0 +1,45 @@
+{
+  "name": "furkansogutma",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FurkanSoğutma e-commerce monorepo",
+  "workspaces": [
+    "api",
+    "admin",
+    "web"
+  ],
+  "scripts": {
+    "lint": "npm run lint -w furkansogutma-api && npm run lint -w furkansogutma-admin && npm run lint -w furkansogutma-web",
+    "test": "npm run test -w furkansogutma-api && npm run test -w furkansogutma-web",
+    "test:e2e": "npm run test:e2e -w furkansogutma-api",
+    "build": "npm run build -w furkansogutma-api && npm run build -w furkansogutma-admin && npm run build -w furkansogutma-web",
+    "web:test": "npm run test -w furkansogutma-web",
+    "api:lint": "npm run lint -w furkansogutma-api",
+    "api:test": "npm run test -w furkansogutma-api",
+    "api:test:e2e": "npm run test:e2e -w furkansogutma-api",
+    "api:build": "npm run build -w furkansogutma-api",
+    "api:start": "npm run start -w furkansogutma-api",
+    "api:start:dev": "npm run start:dev -w furkansogutma-api",
+    "api:docker:up": "npm run docker:up -w furkansogutma-api",
+    "api:docker:down": "npm run docker:down -w furkansogutma-api",
+    "api:prisma:generate": "npm run prisma:generate -w furkansogutma-api",
+    "api:prisma:migrate:dev": "npm run prisma:migrate:dev -w furkansogutma-api",
+    "api:prisma:seed": "npm run prisma:seed -w furkansogutma-api",
+    "admin:dev": "npm run dev -w furkansogutma-admin",
+    "admin:build": "npm run build -w furkansogutma-admin",
+    "admin:lint": "npm run lint -w furkansogutma-admin",
+    "admin:start": "npm run start -w furkansogutma-admin",
+    "web:dev": "npm run dev -w furkansogutma-web",
+    "web:build": "npm run build -w furkansogutma-web",
+    "web:lint": "npm run lint -w furkansogutma-web",
+    "web:start": "npm run start -w furkansogutma-web",
+    "web:test:e2e": "npm run test:e2e -w furkansogutma-web"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1"
+  }
+}

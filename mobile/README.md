@@ -1,0 +1,113 @@
+# FurkanSoğutma — Android
+
+Production-oriented Android client for the FurkanSoğutma NestJS API (`/api/v1`).
+
+## Stack
+
+- Kotlin, Jetpack Compose, Material 3
+- MVVM + Clean Architecture (domain / data / feature)
+- Hilt, Retrofit, OkHttp, Moshi
+- Coroutines + Flow
+- Encrypted token storage (Android Keystore)
+- Coil, DataStore, FCM foundation
+
+## Package
+
+`com.furkansogutma.app`
+
+## Requirements
+
+- Android Studio Ladybug+ (or compatible)
+- JDK **17**
+- Android SDK **35**
+- Gradle **8.12.1** (wrapper included)
+
+## Module map
+
+```text
+mobile/
+├── app/                 # Application, NavHost, FCM, BuildConfig flavors
+├── core/
+│   ├── common/          # Result, AppError, money display helpers (JVM)
+│   ├── network/         # Retrofit APIs, AuthInterceptor, TokenAuthenticator
+│   ├── database/        # EncryptedTokenStorage, DataStore
+│   ├── designsystem/    # Theme + shared Compose components
+│   └── navigation/      # AppRoute + deep link helpers
+├── domain/              # Entities, repository interfaces, use cases (JVM)
+├── data/                # DTO mappers + repository implementations
+└── feature/             # splash, home, auth, category, product, search,
+                         # cart, checkout, account (+ orders/favorites/…)
+```
+
+## Environment / API URL
+
+Flavors: `dev`, `staging`, `production`
+
+`BuildConfig.API_BASE_URL` is set per flavor. Override via `api-urls.properties`
+(copy from `api-urls.properties.example`) or `local.properties`:
+
+```properties
+API_BASE_URL_DEV=http://10.0.2.2:3000/api/v1
+API_BASE_URL_STAGING=https://staging-api.furkansogutma.com/api/v1
+API_BASE_URL_PRODUCTION=https://api.furkansogutma.com/api/v1
+```
+
+Defaults:
+
+| Flavor | Default API base |
+|--------|------------------|
+| dev | `http://10.0.2.2:3000/api/v1` (emulator → host) |
+| staging | `https://staging-api.furkansogutma.com/api/v1` |
+| production | `https://api.furkansogutma.com/api/v1` |
+
+Do **not** commit secrets or `google-services.json`.
+
+## Run
+
+```bash
+cd mobile
+./gradlew :app:assembleDevDebug
+./gradlew :app:installDevDebug
+```
+
+Physical device: use your machine LAN IP instead of `10.0.2.2`.
+
+## Build types
+
+- **debug** — network BODY logs (Authorization redacted)
+- **release** — minify + shrinkResources + R8, logging OFF
+
+## Tests
+
+```bash
+./gradlew test
+./gradlew lint
+./gradlew :feature:auth:connectedDevDebugAndroidTest   # device/emulator required
+```
+
+## Auth
+
+- Login/register/refresh/logout/me against `/api/v1/auth/*`
+- Tokens in EncryptedSharedPreferences
+- Concurrent 401 → single coordinated refresh (`TokenAuthenticator`)
+
+## Deep links
+
+- `furkansogutma://product/{slug}`
+- `furkansogutma://category/{slug}`
+- `furkansogutma://order/{id}`
+
+HTTPS App Links can be added later on the same routes.
+
+## FCM
+
+`FurkanFirebaseMessagingService` registers device tokens via
+`POST /api/v1/notifications/devices`. Add `google-services.json` and enable the
+Google Services Gradle plugin before production push.
+
+## Architecture notes
+
+- Backend is the source of truth for price, stock, totals.
+- No admin API usage from this app.
+- Comment API is not available yet → honest empty state.
+- Brand launcher uses adaptive vector placeholder until marketing assets are provided.
