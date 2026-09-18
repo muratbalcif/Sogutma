@@ -146,7 +146,7 @@ fun FurkanToolbarChip(
 ) {
     Row(
         modifier = modifier
-            .height(40.dp)
+            .height(44.dp)
             .clip(MaterialTheme.shapes.small)
             .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small)
             .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -272,6 +272,7 @@ fun FurkanSearchBar(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "Ürün, marka veya SKU ara",
+    onSearch: (() -> Unit)? = null,
 ) {
     OutlinedTextField(
         value = query,
@@ -289,6 +290,12 @@ fun FurkanSearchBar(
                 style = MaterialTheme.typography.bodyMedium,
             )
         },
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+            imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+        ),
+        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+            onSearch = { onSearch?.invoke() },
+        ),
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,

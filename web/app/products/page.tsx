@@ -3,7 +3,10 @@ import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Pagination } from "@/components/ui/pagination";
 import { ProductGrid } from "@/components/ui/product-card";
-import { ProductFiltersSuspense } from "@/components/catalog/product-filters-suspense";
+import {
+  ProductFiltersDesktopSuspense,
+  ProductFiltersMobileSuspense,
+} from "@/components/catalog/product-filters-suspense";
 import { catalogService } from "@/services/catalog.service";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -59,13 +62,32 @@ export default async function ProductsPage({
 
   return (
     <div>
-      <Breadcrumb items={[{ label: "Ana Sayfa", href: "/" }, { label: "Ürünler" }]} />
-      <h1 className="mb-6 font-[family-name:var(--font-display)] text-3xl text-navy">
+      <Breadcrumb
+        items={[{ label: "Ana Sayfa", href: "/" }, { label: "Ürünler" }]}
+      />
+      <h1 className="mb-4 font-[family-name:var(--font-display)] text-2xl font-semibold text-foreground md:mb-6 md:text-3xl">
         Ürünler
       </h1>
-      <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-        <ProductFiltersSuspense brands={brands} categories={categories} />
+
+      <div className="lg:grid lg:grid-cols-[280px_1fr] lg:gap-8">
+        <div className="hidden lg:block">
+          <ProductFiltersDesktopSuspense
+            brands={brands}
+            categories={categories}
+          />
+        </div>
+
         <div>
+          <ProductFiltersMobileSuspense
+            brands={brands}
+            categories={categories}
+            total={products.meta.total}
+          />
+
+          <p className="mb-4 hidden text-sm text-text-secondary lg:block">
+            {products.meta.total} ürün
+          </p>
+
           {products.items.length === 0 ? (
             <EmptyState
               title="Ürün bulunamadı"
@@ -75,9 +97,6 @@ export default async function ProductsPage({
             />
           ) : (
             <>
-              <p className="mb-4 text-sm text-slate-500">
-                {products.meta.total} ürün
-              </p>
               <ProductGrid products={products.items} />
               <Pagination
                 page={products.meta.page}
