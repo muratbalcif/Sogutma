@@ -1,0 +1,150 @@
+# FurkanSoğutma production stack (isolated from Rotawide / local api/docker-compose.yml).
+# Usage (from repo root, with secrets in .env.production — never commit that file):
+#   docker compose -f docker-compose.production.yml --env-file .env.production up -d --build
+#
+# Host bindings are localhost-only. Put Caddy/Nginx on the host or a separate reverse-proxy
+# in front of 127.0.0.1:3100/3101/3102. Do not publish Postgres/Redis to the host.
+
+name: furkansogutma
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: furkansogutma-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - furkansogutma_postgres_data:/var/lib/postgresql/data
+    networks:
+      - furkansogutma_internal
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    container_name: furkansogutma-redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: ['redis-server', '--requirepass', '${REDIS_PASSWORD}']
+    volumes:
+      - furkansogutma_redis_data:/data
+    networks:
+      - furkansogutma_internal
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: furkansogutma-api:latest
+    container_name: furkansogutma-api
+    restart: unless-stopped
+    env_file:
+      - path: .env.production
+        required: false
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    expose:
+      - '3000'
+    ports:
+      - '127.0.0.1:3100:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - furkansogutma_internal
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '-qO-',
+          'http://127.0.0.1:3000/api/v1/health/live',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+        NEXT_PUBLIC_R2_PUBLIC_URL: ${NEXT_PUBLIC_R2_PUBLIC_URL:-}
+    image: furkansogutma-web:latest
+    container_name: furkansogutma-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      HOSTNAME: 0.0.0.0
+    expose:
+      - '3002'
+    ports:
+      - '127.0.0.1:3102:3002'
+    networks:
+      - furkansogutma_internal
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3002/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  admin:
+    build:
+      context: .
+      dockerfile: admin/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+    image: furkansogutma-admin:latest
+    container_name: furkansogutma-admin
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOSTNAME: 0.0.0.0
+    expose:
+      - '3001'
+    ports:
+      - '127.0.0.1:3101:3001'
+    networks:
+      - furkansogutma_internal
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3001/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  furkansogutma_internal:
+    name: furkansogutma_internal
+    driver: bridge
+
+volumes:
+  furkansogutma_postgres_data:
+    name: furkansogutma_postgres_data
+  furkansogutma_redis_data:
+    name: furkansogutma_redis_data

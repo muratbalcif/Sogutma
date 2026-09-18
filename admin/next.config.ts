@@ -27,6 +27,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  output: "standalone",
   outputFileTracingRoot: path.join(__dirname, ".."),
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
