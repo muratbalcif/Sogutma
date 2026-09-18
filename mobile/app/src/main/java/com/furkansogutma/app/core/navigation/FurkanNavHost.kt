@@ -1,0 +1,472 @@
+package com.furkansogutma.app.core.navigation
+
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
+import com.furkansogutma.app.core.designsystem.theme.BadgeRed
+import com.furkansogutma.app.core.designsystem.theme.OnSurfaceMuted
+import com.furkansogutma.app.core.designsystem.theme.PrimaryLight
+import com.furkansogutma.app.core.designsystem.theme.White
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
+import com.furkansogutma.app.core.navigation.AppRoute
+import com.furkansogutma.app.core.navigation.AppRoutes
+import com.furkansogutma.app.core.navigation.DeepLinks
+import com.furkansogutma.app.feature.auth.domain.repository.AuthRepository
+import com.furkansogutma.app.feature.auth.domain.model.AuthState
+import com.furkansogutma.app.feature.cart.domain.usecase.CartBadgeStore
+import com.furkansogutma.app.feature.account.presentation.AccountRoute
+import com.furkansogutma.app.feature.account.presentation.AddressFormRoute
+import com.furkansogutma.app.feature.account.presentation.AddressesRoute
+import com.furkansogutma.app.feature.account.presentation.AlertsRoute
+import com.furkansogutma.app.feature.banktransfer.presentation.BankTransfersRoute
+import com.furkansogutma.app.feature.account.presentation.CurrentAccountRoute
+import com.furkansogutma.app.feature.favorite.presentation.FavoritesRoute
+import com.furkansogutma.app.feature.account.presentation.LegalDocumentRoute
+import com.furkansogutma.app.feature.notification.presentation.NotificationsRoute
+import com.furkansogutma.app.feature.order.presentation.OrderDetailRoute
+import com.furkansogutma.app.feature.order.presentation.OrdersRoute
+import com.furkansogutma.app.feature.account.presentation.ProfileRoute
+import com.furkansogutma.app.feature.account.presentation.SettingsRoute
+import com.furkansogutma.app.feature.auth.presentation.forgotpassword.ForgotPasswordRoute
+import com.furkansogutma.app.feature.auth.presentation.login.LoginRoute
+import com.furkansogutma.app.feature.auth.presentation.register.RegisterRoute
+import com.furkansogutma.app.feature.campaign.presentation.CampaignDetailRoute
+import com.furkansogutma.app.feature.campaign.presentation.CampaignListRoute
+import com.furkansogutma.app.feature.cart.presentation.CartRoute
+import com.furkansogutma.app.feature.category.presentation.CategoryRoute
+import com.furkansogutma.app.feature.checkout.presentation.CheckoutRoute
+import com.furkansogutma.app.feature.checkout.presentation.OrderSuccessRoute
+import com.furkansogutma.app.feature.home.presentation.HomeRoute
+import com.furkansogutma.app.feature.product.presentation.ProductDetailRoute
+import com.furkansogutma.app.feature.product.presentation.ProductListRoute
+import com.furkansogutma.app.feature.search.presentation.SearchRoute
+import com.furkansogutma.app.feature.splash.presentation.SplashRoute
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+
+private data class TopLevel(val route: String, val label: String, val icon: ImageVector)
+
+@HiltViewModel
+class MainNavViewModel @Inject constructor(
+    authRepository: AuthRepository,
+    badgeStore: CartBadgeStore,
+) : ViewModel() {
+    val authState = authRepository.authState.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        AuthState.Loading,
+    )
+    val cartCount = badgeStore.count
+}
+
+@Composable
+fun FurkanNavHost(
+    viewModel: MainNavViewModel = hiltViewModel(),
+) {
+    val navController = rememberNavController()
+    val backStack by navController.currentBackStackEntryAsState()
+    val current = backStack?.destination?.route
+    val cartCount by viewModel.cartCount.collectAsStateWithLifecycle()
+    val authState by viewModel.authState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(authState) {
+        if (authState is AuthState.Guest &&
+            current?.startsWith("order/") == true
+        ) {
+            // deep link order while guest handled at destination level
+        }
+    }
+
+    val topLevel = listOf(
+        TopLevel(AppRoute.Home.route, "Anasayfa", Icons.Default.Home),
+        TopLevel(AppRoute.Categories.route, "Kategoriler", Icons.Outlined.Category),
+        TopLevel(AppRoute.Search.route, "Ara", Icons.Default.Search),
+        TopLevel(AppRoute.Cart.route, "Sepet", Icons.Default.ShoppingCart),
+        TopLevel(AppRoute.Account.route, "Hesabım", Icons.Default.Person),
+    )
+    val showBottomBar = topLevel.any { it.route == current }
+
+    fun goHomeClearingAuth() {
+        navController.navigate(AppRoute.Home.route) {
+            popUpTo(0) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+
+    fun goLoginClearing() {
+        navController.navigate(AppRoute.Login.route) {
+            popUpTo(0) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+
+    Scaffold(
+        bottomBar = {
+            if (showBottomBar) {
+                NavigationBar(
+                    containerColor = White,
+                    tonalElevation = 0.dp,
+                    windowInsets = NavigationBarDefaults.windowInsets,
+                ) {
+                    topLevel.forEach { item ->
+                        val selected = current == item.route
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                navController.navigate(item.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = {
+                                if (item.route == AppRoute.Cart.route) {
+                                    BadgedBox(
+                                        badge = {
+                                            if (cartCount > 0) {
+                                                Badge(containerColor = BadgeRed) {
+                                                    Text(if (cartCount > 99) "99+" else "$cartCount")
+                                                }
+                                            }
+                                        },
+                                    ) {
+                                        Icon(item.icon, contentDescription = item.label)
+                                    }
+                                } else {
+                                    Icon(item.icon, contentDescription = item.label)
+                                }
+                            },
+                            label = {
+                                Text(
+                                    item.label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (selected) {
+                                        FontWeight.SemiBold
+                                    } else {
+                                        FontWeight.Medium
+                                    },
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = OnSurfaceMuted,
+                                unselectedTextColor = OnSurfaceMuted,
+                                indicatorColor = PrimaryLight,
+                            ),
+                        )
+                    }
+                }
+            }
+        },
+    ) { padding ->
+        NavHost(
+            navController = navController,
+            startDestination = AppRoute.Splash.route,
+            modifier = Modifier.padding(padding),
+        ) {
+            composable(AppRoute.Splash.route) {
+                SplashRoute(
+                    onAuthenticated = {
+                        navController.navigate(AppRoute.Home.route) {
+                            popUpTo(AppRoute.Splash.route) { inclusive = true }
+                        }
+                    },
+                    onGuest = {
+                        navController.navigate(AppRoute.Login.route) {
+                            popUpTo(AppRoute.Splash.route) { inclusive = true }
+                        }
+                    },
+                )
+            }
+            composable(AppRoute.Login.route) {
+                LoginRoute(
+                    onLoggedIn = { goHomeClearingAuth() },
+                    onRegister = { navController.navigate(AppRoute.Register.route) },
+                    onForgotPassword = { navController.navigate(AppRoute.ForgotPassword.route) },
+                )
+            }
+            composable(AppRoute.Register.route) {
+                RegisterRoute(
+                    onRegistered = { goHomeClearingAuth() },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.ForgotPassword.route) {
+                ForgotPasswordRoute(onBack = { navController.popBackStack() })
+            }
+            composable(AppRoute.Home.route) {
+                HomeRoute(
+                    onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                    onCategoryClick = { navController.navigate(AppRoutes.productList(it)) },
+                    onSearchClick = {
+                        navController.navigate(AppRoute.Search.route) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onCartClick = {
+                        navController.navigate(AppRoute.Cart.route) { launchSingleTop = true }
+                    },
+                    onSeeAllProducts = { navController.navigate(AppRoutes.productList(it)) },
+                    onSeeAllCategories = {
+                        navController.navigate(AppRoute.Categories.route) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onSeeAllCampaigns = { navController.navigate(AppRoute.Campaigns.route) },
+                )
+            }
+            composable(AppRoute.Categories.route) {
+                CategoryRoute(
+                    onCategoryClick = { navController.navigate(AppRoutes.productList(it)) },
+                )
+            }
+            composable(
+                route = AppRoutes.PRODUCT_LIST_WITH_CATEGORY,
+                arguments = listOf(
+                    navArgument("category") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) {
+                ProductListRoute(
+                    onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.ProductList.route) {
+                ProductListRoute(
+                    onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.Campaigns.route) {
+                CampaignListRoute(
+                    onCampaignClick = { navController.navigate(AppRoutes.campaignDetail(it)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = AppRoutes.CAMPAIGN_DETAIL,
+                arguments = listOf(navArgument("slug") { type = NavType.StringType }),
+            ) {
+                CampaignDetailRoute(
+                    onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = AppRoutes.PRODUCT_DETAIL,
+                arguments = listOf(navArgument("slug") { type = NavType.StringType }),
+                deepLinks = listOf(navDeepLink { uriPattern = "${DeepLinks.SCHEME}://product/{slug}" }),
+            ) {
+                ProductDetailRoute(
+                    onBack = { navController.popBackStack() },
+                    onRelatedProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                )
+            }
+            composable(
+                route = AppRoutes.CATEGORY_DETAIL,
+                arguments = listOf(navArgument("slug") { type = NavType.StringType }),
+                deepLinks = listOf(navDeepLink { uriPattern = "${DeepLinks.SCHEME}://category/{slug}" }),
+            ) {
+                ProductListRoute(
+                    onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.Search.route) {
+                SearchRoute(onProductClick = { navController.navigate(AppRoutes.productDetail(it)) })
+            }
+            composable(AppRoute.Cart.route) {
+                CartRoute(
+                    onCheckout = { navController.navigate(AppRoute.Checkout.route) },
+                    onBrowse = { navController.navigate(AppRoute.Home.route) },
+                )
+            }
+            composable(AppRoute.Checkout.route) {
+                CheckoutRoute(
+                    onOrderCreated = { orderId, payment ->
+                        navController.navigate(AppRoutes.orderSuccess(orderId, payment)) {
+                            popUpTo(AppRoute.Cart.route)
+                        }
+                    },
+                    onBack = { navController.popBackStack() },
+                    onManageAddresses = { navController.navigate(AppRoute.Addresses.route) },
+                )
+            }
+            composable(
+                route = "order_success/{orderId}?payment={payment}",
+                arguments = listOf(
+                    navArgument("orderId") { type = NavType.StringType },
+                    navArgument("payment") {
+                        type = NavType.StringType
+                        defaultValue = "BANK_TRANSFER"
+                    },
+                ),
+            ) { entry ->
+                val orderId = entry.arguments?.getString("orderId").orEmpty()
+                val payment = entry.arguments?.getString("payment").orEmpty()
+                OrderSuccessRoute(
+                    orderId = orderId,
+                    paymentMethod = payment,
+                    onViewOrder = { navController.navigate(AppRoutes.orderDetail(it)) },
+                    onContinueShopping = {
+                        navController.navigate(AppRoute.Home.route) {
+                            popUpTo(AppRoute.Home.route) { inclusive = true }
+                        }
+                    },
+                    onBankTransfer = {
+                        navController.navigate("bank_transfers?orderId=$it")
+                    },
+                )
+            }
+            composable(AppRoute.Account.route) {
+                AccountRoute(
+                    onOrders = { navController.navigate(AppRoute.Orders.route) },
+                    onNotifications = { navController.navigate(AppRoute.Notifications.route) },
+                    onFavorites = { navController.navigate(AppRoute.Favorites.route) },
+                    onAddresses = { navController.navigate(AppRoute.Addresses.route) },
+                    onAlerts = { navController.navigate(AppRoute.Alerts.route) },
+                    onCurrentAccount = { navController.navigate(AppRoute.CurrentAccount.route) },
+                    onBankTransfers = { navController.navigate(AppRoute.BankTransfers.route) },
+                    onSettings = { navController.navigate(AppRoute.Settings.route) },
+                    onProfile = { navController.navigate(AppRoute.Profile.route) },
+                    onLoggedOut = { goLoginClearing() },
+                )
+            }
+            composable(AppRoute.Profile.route) {
+                ProfileRoute(onBack = { navController.popBackStack() })
+            }
+            composable(AppRoute.Orders.route) {
+                OrdersRoute(
+                    onOrderClick = { navController.navigate(AppRoutes.orderDetail(it)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.Notifications.route) {
+                NotificationsRoute(
+                    onOrderClick = { navController.navigate(AppRoutes.orderDetail(it)) },
+                    onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = AppRoutes.ORDER_DETAIL,
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+                deepLinks = listOf(navDeepLink { uriPattern = "${DeepLinks.SCHEME}://order/{id}" }),
+            ) { entry ->
+                val id = entry.arguments?.getString("id").orEmpty()
+                if (authState is AuthState.Guest) {
+                    LaunchedEffect(id) {
+                        navController.navigate(AppRoute.Login.route) {
+                            launchSingleTop = true
+                        }
+                    }
+                } else {
+                    OrderDetailRoute(
+                        orderId = id,
+                        onBack = { navController.popBackStack() },
+                        onPayBankTransfer = { orderId ->
+                            navController.navigate("bank_transfers?orderId=$orderId")
+                        },
+                    )
+                }
+            }
+            composable(AppRoute.Favorites.route) {
+                FavoritesRoute(
+                    onProductClick = { navController.navigate(AppRoutes.productDetail(it)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.Addresses.route) {
+                AddressesRoute(
+                    onBack = { navController.popBackStack() },
+                    onCreate = { navController.navigate(AppRoutes.addressForm()) },
+                )
+            }
+            composable(AppRoute.AddressForm.route) {
+                AddressFormRoute(
+                    onBack = { navController.popBackStack() },
+                    onSaved = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.Alerts.route) {
+                AlertsRoute(onBack = { navController.popBackStack() })
+            }
+            composable(AppRoute.CurrentAccount.route) {
+                CurrentAccountRoute(onBack = { navController.popBackStack() })
+            }
+            composable(AppRoute.BankTransfers.route) {
+                BankTransfersRoute(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = "bank_transfers?orderId={orderId}",
+                arguments = listOf(
+                    navArgument("orderId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) { entry ->
+                BankTransfersRoute(
+                    orderId = entry.arguments?.getString("orderId"),
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.Settings.route) {
+                SettingsRoute(
+                    onBack = { navController.popBackStack() },
+                    onLegal = { navController.navigate(AppRoutes.legal(it)) },
+                )
+            }
+            composable(
+                route = AppRoutes.LEGAL,
+                arguments = listOf(navArgument("slug") { type = NavType.StringType }),
+            ) { entry ->
+                val slug = entry.arguments?.getString("slug").orEmpty()
+                LegalDocumentRoute(
+                    slug = slug,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+        }
+    }
+}

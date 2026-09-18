@@ -1,0 +1,309 @@
+package com.furkansogutma.app.data.mapper
+
+import com.furkansogutma.app.core.network.dto.AccountCurrentDto
+import com.furkansogutma.app.core.network.dto.AccountTransactionDto
+import com.furkansogutma.app.core.network.dto.AddressDto
+import com.furkansogutma.app.core.network.dto.AuthTokensDto
+import com.furkansogutma.app.core.network.dto.BannerDto
+import com.furkansogutma.app.core.network.dto.BankTransferDto
+import com.furkansogutma.app.core.network.dto.BrandDto
+import com.furkansogutma.app.core.network.dto.CampaignDto
+import com.furkansogutma.app.core.network.dto.CampaignProductDto
+import com.furkansogutma.app.core.network.dto.CartDto
+import com.furkansogutma.app.core.network.dto.CartValidationDto
+import com.furkansogutma.app.core.network.dto.CategoryDto
+import com.furkansogutma.app.core.network.dto.CheckoutValidationDto
+import com.furkansogutma.app.core.network.dto.CompanyBankAccountDto
+import com.furkansogutma.app.core.network.dto.NotificationDto
+import com.furkansogutma.app.core.network.dto.NotificationPreferenceDto
+import com.furkansogutma.app.core.network.dto.OrderDto
+import com.furkansogutma.app.core.network.dto.ProductAlertDto
+import com.furkansogutma.app.core.network.dto.ProductDto
+import com.furkansogutma.app.core.network.dto.LegalPageDto
+import com.furkansogutma.app.core.network.dto.SiteConfigDto
+import com.furkansogutma.app.core.network.dto.UnreadCountDto
+import com.furkansogutma.app.core.network.dto.UserDto
+import com.furkansogutma.app.feature.account.domain.model.AccountTransaction
+import com.furkansogutma.app.feature.account.domain.model.Address
+import com.furkansogutma.app.feature.account.domain.model.BankTransfer
+import com.furkansogutma.app.feature.account.domain.model.CompanyBankAccount
+import com.furkansogutma.app.feature.account.domain.model.CurrentAccount
+import com.furkansogutma.app.feature.account.domain.model.LegalPage
+import com.furkansogutma.app.feature.account.domain.model.ProductAlert
+import com.furkansogutma.app.feature.account.domain.model.SiteConfig
+import com.furkansogutma.app.feature.auth.domain.model.AuthSession
+import com.furkansogutma.app.feature.auth.domain.model.AuthUser
+import com.furkansogutma.app.feature.cart.domain.model.Cart
+import com.furkansogutma.app.feature.cart.domain.model.CartIssue
+import com.furkansogutma.app.feature.cart.domain.model.CartItem
+import com.furkansogutma.app.feature.cart.domain.model.CartValidation
+import com.furkansogutma.app.feature.category.domain.model.Category
+import com.furkansogutma.app.feature.notification.domain.model.AppNotification
+import com.furkansogutma.app.feature.notification.domain.model.NotificationPreferences
+import com.furkansogutma.app.feature.notification.domain.model.UnreadCount
+import com.furkansogutma.app.feature.order.domain.model.CheckoutIssue
+import com.furkansogutma.app.feature.order.domain.model.CheckoutValidation
+import com.furkansogutma.app.feature.order.domain.model.Order
+import com.furkansogutma.app.feature.order.domain.model.OrderItem
+import com.furkansogutma.app.feature.order.domain.model.OrderShipping
+import com.furkansogutma.app.feature.order.domain.model.OrderStatusHistory
+import com.furkansogutma.app.feature.product.domain.model.Banner
+import com.furkansogutma.app.feature.product.domain.model.Brand
+import com.furkansogutma.app.feature.product.domain.model.Campaign
+import com.furkansogutma.app.feature.product.domain.model.CampaignProduct
+import com.furkansogutma.app.feature.product.domain.model.Money
+import com.furkansogutma.app.feature.product.domain.model.Product
+import com.furkansogutma.app.feature.product.domain.model.ProductAttribute
+import com.furkansogutma.app.feature.product.domain.model.ProductCompatibility
+import com.furkansogutma.app.feature.product.domain.model.ProductImage
+
+fun UserDto.toDomain() = AuthUser(
+    id = id,
+    email = email,
+    firstName = firstName,
+    lastName = lastName,
+    phone = phone,
+    userType = userType,
+    status = status,
+)
+
+fun AuthTokensDto.toDomain() = AuthSession(
+    user = user.toDomain(),
+    accessToken = accessToken,
+    refreshToken = refreshToken,
+)
+
+fun ProductDto.toDomain() = Product(
+    id = id,
+    sku = sku,
+    barcode = barcode,
+    name = name,
+    slug = slug,
+    description = description,
+    brandName = brand.name,
+    brandSlug = brand.slug,
+    categoryName = category.name,
+    categorySlug = category.slug,
+    images = images.map { ProductImage(it.id, it.url, it.alt, it.isPrimary) },
+    price = price?.let { Money(it.amount, it.currency, it.type) },
+    compareAtPrice = compareAtPrice?.let { Money(it.amount, it.currency, it.type) },
+    stockAvailable = stock?.available == true,
+    stockQuantity = stock?.quantity ?: 0,
+    onCampaign = onCampaign == true,
+    attributes = attributes.orEmpty().map { ProductAttribute(it.name, it.value) },
+    compatibility = compatibility.orEmpty().map {
+        ProductCompatibility(it.manufacturer, it.model, it.modelYear, it.notes)
+    },
+    technicalHtml = technicalHtml,
+    compatibilityHtml = compatibilityHtml,
+)
+
+fun CategoryDto.toDomain(): Category = Category(
+    id = id,
+    name = name,
+    slug = slug,
+    description = description,
+    parentId = parentId,
+    image = image,
+    children = children.orEmpty().map { it.toDomain() },
+)
+
+fun BannerDto.toDomain() = Banner(id, title, subtitle, imageUrl, linkType, linkValue)
+fun BrandDto.toDomain() = Brand(id, name, slug, logo)
+
+fun CampaignDto.toDomain() = Campaign(
+    id = id,
+    name = name,
+    slug = slug,
+    description = description,
+    type = type,
+    active = active,
+    priority = priority,
+    startsAt = startsAt,
+    endsAt = endsAt,
+    status = status,
+)
+
+fun CampaignProductDto.toDomain() = CampaignProduct(
+    id = id,
+    productId = productId,
+    name = product?.name.orEmpty(),
+    slug = product?.slug.orEmpty(),
+    sku = product?.sku.orEmpty(),
+    discountPercentage = discountPercentage,
+    discountAmount = discountAmount,
+    specialPrice = specialPrice,
+)
+
+fun CartDto.toDomain() = Cart(
+    id = id,
+    items = items.map {
+        CartItem(
+            productId = it.product.id,
+            quantity = it.quantity,
+            name = it.product.name,
+            slug = it.product.slug,
+            sku = it.product.sku,
+            imageUrl = it.product.images.firstOrNull { img -> img.isPrimary }?.url
+                ?: it.product.images.firstOrNull()?.url,
+            unitPrice = it.unitPrice,
+            lineTotal = it.subtotal,
+            currency = it.currency ?: summary.currency,
+            available = it.available,
+            availableQuantity = it.availableQuantity,
+            issueCode = it.issueCode,
+        )
+    },
+    subtotal = summary.subtotal,
+    discountAmount = summary.discount,
+    total = summary.total,
+    currency = summary.currency,
+)
+
+fun CartValidationDto.toDomain() = CartValidation(
+    valid = valid,
+    issues = issues.map { CartIssue(it.productId, it.code, it.message) },
+)
+
+fun CheckoutValidationDto.toDomain() = CheckoutValidation(
+    valid = valid,
+    issues = issues.map { CheckoutIssue(it.code, it.message, it.productId) },
+    total = summary?.total,
+    currency = summary?.currency,
+)
+
+fun OrderDto.toDomain() = Order(
+    id = id,
+    orderNumber = orderNumber,
+    status = status,
+    paymentStatus = payment?.status,
+    paymentMethod = payment?.method,
+    total = totalAmount,
+    subtotal = subtotal,
+    taxAmount = taxAmount,
+    discountAmount = discountAmount,
+    shippingAmount = shippingAmount,
+    currency = currency,
+    createdAt = createdAt,
+    items = items.map {
+        OrderItem(it.id, it.productId, it.productName, it.sku, it.quantity, it.unitPrice, it.totalAmount)
+    },
+    statusHistory = statusHistory.map {
+        OrderStatusHistory(it.id, it.toStatus, it.note, it.createdAt)
+    },
+    shippingSummary = shippingAddress?.let {
+        "${it.firstName} ${it.lastName}, ${it.addressLine}, ${it.district}/${it.city}"
+    },
+    shipping = shipping?.let {
+        OrderShipping(
+            provider = it.provider,
+            trackingNumber = it.trackingNumber,
+            trackingUrl = it.trackingUrl,
+            status = it.status,
+        )
+    },
+    canCancel = canCancel,
+    paymentApprovedTotal = payment?.approvedTotal,
+    paymentRemainingAmount = payment?.remainingAmount,
+    paymentReference = payment?.paymentReference,
+    pendingBankTransferId = payment?.pendingBankTransferId,
+    pendingBankTransferAmount = payment?.pendingBankTransferAmount,
+    pendingBankTransferBankName = payment?.pendingBankTransferBankName,
+    pendingBankTransferReference = payment?.pendingBankTransferReference,
+)
+
+fun NotificationDto.toDomain() = AppNotification(
+    id = id,
+    type = type,
+    title = title,
+    body = body.ifBlank { message.orEmpty() },
+    entityType = entityType,
+    entityId = entityId,
+    productSlug = data?.productSlug ?: data?.slug,
+    orderId = data?.orderId
+        ?: entityId?.takeIf {
+            entityType.equals("ORDER", ignoreCase = true) ||
+                entityType.equals("PAYMENT", ignoreCase = true)
+        },
+    readAt = readAt,
+    createdAt = createdAt,
+)
+
+fun UnreadCountDto.toDomain() = UnreadCount(count)
+
+fun NotificationPreferenceDto.toDomain() = NotificationPreferences(
+    orderNotifications = orderNotifications,
+    paymentNotifications = paymentNotifications,
+    stockAlerts = stockAlerts,
+    campaignNotifications = campaignNotifications,
+    systemNotifications = systemNotifications,
+)
+
+fun NotificationPreferences.toDto() = NotificationPreferenceDto(
+    orderNotifications = orderNotifications,
+    paymentNotifications = paymentNotifications,
+    stockAlerts = stockAlerts,
+    campaignNotifications = campaignNotifications,
+    systemNotifications = systemNotifications,
+)
+
+fun AddressDto.toDomain() = Address(
+    id, title, firstName, lastName, phone, city, district, neighborhood,
+    addressLine, postalCode, country, isDefault,
+)
+
+fun ProductAlertDto.toDomain() = ProductAlert(
+    id, productId, product?.name, product?.slug, status, createdAt,
+)
+
+fun AccountCurrentDto.toDomain() = CurrentAccount(
+    balance = balance,
+    debit = totalDebit ?: debit,
+    credit = totalCredit ?: credit,
+    currency = currency,
+)
+fun AccountTransactionDto.toDomain() = AccountTransaction(id, type, amount, balanceAfter, description, createdAt)
+fun BankTransferDto.toDomain() = BankTransfer(
+    id = id,
+    orderId = orderId,
+    amount = amount,
+    transferDate = transferDate,
+    description = description ?: note,
+    status = status,
+    bankName = bankName,
+    senderName = senderName,
+    remainingAmount = remainingAmount,
+    approvedTotal = approvedTotal,
+    paymentStatus = paymentStatus,
+    orderTotal = orderTotal,
+    referenceNumber = referenceNumber,
+)
+fun SiteConfigDto.toDomain() = SiteConfig(
+    siteName = siteName,
+    supportEmail = supportEmail,
+    supportPhone = supportPhone,
+    address = address,
+    privacyUrl = privacyUrl,
+    kvkkUrl = kvkkUrl,
+    termsUrl = termsUrl,
+    bankName = bankTransferInfo.bankName,
+    iban = bankTransferInfo.iban,
+    accountName = bankTransferInfo.accountName,
+)
+
+fun LegalPageDto.toDomain() = LegalPage(
+    slug = slug,
+    title = title,
+    body = body,
+    updatedAt = updatedAt,
+)
+
+fun CompanyBankAccountDto.toDomain() = CompanyBankAccount(
+    id = id,
+    bankName = bankName,
+    accountName = accountName,
+    iban = iban,
+    branch = branch,
+    currency = currency,
+    description = description,
+)
