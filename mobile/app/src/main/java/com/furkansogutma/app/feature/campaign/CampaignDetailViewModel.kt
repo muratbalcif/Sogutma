@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.campaign
+package com.furkansogutma.app.feature.campaign
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel

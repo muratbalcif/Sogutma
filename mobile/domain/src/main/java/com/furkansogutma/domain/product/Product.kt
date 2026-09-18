@@ -32,6 +32,8 @@ data class Product(
     val onCampaign: Boolean,
     val attributes: List<ProductAttribute> = emptyList(),
     val compatibility: List<ProductCompatibility> = emptyList(),
+    val technicalHtml: String? = null,
+    val compatibilityHtml: String? = null,
 )
 
 data class ProductAttribute(val name: String, val value: String)

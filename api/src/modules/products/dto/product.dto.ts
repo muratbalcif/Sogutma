@@ -173,6 +173,24 @@ export class CreateProductDto {
   @MaxLength(500)
   metaDescription?: string;
 
+  @ApiPropertyOptional({
+    description: 'Sanitized rich HTML for Teknik Özellikler',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50000)
+  technicalHtml?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Sanitized rich HTML for Uyumluluk',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50000)
+  compatibilityHtml?: string | null;
+
   @ApiPropertyOptional({ type: [ProductImageInputDto] })
   @IsOptional()
   @IsArray()
@@ -269,6 +287,24 @@ export class UpdateProductDto {
   @IsString()
   @MaxLength(500)
   metaDescription?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Sanitized rich HTML for Teknik Özellikler',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50000)
+  technicalHtml?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Sanitized rich HTML for Uyumluluk',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50000)
+  compatibilityHtml?: string | null;
 
   @ApiPropertyOptional({ type: [ProductImageInputDto] })
   @IsOptional()

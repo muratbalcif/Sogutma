@@ -24,7 +24,7 @@ export function Button({
         variant === "accent" &&
           "bg-accent text-white hover:bg-accent-dark",
         variant === "secondary" &&
-          "border border-slate-300 bg-white text-foreground hover:bg-surface-secondary",
+          "border border-border bg-surface text-foreground hover:bg-surface-secondary",
         variant === "ghost" && "text-text-secondary hover:bg-surface-secondary",
         variant === "danger" && "bg-error text-white hover:bg-red-700",
         className,

@@ -139,4 +139,16 @@ export class ProductDetailDto extends ProductListItemDto {
 
   @ApiProperty({ type: [ProductCompatibilityResponseDto] })
   compatibility!: ProductCompatibilityResponseDto[];
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Sanitized rich HTML for Teknik Özellikler',
+  })
+  technicalHtml?: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Sanitized rich HTML for Uyumluluk',
+  })
+  compatibilityHtml?: string | null;
 }

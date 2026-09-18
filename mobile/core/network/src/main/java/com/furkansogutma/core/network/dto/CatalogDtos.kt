@@ -40,6 +40,7 @@ data class CategoryDto(
     val slug: String,
     val description: String? = null,
     val parentId: String? = null,
+    val image: String? = null,
     val children: List<CategoryDto>? = null,
 )
 
@@ -64,6 +65,8 @@ data class ProductDto(
     val onCampaign: Boolean? = null,
     val attributes: List<ProductAttributeDto>? = null,
     val compatibility: List<ProductCompatibilityDto>? = null,
+    val technicalHtml: String? = null,
+    val compatibilityHtml: String? = null,
 )
 
 data class ProductAttributeDto(

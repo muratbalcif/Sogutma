@@ -206,6 +206,10 @@ model Product {
   description     String?
   metaTitle       String?
   metaDescription String?
+  /// Sanitized rich HTML for Teknik Özellikler section (beyond structured attributes).
+  technicalHtml   String?  @db.Text
+  /// Sanitized rich HTML for Uyumluluk notes (beyond structured compatibility rows).
+  compatibilityHtml String? @db.Text
   brandId         String   @db.Uuid
   categoryId      String   @db.Uuid
   vatRate         Decimal  @db.Decimal(5, 2)

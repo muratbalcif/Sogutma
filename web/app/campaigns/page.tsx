@@ -53,7 +53,7 @@ export default async function CampaignsIndexPage() {
             <Link
               key={campaign.id}
               href={`/campaigns/${campaign.slug}`}
-              className="rounded-xl border bg-white p-5 transition hover:border-cyan-300"
+              className="rounded-xl border bg-white p-5 transition hover:border-accent/50"
             >
               <p className="text-xs uppercase tracking-wide text-slate-500">
                 {campaign.type}

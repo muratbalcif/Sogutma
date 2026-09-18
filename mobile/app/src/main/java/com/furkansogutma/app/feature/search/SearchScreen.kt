@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.search
+package com.furkansogutma.app.feature.search
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column

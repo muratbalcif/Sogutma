@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.account
+package com.furkansogutma.app.feature.account
 
 import com.furkansogutma.core.common.result.Result
 import com.furkansogutma.core.database.settings.AppSettingsDataStore

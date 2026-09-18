@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.cart
+package com.furkansogutma.app.feature.cart
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

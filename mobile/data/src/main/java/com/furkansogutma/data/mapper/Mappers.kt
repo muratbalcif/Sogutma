@@ -94,6 +94,8 @@ fun ProductDto.toDomain() = Product(
     compatibility = compatibility.orEmpty().map {
         ProductCompatibility(it.manufacturer, it.model, it.modelYear, it.notes)
     },
+    technicalHtml = technicalHtml,
+    compatibilityHtml = compatibilityHtml,
 )
 
 fun CategoryDto.toDomain(): Category = Category(
@@ -102,6 +104,7 @@ fun CategoryDto.toDomain(): Category = Category(
     slug = slug,
     description = description,
     parentId = parentId,
+    image = image,
     children = children.orEmpty().map { it.toDomain() },
 )
 

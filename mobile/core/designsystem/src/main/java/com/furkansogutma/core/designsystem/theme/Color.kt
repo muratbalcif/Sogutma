@@ -2,32 +2,34 @@ package com.furkansogutma.core.designsystem.theme
 
 import androidx.compose.ui.graphics.Color
 
-/** Primary brand — teal */
-val Primary = Color(0xFF0F766E)
-val PrimaryDark = Color(0xFF115E59)
-val PrimaryLight = Color(0xFFCCFBF1)
-val PrimarySoft = Color(0xFFF0FDFA)
+/**
+ * 60-30-10 palette (shared with web):
+ * Main #186195 · Secondary #F4F8FB · Accent #137262
+ */
+val Primary = Color(0xFF186195)
+val PrimaryDark = Color(0xFF124A73)
+val PrimaryLight = Color(0xFFD6E6F2)
+val PrimarySoft = Color(0xFFEAF2F8)
 
-/** Accent — amber for CTAs / discounts */
-val Accent = Color(0xFFF59E0B)
-val AccentDark = Color(0xFFD97706)
-val AccentSoft = Color(0xFFFEF3C7)
+val Accent = Color(0xFF137262)
+val AccentDark = Color(0xFF0E5A4D)
+val AccentSoft = Color(0xFFD7EDE8)
 
 val White = Color(0xFFFFFFFF)
-val Background = Color(0xFFF8FAFC)
+val Background = Color(0xFFF4F8FB)
 val Surface = Color(0xFFFFFFFF)
-val SurfaceSecondary = Color(0xFFF1F5F9)
-val Outline = Color(0xFFE2E8F0)
-val OutlineStrong = Color(0xFFCBD5E1)
+val SurfaceSecondary = Color(0xFFF4F8FB)
+val Outline = Color(0xFFD5E2EC)
+val OutlineStrong = Color(0xFFB7CBD9)
 
-val OnSurface = Color(0xFF0F172A)
-val OnSurfaceSecondary = Color(0xFF475569)
-val OnSurfaceMuted = Color(0xFF64748B)
-val OnSurfaceFaint = Color(0xFF94A3B8)
+val OnSurface = Color(0xFF186195)
+val OnSurfaceSecondary = Color(0xFF4A6F8A)
+val OnSurfaceMuted = Color(0xFF5F8199)
+val OnSurfaceFaint = Color(0xFF7A97AD)
 
-val Success = Color(0xFF16A34A)
+val Success = Color(0xFF137262)
 val Error = Color(0xFFDC2626)
-val Warning = Color(0xFFD97706)
+val Warning = Color(0xFFC27803)
 val BadgeRed = Color(0xFFDC2626)
 
 val OnPrimary = Color(0xFFFFFFFF)

@@ -5,7 +5,9 @@ import { notFound } from "next/navigation";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Price } from "@/components/ui/price";
 import { ProductActions } from "@/components/product/product-actions";
+import { ProductContentSections } from "@/components/product/product-content-sections";
 import { RelatedProductsSection } from "@/components/product/related-products";
+import { SafeProductHtml } from "@/components/product/safe-product-html";
 import { catalogService } from "@/services/catalog.service";
 import type { ProductDetail } from "@/types/api";
 
@@ -165,35 +167,22 @@ export default async function ProductDetailPage({ params }: Props) {
               </p>
             </div>
           ) : null}
-          {product.attributes.length > 0 ? (
-            <div className="mt-8">
-              <h2 className="font-semibold text-navy">Teknik özellikler</h2>
-              <dl className="mt-2 divide-y rounded border bg-white">
-                {product.attributes.map((attr) => (
-                  <div
-                    key={attr.id}
-                    className="grid grid-cols-2 gap-2 px-3 py-2 text-sm"
-                  >
-                    <dt className="text-slate-500">{attr.name}</dt>
-                    <dd>{attr.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          ) : null}
-          {product.compatibility.length > 0 ? (
-            <div className="mt-8">
-              <h2 className="font-semibold text-navy">Uyumluluk</h2>
-              <ul className="mt-2 space-y-1 text-sm">
-                {product.compatibility.map((item) => (
-                  <li key={item.id}>
-                    {item.manufacturer} {item.model}
-                    {item.modelYear ? ` (${item.modelYear})` : ""}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          <ProductContentSections
+            attributes={product.attributes}
+            compatibility={product.compatibility}
+            technicalHtml={product.technicalHtml}
+            compatibilityHtml={product.compatibilityHtml}
+            technicalRich={
+              product.technicalHtml ? (
+                <SafeProductHtml html={product.technicalHtml} />
+              ) : null
+            }
+            compatibilityRich={
+              product.compatibilityHtml ? (
+                <SafeProductHtml html={product.compatibilityHtml} />
+              ) : null
+            }
+          />
         </div>
       </div>
       <RelatedProductsSection slug={product.slug} />

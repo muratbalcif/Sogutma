@@ -32,6 +32,7 @@ import {
   ReorderImagesDto,
   UpdateProductDto,
 } from './dto/product.dto';
+import { sanitizeProductHtml } from './product-html.sanitize';
 
 const productListInclude = {
   brand: true,
@@ -135,7 +136,35 @@ export class ProductsService {
         modelYear: item.modelYear,
         notes: item.notes,
       })),
+      technicalHtml: product.technicalHtml ?? null,
+      compatibilityHtml: product.compatibilityHtml ?? null,
     };
+  }
+
+  private sanitizeHtmlFields(dto: {
+    technicalHtml?: string | null;
+    compatibilityHtml?: string | null;
+  }): {
+    technicalHtml?: string | null;
+    compatibilityHtml?: string | null;
+  } {
+    try {
+      const result: {
+        technicalHtml?: string | null;
+        compatibilityHtml?: string | null;
+      } = {};
+      if (dto.technicalHtml !== undefined) {
+        result.technicalHtml = sanitizeProductHtml(dto.technicalHtml);
+      }
+      if (dto.compatibilityHtml !== undefined) {
+        result.compatibilityHtml = sanitizeProductHtml(dto.compatibilityHtml);
+      }
+      return result;
+    } catch (err) {
+      throw new BadRequestException(
+        err instanceof Error ? err.message : 'Invalid HTML content',
+      );
+    }
   }
 
   private toImageResponse(image: {
@@ -356,6 +385,7 @@ export class ProductsService {
     await this.ensureUniqueFields(dto.sku, dto.slug, dto.barcode);
     await this.ensureBrandAndCategory(dto.brandId, dto.categoryId);
     this.ensureSinglePrimaryImage(dto.images);
+    const htmlFields = this.sanitizeHtmlFields(dto);
 
     const product = await this.prisma.$transaction(async (tx) => {
       const created = await tx.product.create({
@@ -367,6 +397,8 @@ export class ProductsService {
           description: dto.description,
           metaTitle: dto.metaTitle,
           metaDescription: dto.metaDescription,
+          technicalHtml: htmlFields.technicalHtml,
+          compatibilityHtml: htmlFields.compatibilityHtml,
           brandId: dto.brandId,
           categoryId: dto.categoryId,
           vatRate: new Prisma.Decimal(dto.vatRate),
@@ -460,6 +492,7 @@ export class ProductsService {
     if (dto.images) {
       this.ensureSinglePrimaryImage(dto.images);
     }
+    const htmlFields = this.sanitizeHtmlFields(dto);
 
     const product = await this.prisma.$transaction(async (tx) => {
       if (dto.images) {
@@ -482,6 +515,12 @@ export class ProductsService {
           description: dto.description,
           metaTitle: dto.metaTitle,
           metaDescription: dto.metaDescription,
+          ...(htmlFields.technicalHtml !== undefined
+            ? { technicalHtml: htmlFields.technicalHtml }
+            : {}),
+          ...(htmlFields.compatibilityHtml !== undefined
+            ? { compatibilityHtml: htmlFields.compatibilityHtml }
+            : {}),
           brandId: dto.brandId,
           categoryId: dto.categoryId,
           vatRate:

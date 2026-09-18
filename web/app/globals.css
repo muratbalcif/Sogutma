@@ -1,43 +1,90 @@
 @import "tailwindcss";
 
 :root {
-  /* Brand tokens — shared visual language with Android */
-  --primary: #0f766e;
-  --primary-dark: #115e59;
-  --primary-light: #ccfbf1;
-  --accent: #f59e0b;
-  --accent-dark: #d97706;
-  --background: #f8fafc;
+  /* =========================================================
+     Furkan Soğutma Design System
+     60-30-10 palette — shared with Android
+     ========================================================= */
+
+  /* Primary — 60% */
+  --primary: #186195;
+  --primary-dark: #124a73;
+  --primary-light: #d6e6f2;
+  --primary-soft: #eaf2f8;
+
+  /* Accent — 10% */
+  --accent: #169580;
+  --accent-dark: #0e5a4d;
+  --accent-soft: #d7ede8;
+
+  /* Surfaces / Background — 30% */
+  --white: #ffffff;
+  --background: #fcfcfcd0;
   --surface: #ffffff;
-  --surface-secondary: #f1f5f9;
-  --border: #e2e8f0;
-  --foreground: #0f172a;
-  --text-secondary: #475569;
-  --muted: #94a3b8;
-  --success: #16a34a;
+  --surface-secondary: #f4f8fb;
+
+  /* Borders */
+  --border: #d5e2ec;
+  --border-strong: #b7cbd9;
+
+  /* Text */
+  --foreground: #186195;
+  --text-secondary: #4a6f8a;
+  --muted: #5f8199;
+  --text-faint: #7a97ad;
+
+  /* Semantic */
+  --success: #137262;
   --error: #dc2626;
-  --warning: #d97706;
-  /* Legacy aliases used across the storefront */
+  --warning: #c27803;
+  --badge-red: #dc2626;
+
+  /* Content on colored backgrounds */
+  --on-primary: #ffffff;
+  --on-accent: #ffffff;
+
+  /* Legacy aliases */
   --navy: var(--primary);
+  --navy-dark: var(--primary-dark);
 }
 
 @theme inline {
+  /* Colors */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
   --color-primary: var(--primary);
   --color-primary-dark: var(--primary-dark);
   --color-primary-light: var(--primary-light);
+  --color-primary-soft: var(--primary-soft);
+
   --color-accent: var(--accent);
   --color-accent-dark: var(--accent-dark);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-white: var(--white);
+
   --color-surface: var(--surface);
   --color-surface-secondary: var(--surface-secondary);
+
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
   --color-text-secondary: var(--text-secondary);
   --color-muted: var(--muted);
+  --color-text-faint: var(--text-faint);
+
   --color-success: var(--success);
   --color-error: var(--error);
   --color-warning: var(--warning);
+  --color-badge-red: var(--badge-red);
+
+  --color-on-primary: var(--on-primary);
+  --color-on-accent: var(--on-accent);
+
   --color-navy: var(--navy);
+
+  /* Typography */
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
 }

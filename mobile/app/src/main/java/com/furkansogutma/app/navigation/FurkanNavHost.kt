@@ -46,33 +46,33 @@ import com.furkansogutma.core.navigation.DeepLinks
 import com.furkansogutma.domain.auth.AuthRepository
 import com.furkansogutma.domain.auth.AuthState
 import com.furkansogutma.domain.cart.CartBadgeStore
-import com.furkansogutma.feature.account.AccountRoute
-import com.furkansogutma.feature.account.AddressFormRoute
-import com.furkansogutma.feature.account.AddressesRoute
-import com.furkansogutma.feature.account.AlertsRoute
-import com.furkansogutma.feature.account.BankTransfersRoute
-import com.furkansogutma.feature.account.CurrentAccountRoute
-import com.furkansogutma.feature.account.FavoritesRoute
-import com.furkansogutma.feature.account.LegalDocumentRoute
-import com.furkansogutma.feature.account.NotificationsRoute
-import com.furkansogutma.feature.account.OrderDetailRoute
-import com.furkansogutma.feature.account.OrdersRoute
-import com.furkansogutma.feature.account.ProfileRoute
-import com.furkansogutma.feature.account.SettingsRoute
-import com.furkansogutma.feature.auth.ForgotPasswordRoute
-import com.furkansogutma.feature.auth.LoginRoute
-import com.furkansogutma.feature.auth.RegisterRoute
-import com.furkansogutma.feature.campaign.CampaignDetailRoute
-import com.furkansogutma.feature.campaign.CampaignListRoute
-import com.furkansogutma.feature.cart.CartRoute
-import com.furkansogutma.feature.category.CategoryRoute
-import com.furkansogutma.feature.checkout.CheckoutRoute
-import com.furkansogutma.feature.checkout.OrderSuccessRoute
-import com.furkansogutma.feature.home.HomeRoute
-import com.furkansogutma.feature.product.ProductDetailRoute
-import com.furkansogutma.feature.product.ProductListRoute
-import com.furkansogutma.feature.search.SearchRoute
-import com.furkansogutma.feature.splash.SplashRoute
+import com.furkansogutma.app.feature.account.AccountRoute
+import com.furkansogutma.app.feature.account.AddressFormRoute
+import com.furkansogutma.app.feature.account.AddressesRoute
+import com.furkansogutma.app.feature.account.AlertsRoute
+import com.furkansogutma.app.feature.account.BankTransfersRoute
+import com.furkansogutma.app.feature.account.CurrentAccountRoute
+import com.furkansogutma.app.feature.account.FavoritesRoute
+import com.furkansogutma.app.feature.account.LegalDocumentRoute
+import com.furkansogutma.app.feature.account.NotificationsRoute
+import com.furkansogutma.app.feature.account.OrderDetailRoute
+import com.furkansogutma.app.feature.account.OrdersRoute
+import com.furkansogutma.app.feature.account.ProfileRoute
+import com.furkansogutma.app.feature.account.SettingsRoute
+import com.furkansogutma.app.feature.auth.ForgotPasswordRoute
+import com.furkansogutma.app.feature.auth.LoginRoute
+import com.furkansogutma.app.feature.auth.RegisterRoute
+import com.furkansogutma.app.feature.campaign.CampaignDetailRoute
+import com.furkansogutma.app.feature.campaign.CampaignListRoute
+import com.furkansogutma.app.feature.cart.CartRoute
+import com.furkansogutma.app.feature.category.CategoryRoute
+import com.furkansogutma.app.feature.checkout.CheckoutRoute
+import com.furkansogutma.app.feature.checkout.OrderSuccessRoute
+import com.furkansogutma.app.feature.home.HomeRoute
+import com.furkansogutma.app.feature.product.ProductDetailRoute
+import com.furkansogutma.app.feature.product.ProductListRoute
+import com.furkansogutma.app.feature.search.SearchRoute
+import com.furkansogutma.app.feature.splash.SplashRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
@@ -242,6 +242,11 @@ fun FurkanNavHost(
                         navController.navigate(AppRoute.Cart.route) { launchSingleTop = true }
                     },
                     onSeeAllProducts = { navController.navigate(AppRoutes.productList(it)) },
+                    onSeeAllCategories = {
+                        navController.navigate(AppRoute.Categories.route) {
+                            launchSingleTop = true
+                        }
+                    },
                     onSeeAllCampaigns = { navController.navigate(AppRoute.Campaigns.route) },
                 )
             }

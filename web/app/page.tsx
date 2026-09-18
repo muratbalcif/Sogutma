@@ -51,7 +51,7 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-14 md:space-y-16">
-      <section className="relative overflow-hidden rounded-2xl bg-primary text-white shadow-[0_16px_40px_rgba(15,118,110,0.18)]">
+      <section className="relative overflow-hidden rounded-2xl bg-primary text-white shadow-[0_16px_40px_rgba(24,97,149,0.22)]">
         {hero ? (
           <div className="grid md:grid-cols-2">
             <div className="relative min-h-[300px] md:min-h-[360px]">
@@ -109,17 +109,32 @@ export default async function HomePage() {
       </section>
 
       <section>
-        <SectionHeader title="Kategoriler" href="/products" />
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-          {categories.slice(0, 8).map((cat) => (
-            <Link
-              key={cat.id}
-              href={`/categories/${cat.slug}`}
-              className="rounded-2xl border border-border bg-surface px-4 py-5 text-sm font-semibold text-foreground shadow-[0_4px_16px_rgba(15,23,42,0.03)] transition hover:border-primary/30 hover:bg-primary-light/40 hover:text-primary-dark"
-            >
-              {cat.name}
-            </Link>
-          ))}
+        <SectionHeader title="Kategoriler" href="/categories" />
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+          {categories.slice(0, 8).map((cat) => {
+            const label = cat.name?.trim() || cat.slug;
+            return (
+              <Link
+                key={cat.id}
+                href={`/categories/${cat.slug}`}
+                className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface transition hover:-translate-y-0.5 hover:border-primary hover:shadow-[0_12px_28px_rgba(15,118,110,0.1)]"
+              >
+                <div className="flex aspect-[16/10] items-center justify-center bg-surface-secondary">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-light text-lg font-bold text-primary-dark">
+                    {label.slice(0, 1).toLocaleUpperCase("tr-TR")}
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-col gap-1 p-4">
+                  <span className="line-clamp-2 text-[15px] font-semibold text-foreground">
+                    {label}
+                  </span>
+                  <span className="text-sm font-semibold text-primary">
+                    Klimayı keşfet →
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </section>
 

@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.cart
+package com.furkansogutma.app.feature.cart
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row

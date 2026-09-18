@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.account
+package com.furkansogutma.app.feature.account
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

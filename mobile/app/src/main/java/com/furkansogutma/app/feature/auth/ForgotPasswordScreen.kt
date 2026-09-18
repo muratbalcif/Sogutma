@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.auth
+package com.furkansogutma.app.feature.auth
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer

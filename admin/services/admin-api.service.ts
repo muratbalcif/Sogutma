@@ -34,6 +34,8 @@ export type AdminProduct = {
     modelYear: number | null;
     notes: string | null;
   }>;
+  technicalHtml?: string | null;
+  compatibilityHtml?: string | null;
   price?: { amount: string; type: string; currency: string } | null;
   stock?: {
     quantity: number;

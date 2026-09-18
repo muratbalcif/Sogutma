@@ -159,7 +159,7 @@ export default async function OrderDetailPage({ params }: Props) {
               href={order.shipping.trackingUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-4 inline-flex rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
+              className="mt-4 inline-flex rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-dark"
             >
               Kargoyu Takip Et
             </a>

@@ -108,6 +108,8 @@ describe('ProductsService', () => {
       description: 'desc',
       metaTitle: null,
       metaDescription: null,
+      technicalHtml: null,
+      compatibilityHtml: null,
       brandId: brand.id,
       categoryId: category.id,
       vatRate: new Prisma.Decimal(20),
@@ -131,6 +133,8 @@ describe('ProductsService', () => {
       description: 'desc',
       metaTitle: null,
       metaDescription: null,
+      technicalHtml: null,
+      compatibilityHtml: null,
       brandId: brand.id,
       categoryId: category.id,
       vatRate: new Prisma.Decimal(20),
@@ -164,7 +168,64 @@ describe('ProductsService', () => {
 
     expect(result.attributes[0].value).toBe('R32');
     expect(result.vatRate).toBe('20.00');
+    expect(result.technicalHtml).toBeNull();
+    expect(result.compatibilityHtml).toBeNull();
     expect(prisma.inventory.create).toHaveBeenCalled();
+  });
+
+  it('sanitizes technicalHtml on create', async () => {
+    prisma.product.findFirst.mockResolvedValue(null);
+    prisma.brand.findUnique.mockResolvedValue(brand);
+    prisma.category.findUnique.mockResolvedValue(category);
+    const created = {
+      id: 'p1',
+      sku: 'SKU-2',
+      barcode: null,
+      name: 'Klima',
+      slug: 'klima-2',
+      description: null,
+      metaTitle: null,
+      metaDescription: null,
+      technicalHtml: '<p>OK</p>',
+      compatibilityHtml: null,
+      brandId: brand.id,
+      categoryId: category.id,
+      vatRate: new Prisma.Decimal(20),
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      brand,
+      category,
+      images: [],
+      attributes: [],
+      compatibility: [],
+      inventory: {
+        id: 'inv1',
+        productId: 'p1',
+        quantity: 0,
+        reservedQuantity: 0,
+        minimumQuantity: 0,
+      },
+    };
+    prisma.product.create.mockImplementation(async (args: { data: { technicalHtml?: string | null } }) => {
+      expect(args.data.technicalHtml).toBe('<p>OK</p>');
+      expect(args.data.technicalHtml).not.toContain('script');
+      return created;
+    });
+    prisma.inventory.create.mockResolvedValue({});
+    prisma.product.findUniqueOrThrow.mockResolvedValue(created);
+
+    const result = await service.create({
+      sku: 'SKU-2',
+      name: 'Klima',
+      slug: 'klima-2',
+      brandId: brand.id,
+      categoryId: category.id,
+      vatRate: 20,
+      technicalHtml: '<p>OK</p><script>alert(1)</script>',
+    });
+
+    expect(result.technicalHtml).toBe('<p>OK</p>');
   });
 
   it('rejects duplicate SKU', async () => {

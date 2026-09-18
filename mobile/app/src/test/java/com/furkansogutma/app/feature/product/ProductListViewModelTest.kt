@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.product
+package com.furkansogutma.app.feature.product
 
 import androidx.lifecycle.SavedStateHandle
 import com.furkansogutma.core.common.result.Result

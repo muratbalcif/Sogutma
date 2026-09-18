@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.auth
+package com.furkansogutma.app.feature.auth
 
 import app.cash.turbine.test
 import com.furkansogutma.core.common.result.Result

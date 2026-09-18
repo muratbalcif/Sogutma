@@ -194,7 +194,7 @@ export function NotificationsClient() {
                   <button
                     type="button"
                     className={`w-full rounded-lg border p-4 text-left transition hover:border-accent/40 ${
-                      unread ? "bg-cyan-50/40" : "bg-white"
+                      unread ? "bg-primary-soft/60" : "bg-white"
                     }`}
                     onClick={() => void handleClick(item)}
                   >
@@ -203,7 +203,7 @@ export function NotificationsClient() {
                 ) : (
                   <div
                     className={`rounded-lg border p-4 ${
-                      unread ? "bg-cyan-50/40" : "bg-white"
+                      unread ? "bg-primary-soft/60" : "bg-white"
                     }`}
                   >
                     {content}
@@ -238,7 +238,7 @@ export function NotificationsClient() {
                 <span className="text-sm">{label}</span>
                 <input
                   type="checkbox"
-                  className="h-4 w-4 accent-cyan-700"
+                  className="h-4 w-4 accent-accent"
                   checked={prefs.data[key]}
                   disabled={updatePrefs.isPending}
                   onChange={(e) =>

@@ -19,7 +19,8 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https: blob:",
       "font-src 'self' data:",
-      "connect-src 'self' https: http://localhost:* http://127.0.0.1:*",
+      // Dev HMR + LAN access (external browser / phone on same Wi‑Fi)
+      "connect-src 'self' https: http://localhost:* http://127.0.0.1:* http://192.168.*:* ws: wss:",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -49,7 +50,13 @@ const nextConfig: NextConfig = {
     ],
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      // Do not attach page CSP to Turbopack/static assets — can break CSS in some browsers
+      {
+        source: "/((?!_next/static|_next/image|favicon.ico).*)",
+        headers: securityHeaders,
+      },
+    ];
   },
 };
 

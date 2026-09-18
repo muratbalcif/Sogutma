@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.cart
+package com.furkansogutma.app.feature.cart
 
 import com.furkansogutma.core.common.result.Result
 import com.furkansogutma.domain.cart.Cart

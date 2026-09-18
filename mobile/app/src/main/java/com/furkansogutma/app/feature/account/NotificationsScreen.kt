@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.account
+package com.furkansogutma.app.feature.account
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column

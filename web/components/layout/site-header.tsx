@@ -27,10 +27,10 @@ function CategoryBar({ categories }: { categories: CategoryNode[] }) {
     <div className="bg-primary">
       <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 py-2.5">
         <Link
-          href="/products"
+          href="/categories"
           className={clsx(
             "whitespace-nowrap rounded-lg px-3.5 py-2 text-[15px] font-semibold transition",
-            pathname.startsWith("/products")
+            pathname.startsWith("/categories")
               ? "bg-primary-light text-primary-dark"
               : "text-white/90 hover:bg-white/10 hover:text-white",
           )}

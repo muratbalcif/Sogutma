@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.home
+package com.furkansogutma.app.feature.home
 
 import com.furkansogutma.core.common.result.Result
 import com.furkansogutma.domain.auth.AuthRepository

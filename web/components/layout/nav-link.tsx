@@ -30,7 +30,7 @@ export function NavLink({
         "rounded-xl px-3.5 py-2 text-[15px] font-semibold transition",
         active
           ? "bg-primary-light text-primary-dark"
-          : "text-text-secondary hover:bg-[#F0FDFA] hover:text-primary",
+          : "text-text-secondary hover:bg-primary-soft hover:text-primary",
         className,
       )}
       aria-current={active ? "page" : undefined}

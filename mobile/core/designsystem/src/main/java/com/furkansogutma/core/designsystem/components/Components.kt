@@ -134,6 +134,45 @@ fun FurkanOutlinedButton(
     }
 }
 
+/** Compact filter/sort chip for list toolbars (mobile-native height). */
+@Composable
+fun FurkanToolbarChip(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    leadingIcon: ImageVector? = null,
+) {
+    Row(
+        modifier = modifier
+            .height(40.dp)
+            .clip(MaterialTheme.shapes.small)
+            .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = FurkanSpacing.sm)
+            .semantics { contentDescription = text },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        if (leadingIcon != null) {
+            Icon(
+                leadingIcon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(FurkanSpacing.xxs))
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+    }
+}
+
 @Composable
 fun FurkanAddToCartButton(
     onClick: () -> Unit,

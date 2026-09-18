@@ -5,18 +5,33 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
+import { RichHtmlEditor } from "@/components/catalog/rich-html-editor";
 import { usePermissions } from "@/hooks/use-permissions";
 import { catalogService, inventoryService } from "@/services/admin-api.service";
 
 const TABS = [
   { id: "general", label: "Genel" },
   { id: "images", label: "Görseller" },
-  { id: "attributes", label: "Özellikler" },
+  { id: "attributes", label: "Teknik Özellikler" },
   { id: "compatibility", label: "Uyumluluk" },
   { id: "pricing", label: "Fiyatlar" },
   { id: "inventory", label: "Stok" },
   { id: "seo", label: "SEO" },
 ] as const;
+
+/** Suggested attribute names (not hardcoded fields — fill name when clicked). */
+const ATTRIBUTE_SUGGESTIONS = [
+  "Soğutma kapasitesi",
+  "Isıtma kapasitesi",
+  "Enerji sınıfı",
+  "Gaz tipi",
+  "Ses seviyesi",
+  "Enerji tüketimi",
+  "İç ünite boyutları",
+  "Dış ünite boyutları",
+  "Soğutucu akışkan",
+  "Çalışma aralığı",
+];
 
 type TabId = (typeof TABS)[number]["id"];
 
@@ -63,6 +78,8 @@ export default function ProductDetailPage() {
     slug: "",
     metaTitle: "",
     metaDescription: "",
+    technicalHtml: "",
+    compatibilityHtml: "",
     attributes: [] as Array<{ name: string; value: string }>,
     compatibility: [] as Array<{
       manufacturer: string;
@@ -86,6 +103,8 @@ export default function ProductDetailPage() {
       slug: product.slug,
       metaTitle: product.metaTitle ?? "",
       metaDescription: product.metaDescription ?? "",
+      technicalHtml: product.technicalHtml ?? "",
+      compatibilityHtml: product.compatibilityHtml ?? "",
       attributes: (product.attributes ?? []).map((a) => ({
         name: a.name,
         value: a.value,
@@ -124,6 +143,8 @@ export default function ProductDetailPage() {
         slug: form.slug,
         metaTitle: form.metaTitle || null,
         metaDescription: form.metaDescription || null,
+        technicalHtml: form.technicalHtml || null,
+        compatibilityHtml: form.compatibilityHtml || null,
         attributes: form.attributes.filter((a) => a.name && a.value),
         compatibility: form.compatibility
           .filter((c) => c.manufacturer && c.model)
@@ -492,139 +513,203 @@ export default function ProductDetailPage() {
               )}
 
               {tab === "attributes" && (
-                <div className="space-y-3">
-                  {form.attributes.map((attr, index) => (
-                    <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                      <input
-                        className="rounded-md border px-3 py-2 text-sm"
-                        placeholder="Özellik adı"
-                        value={attr.name}
-                        onChange={(e) => {
-                          const next = [...form.attributes];
-                          next[index] = { ...attr, name: e.target.value };
-                          setForm((f) => ({ ...f, attributes: next }));
-                          setDirty(true);
-                        }}
-                      />
-                      <input
-                        className="rounded-md border px-3 py-2 text-sm"
-                        placeholder="Değer"
-                        value={attr.value}
-                        onChange={(e) => {
-                          const next = [...form.attributes];
-                          next[index] = { ...attr, value: e.target.value };
-                          setForm((f) => ({ ...f, attributes: next }));
-                          setDirty(true);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="text-sm text-red-700"
-                        onClick={() => {
-                          setForm((f) => ({
-                            ...f,
-                            attributes: f.attributes.filter((_, i) => i !== index),
-                          }));
-                          setDirty(true);
-                        }}
-                      >
-                        Sil
-                      </button>
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-800">
+                        Yapısal özellikler
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Mevcut ürün attribute sistemi — önerilen isimleri
+                        kullanabilir veya özel alan ekleyebilirsiniz.
+                      </p>
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    className="rounded-md border px-3 py-2 text-sm"
-                    onClick={() => {
-                      setForm((f) => ({
-                        ...f,
-                        attributes: [...f.attributes, { name: "", value: "" }],
-                      }));
-                      setDirty(true);
-                    }}
-                  >
-                    Özellik ekle
-                  </button>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ATTRIBUTE_SUGGESTIONS.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs text-teal-900 hover:bg-teal-100"
+                          onClick={() => {
+                            setForm((f) => ({
+                              ...f,
+                              attributes: [...f.attributes, { name, value: "" }],
+                            }));
+                            setDirty(true);
+                          }}
+                        >
+                          + {name}
+                        </button>
+                      ))}
+                    </div>
+                    {form.attributes.map((attr, index) => (
+                      <div
+                        key={index}
+                        className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                      >
+                        <input
+                          className="rounded-md border px-3 py-2 text-sm"
+                          placeholder="Özellik adı"
+                          value={attr.name}
+                          onChange={(e) => {
+                            const next = [...form.attributes];
+                            next[index] = { ...attr, name: e.target.value };
+                            setForm((f) => ({ ...f, attributes: next }));
+                            setDirty(true);
+                          }}
+                        />
+                        <input
+                          className="rounded-md border px-3 py-2 text-sm"
+                          placeholder="Değer"
+                          value={attr.value}
+                          onChange={(e) => {
+                            const next = [...form.attributes];
+                            next[index] = { ...attr, value: e.target.value };
+                            setForm((f) => ({ ...f, attributes: next }));
+                            setDirty(true);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="text-sm text-red-700"
+                          onClick={() => {
+                            setForm((f) => ({
+                              ...f,
+                              attributes: f.attributes.filter((_, i) => i !== index),
+                            }));
+                            setDirty(true);
+                          }}
+                        >
+                          Sil
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="rounded-md border px-3 py-2 text-sm"
+                      onClick={() => {
+                        setForm((f) => ({
+                          ...f,
+                          attributes: [...f.attributes, { name: "", value: "" }],
+                        }));
+                        setDirty(true);
+                      }}
+                    >
+                      Özellik ekle
+                    </button>
+                  </div>
+                  <div className="border-t border-slate-100 pt-4">
+                    <RichHtmlEditor
+                      label="Zengin teknik içerik (HTML)"
+                      value={form.technicalHtml}
+                      onChange={(html) => {
+                        setForm((f) => ({ ...f, technicalHtml: html }));
+                        setDirty(true);
+                      }}
+                      placeholder="Tablo, liste ve başlıklarla teknik açıklama…"
+                    />
+                  </div>
                 </div>
               )}
 
               {tab === "compatibility" && (
-                <div className="space-y-3">
-                  {form.compatibility.map((row, index) => (
-                    <div
-                      key={index}
-                      className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2"
-                    >
-                      <input
-                        className="rounded-md border px-3 py-2 text-sm"
-                        placeholder="Marka"
-                        value={row.manufacturer}
-                        onChange={(e) => {
-                          const next = [...form.compatibility];
-                          next[index] = {
-                            ...row,
-                            manufacturer: e.target.value,
-                          };
-                          setForm((f) => ({ ...f, compatibility: next }));
-                          setDirty(true);
-                        }}
-                      />
-                      <input
-                        className="rounded-md border px-3 py-2 text-sm"
-                        placeholder="Model"
-                        value={row.model}
-                        onChange={(e) => {
-                          const next = [...form.compatibility];
-                          next[index] = { ...row, model: e.target.value };
-                          setForm((f) => ({ ...f, compatibility: next }));
-                          setDirty(true);
-                        }}
-                      />
-                      <input
-                        className="rounded-md border px-3 py-2 text-sm"
-                        placeholder="Model yılı"
-                        value={row.modelYear}
-                        onChange={(e) => {
-                          const next = [...form.compatibility];
-                          next[index] = { ...row, modelYear: e.target.value };
-                          setForm((f) => ({ ...f, compatibility: next }));
-                          setDirty(true);
-                        }}
-                      />
-                      <input
-                        className="rounded-md border px-3 py-2 text-sm"
-                        placeholder="Açıklama"
-                        value={row.notes}
-                        onChange={(e) => {
-                          const next = [...form.compatibility];
-                          next[index] = { ...row, notes: e.target.value };
-                          setForm((f) => ({ ...f, compatibility: next }));
-                          setDirty(true);
-                        }}
-                      />
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-800">
+                        Uyumlu model / ürün listesi
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Mevcut uyumluluk satırları — marka, model ve not.
+                      </p>
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    className="rounded-md border px-3 py-2 text-sm"
-                    onClick={() => {
-                      setForm((f) => ({
-                        ...f,
-                        compatibility: [
-                          ...f.compatibility,
-                          {
-                            manufacturer: "",
-                            model: "",
-                            modelYear: "",
-                            notes: "",
-                          },
-                        ],
-                      }));
-                      setDirty(true);
-                    }}
-                  >
-                    Uyumluluk ekle
-                  </button>
+                    {form.compatibility.map((row, index) => (
+                      <div
+                        key={index}
+                        className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2"
+                      >
+                        <input
+                          className="rounded-md border px-3 py-2 text-sm"
+                          placeholder="Marka"
+                          value={row.manufacturer}
+                          onChange={(e) => {
+                            const next = [...form.compatibility];
+                            next[index] = {
+                              ...row,
+                              manufacturer: e.target.value,
+                            };
+                            setForm((f) => ({ ...f, compatibility: next }));
+                            setDirty(true);
+                          }}
+                        />
+                        <input
+                          className="rounded-md border px-3 py-2 text-sm"
+                          placeholder="Model"
+                          value={row.model}
+                          onChange={(e) => {
+                            const next = [...form.compatibility];
+                            next[index] = { ...row, model: e.target.value };
+                            setForm((f) => ({ ...f, compatibility: next }));
+                            setDirty(true);
+                          }}
+                        />
+                        <input
+                          className="rounded-md border px-3 py-2 text-sm"
+                          placeholder="Model yılı"
+                          value={row.modelYear}
+                          onChange={(e) => {
+                            const next = [...form.compatibility];
+                            next[index] = { ...row, modelYear: e.target.value };
+                            setForm((f) => ({ ...f, compatibility: next }));
+                            setDirty(true);
+                          }}
+                        />
+                        <input
+                          className="rounded-md border px-3 py-2 text-sm"
+                          placeholder="Uyumluluk notu"
+                          value={row.notes}
+                          onChange={(e) => {
+                            const next = [...form.compatibility];
+                            next[index] = { ...row, notes: e.target.value };
+                            setForm((f) => ({ ...f, compatibility: next }));
+                            setDirty(true);
+                          }}
+                        />
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="rounded-md border px-3 py-2 text-sm"
+                      onClick={() => {
+                        setForm((f) => ({
+                          ...f,
+                          compatibility: [
+                            ...f.compatibility,
+                            {
+                              manufacturer: "",
+                              model: "",
+                              modelYear: "",
+                              notes: "",
+                            },
+                          ],
+                        }));
+                        setDirty(true);
+                      }}
+                    >
+                      Uyumluluk ekle
+                    </button>
+                  </div>
+                  <div className="border-t border-slate-100 pt-4">
+                    <RichHtmlEditor
+                      label="Uyumluluk zengin içerik (HTML)"
+                      value={form.compatibilityHtml}
+                      onChange={(html) => {
+                        setForm((f) => ({ ...f, compatibilityHtml: html }));
+                        setDirty(true);
+                      }}
+                      placeholder="Uyumluluk notları, tablolar, ek açıklamalar…"
+                    />
+                  </div>
                 </div>
               )}
 

@@ -37,6 +37,8 @@ export type ProductDetail = ProductListItem & {
     modelYear: number | null;
     notes: string | null;
   }>;
+  technicalHtml?: string | null;
+  compatibilityHtml?: string | null;
 };
 
 export type Paginated<T> = {
@@ -48,6 +50,7 @@ export type CategoryNode = {
   id: string;
   name: string;
   slug: string;
+  image?: string | null;
   children?: CategoryNode[];
 };
 

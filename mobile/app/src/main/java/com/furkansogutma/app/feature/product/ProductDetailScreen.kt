@@ -1,8 +1,11 @@
-package com.furkansogutma.feature.product
+package com.furkansogutma.app.feature.product
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -30,6 +34,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -48,7 +53,12 @@ import com.furkansogutma.core.designsystem.components.FurkanProductCard
 import com.furkansogutma.core.designsystem.components.FurkanQtyStepper
 import com.furkansogutma.core.designsystem.components.FurkanStickyBottomBar
 import com.furkansogutma.core.designsystem.components.FurkanTopBar
+import com.furkansogutma.core.designsystem.components.SafeProductHtml
 import com.furkansogutma.core.designsystem.theme.FurkanSpacing
+import com.furkansogutma.core.designsystem.theme.Outline
+import com.furkansogutma.core.designsystem.theme.PrimaryLight
+import com.furkansogutma.core.designsystem.theme.Surface
+import com.furkansogutma.domain.product.Product
 
 @Composable
 fun ProductDetailRoute(
@@ -169,10 +179,8 @@ fun ProductDetailScreen(
             Spacer(Modifier.height(FurkanSpacing.sm))
             when (tab) {
                 0 -> Text(product.description.orEmpty().ifBlank { "Açıklama bulunmuyor." })
-                1 -> if (product.attributes.isEmpty()) Text("Teknik özellik bulunmuyor.")
-                else product.attributes.forEach { Text("${it.name}: ${it.value}") }
-                else -> if (product.compatibility.isEmpty()) Text("Uyumluluk bilgisi yok.")
-                else product.compatibility.forEach { Text("${it.manufacturer} ${it.model}") }
+                1 -> TechnicalSpecsContent(product)
+                else -> CompatibilityContent(product)
             }
             Spacer(Modifier.height(FurkanSpacing.lg))
             Text(
@@ -213,6 +221,93 @@ fun ProductDetailScreen(
                 }
             }
             Spacer(Modifier.height(FurkanSpacing.xxl))
+        }
+    }
+}
+
+@Composable
+private fun TechnicalSpecsContent(product: Product) {
+    val hasAttrs = product.attributes.isNotEmpty()
+    val hasHtml = !product.technicalHtml.isNullOrBlank()
+    if (!hasAttrs && !hasHtml) {
+        Text("Teknik özellik bulunmuyor.")
+        return
+    }
+    Column(Modifier.fillMaxWidth()) {
+        if (hasAttrs) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, Outline, RoundedCornerShape(12.dp)),
+            ) {
+                product.attributes.forEachIndexed { index, attr ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(if (index % 2 == 0) PrimaryLight.copy(alpha = 0.35f) else Surface)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                    ) {
+                        Text(
+                            attr.name,
+                            modifier = Modifier.weight(0.45f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            attr.value,
+                            modifier = Modifier.weight(0.55f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+            }
+        }
+        if (hasHtml) {
+            if (hasAttrs) Spacer(Modifier.height(FurkanSpacing.md))
+            SafeProductHtml(product.technicalHtml)
+        }
+    }
+}
+
+@Composable
+private fun CompatibilityContent(product: Product) {
+    val hasRows = product.compatibility.isNotEmpty()
+    val hasHtml = !product.compatibilityHtml.isNullOrBlank()
+    if (!hasRows && !hasHtml) {
+        Text("Uyumluluk bilgisi yok.")
+        return
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        product.compatibility.forEach { item ->
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, Outline, RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+            ) {
+                Text(
+                    buildString {
+                        append(item.manufacturer)
+                        append(' ')
+                        append(item.model)
+                        if (item.modelYear != null) append(" (${item.modelYear})")
+                    },
+                    fontWeight = FontWeight.Medium,
+                )
+                if (!item.notes.isNullOrBlank()) {
+                    Text(
+                        item.notes.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        if (hasHtml) {
+            SafeProductHtml(product.compatibilityHtml)
         }
     }
 }

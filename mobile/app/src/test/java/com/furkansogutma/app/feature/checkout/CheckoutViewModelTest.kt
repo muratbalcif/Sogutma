@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.checkout
+package com.furkansogutma.app.feature.checkout
 
 import com.furkansogutma.core.common.result.Result
 import com.furkansogutma.domain.account.AccountRepository

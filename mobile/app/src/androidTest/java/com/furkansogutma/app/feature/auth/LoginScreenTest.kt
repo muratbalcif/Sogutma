@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.auth
+package com.furkansogutma.app.feature.auth
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule

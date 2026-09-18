@@ -36,4 +36,5 @@ implementation(project(":core:common"))
     implementation(libs.androidx.compose.material.icons)
     implementation(libs.coil.compose)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    testImplementation(libs.junit)
 }

@@ -118,7 +118,7 @@ export default async function CampaignLandingPage({
             <Link
               key={product.id}
               href={`/products/${product.slug}`}
-              className="rounded-xl border bg-white p-4 transition hover:border-cyan-300"
+              className="rounded-xl border bg-white p-4 transition hover:border-accent/50"
             >
               <h3 className="font-medium text-navy">{product.name}</h3>
               {product.onCampaign ? (

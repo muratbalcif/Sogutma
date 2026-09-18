@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.splash
+package com.furkansogutma.app.feature.splash
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

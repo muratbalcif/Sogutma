@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.account
+package com.furkansogutma.app.feature.account
 
 import android.content.Intent
 import android.net.Uri

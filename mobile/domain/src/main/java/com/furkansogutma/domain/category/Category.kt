@@ -6,5 +6,6 @@ data class Category(
     val slug: String,
     val description: String?,
     val parentId: String?,
+    val image: String?,
     val children: List<Category>,
 )

@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.checkout
+package com.furkansogutma.app.feature.checkout
 
 import android.content.ClipData
 import android.content.ClipboardManager

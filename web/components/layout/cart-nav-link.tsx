@@ -42,7 +42,7 @@ export function CartNavLink({ className, onNavigate, compact }: Props) {
         "inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-[15px] font-semibold transition",
         count > 0
           ? "bg-primary-light text-primary-dark"
-          : "text-text-secondary hover:bg-[#F0FDFA] hover:text-primary",
+          : "text-text-secondary hover:bg-primary-soft hover:text-primary",
         className,
       )}
       aria-label={

@@ -1,4 +1,4 @@
-package com.furkansogutma.feature.home
+package com.furkansogutma.app.feature.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,6 +60,7 @@ fun HomeRoute(
     onSearchClick: () -> Unit,
     onCartClick: () -> Unit,
     onSeeAllProducts: (String?) -> Unit,
+    onSeeAllCategories: () -> Unit = {},
     onSeeAllCampaigns: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
@@ -78,6 +79,7 @@ fun HomeRoute(
             onSearchClick = onSearchClick,
             onCartClick = onCartClick,
             onSeeAllProducts = onSeeAllProducts,
+            onSeeAllCategories = onSeeAllCategories,
             onSeeAllCampaigns = onSeeAllCampaigns,
         )
     }
@@ -93,6 +95,7 @@ fun HomeScreen(
     onSearchClick: () -> Unit,
     onCartClick: () -> Unit,
     onSeeAllProducts: (String?) -> Unit,
+    onSeeAllCategories: () -> Unit = {},
     onSeeAllCampaigns: () -> Unit = {},
 ) {
     LazyColumn(
@@ -160,7 +163,7 @@ fun HomeScreen(
             }
         }
         item {
-            SectionHeader("Kategoriler", onSeeAll = { onSeeAllProducts(null) })
+            SectionHeader("Kategoriler", onSeeAll = onSeeAllCategories)
         }
         item {
             CategoryRow(
