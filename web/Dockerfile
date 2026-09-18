@@ -48,5 +48,5 @@ COPY --from=build /app/web/public ./web/public
 USER app
 EXPOSE 3002
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3002/ >/dev/null || exit 1
+  CMD wget -qO- http://127.0.0.1:3002/api/health >/dev/null || exit 1
 CMD ["node", "web/server.js"]

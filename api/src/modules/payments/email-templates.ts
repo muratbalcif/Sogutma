@@ -41,8 +41,8 @@ export function renderOrderEmailHtml(payload: OrderEmailPayload): string {
           ${action}
         </td></tr>
         <tr><td style="padding:16px 28px;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5">
-          <p style="margin:0">İletişim: ${escapeHtml(payload.supportEmail || 'destek@furkansogutma.com')}</p>
-          <p style="margin:4px 0 0">${escapeHtml(payload.websiteUrl || 'https://furkansogutma.com')}</p>
+          <p style="margin:0">İletişim: ${escapeHtml(payload.supportEmail || 'destek@furkansogutma.net')}</p>
+          <p style="margin:4px 0 0">${escapeHtml(payload.websiteUrl || 'https://furkansogutma.net')}</p>
         </td></tr>
       </table>
     </td></tr>

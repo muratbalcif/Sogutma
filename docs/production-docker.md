@@ -42,4 +42,6 @@ Postgres and Redis are internal-only (`furkansogutma_internal`). Put a reverse p
 
 - `DATABASE_URL` / `REDIS_URL` are overridden by compose to `postgres` / `redis` service hostnames.
 - Web/Admin `NEXT_PUBLIC_*` values are build-time args (rebuild images after changing them).
+- Web runtime `INTERNAL_API_BASE_URL` (default `http://api:3000/api/v1`) is used for SSR and BFF proxy fetches so they stay on the Docker network. Do not put this in `NEXT_PUBLIC_*`.
+- Web healthcheck hits `/api/health` (not `/`).
 - Do not run this stack at the same time as local `api/docker-compose.yml` (same container names).

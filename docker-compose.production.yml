@@ -105,14 +105,19 @@ services:
       NODE_ENV: production
       PORT: 3002
       HOSTNAME: 0.0.0.0
+      # Runtime-only (not NEXT_PUBLIC). SSR/BFF use Docker DNS — never hairpin public HTTPS.
+      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://api:3000/api/v1}
     expose:
       - '3002'
     ports:
       - '127.0.0.1:3102:3002'
+    depends_on:
+      api:
+        condition: service_healthy
     networks:
       - furkansogutma_internal
     healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3002/']
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3002/api/health']
       interval: 30s
       timeout: 5s
       retries: 3

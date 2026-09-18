@@ -47,8 +47,8 @@ Flavors: `dev`, `staging`, `production`
 
 ```properties
 API_BASE_URL_DEV=http://10.0.2.2:3000/api/v1
-API_BASE_URL_STAGING=https://staging-api.furkansogutma.com/api/v1
-API_BASE_URL_PRODUCTION=https://api.furkansogutma.com/api/v1
+API_BASE_URL_STAGING=https://staging-api.furkansogutma.net/api/v1
+API_BASE_URL_PRODUCTION=https://api.furkansogutma.net/api/v1
 ```
 
 Defaults:
@@ -56,8 +56,8 @@ Defaults:
 | Flavor | Default API base |
 |--------|------------------|
 | dev | `http://10.0.2.2:3000/api/v1` (emulator → host) |
-| staging | `https://staging-api.furkansogutma.com/api/v1` |
-| production | `https://api.furkansogutma.com/api/v1` |
+| staging | `https://staging-api.furkansogutma.net/api/v1` |
+| production | `https://api.furkansogutma.net/api/v1` |
 
 Do **not** commit secrets or `google-services.json`.
 

@@ -43,7 +43,7 @@ export default async function RootLayout({
   } catch {
     config = {
       siteName: "FurkanSoğutma",
-      supportEmail: "info@furkansogutma.com",
+      supportEmail: "info@furkansogutma.net",
       supportPhone: "",
       address: "",
       privacyUrl: "/gizlilik",

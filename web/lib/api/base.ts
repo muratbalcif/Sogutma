@@ -1,7 +1,4 @@
-const API_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  "http://localhost:3000/api/v1";
+import { getServerApiBaseUrl } from "@/lib/api/config";
 
 export class ApiError extends Error {
   status: number;
@@ -11,8 +8,9 @@ export class ApiError extends Error {
   }
 }
 
+/** Server-side API origin (internal in production Docker). */
 export function getApiUrl(): string {
-  return API_URL;
+  return getServerApiBaseUrl();
 }
 
 export async function apiFetch<T>(
@@ -20,7 +18,7 @@ export async function apiFetch<T>(
   init: RequestInit & { accessToken?: string | null } = {},
 ): Promise<T> {
   const { accessToken, headers, ...rest } = init;
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${getServerApiBaseUrl()}${path}`, {
     ...rest,
     headers: {
       Accept: "application/json",

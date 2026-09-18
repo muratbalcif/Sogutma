@@ -75,7 +75,7 @@ android {
             buildConfigField(
                 "String",
                 "API_BASE_URL",
-                "\"${apiUrl("API_BASE_URL_STAGING", "https://staging-api.furkansogutma.com/api/v1")}\"",
+                "\"${apiUrl("API_BASE_URL_STAGING", "https://staging-api.furkansogutma.net/api/v1")}\"",
             )
             buildConfigField("String", "ENVIRONMENT", "\"staging\"")
         }
@@ -84,7 +84,7 @@ android {
             buildConfigField(
                 "String",
                 "API_BASE_URL",
-                "\"${apiUrl("API_BASE_URL_PRODUCTION", "https://api.furkansogutma.com/api/v1")}\"",
+                "\"${apiUrl("API_BASE_URL_PRODUCTION", "https://api.furkansogutma.net/api/v1")}\"",
             )
             buildConfigField("String", "ENVIRONMENT", "\"production\"")
         }

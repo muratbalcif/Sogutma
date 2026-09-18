@@ -88,7 +88,7 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
       this.config.get('SITE_SUPPORT_EMAIL', { infer: true }) || undefined;
     const webBase =
       this.config.get('CORS_ORIGINS', { infer: true })?.split(',')[0]?.trim() ||
-      'https://furkansogutma.com';
+      'https://furkansogutma.net';
     const actionUrl = `${webBase.replace(/\/$/, '')}/account/orders/${input.orderId}`;
     const html = renderOrderEmailHtml({
       customerName: input.customerName,

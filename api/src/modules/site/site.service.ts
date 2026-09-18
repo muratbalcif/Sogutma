@@ -36,7 +36,7 @@ Barındırma, bildirim ve operasyonel hizmet sağlayıcılarına; zorunlu haller
 Hesap süresi ve ilgili mevzuattaki ticari/mali saklama süreleri boyunca; sonrasında silinir, yok edilir veya anonimleştirilir.
 
 6. Haklarınız
-KVKK m.11 kapsamında erişim, düzeltme, silme, itiraz ve şikayet haklarınızı destek@furkansogutma.com üzerinden kullanabilirsiniz.
+KVKK m.11 kapsamında erişim, düzeltme, silme, itiraz ve şikayet haklarınızı destek@furkansogutma.net üzerinden kullanabilirsiniz.
 
 Bu metin yönetim panelinden güncellenebilir.`,
   },

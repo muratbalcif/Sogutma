@@ -38,7 +38,7 @@ export class SiteController {
         this.config.get('SITE_NAME', { infer: true }) ?? 'FurkanSoğutma',
       supportEmail:
         this.config.get('SITE_SUPPORT_EMAIL', { infer: true }) ??
-        'info@furkansogutma.com',
+        'info@furkansogutma.net',
       supportPhone:
         this.config.get('SITE_SUPPORT_PHONE', { infer: true }) ?? '',
       address: this.config.get('SITE_ADDRESS', { infer: true }) ?? '',
