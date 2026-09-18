@@ -6,7 +6,7 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY api/package.json ./api/
-RUN npm ci -w furkansogutma-api --include-workspace-root=false
+RUN npm ci -w furkansogutma-api --include-workspace-root=false --ignore-scripts
 
 FROM node:22-alpine AS build
 WORKDIR /app
