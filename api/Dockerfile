@@ -16,15 +16,6 @@ COPY package.json package-lock.json ./
 COPY api ./api
 WORKDIR /app/api
 RUN npx prisma generate
-RUN echo "=== PRISMA DEBUG ===" && \
-    echo "--- /app/api/node_modules ---" && \
-    ls -lah /app/api/node_modules 2>/dev/null || true && \
-    echo "--- .prisma locations ---" && \
-    find /app -type d -name ".prisma" -print 2>/dev/null || true && \
-    echo "--- @prisma locations ---" && \
-    find /app -type d -name "@prisma" -print 2>/dev/null || true && \
-    echo "--- generated prisma files ---" && \
-    find /app -path "*/node_modules/.prisma/*" -maxdepth 8 -print 2>/dev/null | head -100 || true
 RUN npm run build
 
 FROM node:22-alpine AS production
@@ -38,7 +29,8 @@ RUN npm ci -w furkansogutma-api --omit=dev --include-workspace-root=false --igno
   && npm cache clean --force
 COPY --from=build /app/api/dist ./api/dist
 COPY --from=build /app/api/prisma ./api/prisma
-COPY --from=build /app/api/node_modules/.prisma ./api/node_modules/.prisma
+# npm workspaces hoist @prisma/client to /app/node_modules; generate writes .prisma there
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 WORKDIR /app/api
 USER app
 EXPOSE 3000
