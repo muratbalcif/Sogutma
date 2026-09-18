@@ -10,21 +10,29 @@
 | 4 Product → KolayBi Product sync | Done |
 | 5 Sale → local Invoice → KolayBi draft | Done |
 | 6 e-Fatura / e-Arşiv formalize | **Done** |
-| 7+ PDF/UI / cancel e-document | Not started |
+| 7 Admin invoice ops | Done |
+| 8 Document retrieve + status sync | **Done** |
+| 9 Production hardening | **Done** (sandbox E2E blocked — no credentials) |
 
 Phase 6 formalizes a KolayBi **draft** into a GİB e-document (`uuid` / ETTN + `no`).
+Phase 8 retrieves PDF/XML via documented e-document/view and syncs uuid/serial from detail+list.
 
 ## Architecture
 
 ```
 Admin (JWT)
+  → GET  /admin/invoices                          (invoice.read)
+  → GET  /admin/invoices/:invoiceId               (invoice.read)
+  → GET  /admin/invoices/:invoiceId/pdf           (invoice.read)
+  → GET  /admin/invoices/:invoiceId/xml           (invoice.read)
+  → POST /admin/invoices/:invoiceId/sync          (invoice.read)
   → GET  /admin/invoices/provider/health          (invoice.read)
   → POST /admin/invoices/from-sale/:saleId        (invoice.create)
   → POST /admin/invoices/:invoiceId/formalize     (invoice.create)
   → POST /admin/invoices/provider/:code/customers/:userId/sync   (invoice.update)
   → POST /admin/invoices/provider/:code/addresses/:addressId/sync (invoice.update)
   → POST /admin/invoices/provider/:code/products/:productId/sync  (invoice.update)
-  → InvoiceFromSaleService / InvoiceFormalizeService / InvoicesService
+  → InvoiceFromSaleService / InvoiceFormalizeService / InvoiceDocumentService / InvoicesService
   → InvoiceProvider          (provider-neutral DTOs)
        └── KolayBiInvoiceProvider
               └── KolayBiClient (fetch + token cache)
@@ -335,7 +343,23 @@ Phase 5 `idempotencyKey = SALE:{saleId}` is unchanged.
 2. Detail GET response docs only show `uuid` — timeout recovery may restore ETTN without `no` (invoice number).
 3. Enum cannot express DRAFT vs FORMALIZED separately without migration — `uuid` is the discriminator.
 
-## Error handling
+## Phase 8 — Document retrieve + status sync
+
+Docs: [e-Belge görüntüleme](https://developer.kolaybi.com/docs/invoices/e-document-view/) (`GET /kolaybi/v1/invoices/e-document/view`), [Fatura detay](https://developer.kolaybi.com/docs/invoices/detail/), [Fatura listeleme](https://developer.kolaybi.com/docs/invoices/list/).
+
+| Admin endpoint | Provider | Notes |
+|----------------|----------|--------|
+| `GET …/invoices/:id/pdf` | `e-document/view?uuid=&output_type=pdf` | JSON `data.src` base64 → streamed `application/pdf` |
+| `GET …/invoices/:id/xml` | `e-document/view?uuid=&output_type=xml` | Same endpoint; `application/xml` |
+| `POST …/invoices/:id/sync` | detail + list | Updates local `uuid` / `invoiceNumber` only |
+
+Capability flags on list/detail: `canDownloadPdf`, `canDownloadXml`, `canSync`.
+
+**Not implemented (not in public docs sitemap):** dedicated webhook API, dedicated status-only endpoint, R2 auto-persist (schema already has `pdfUrl`/`xmlUrl` for later).
+
+Provider e-document / commercial status from list is returned **ephemerally** on sync response — not persisted (no migration for provider status column).
+
+### Error handling
 
 `KolayBiApiError` normalizes upstream failures:
 
@@ -378,3 +402,41 @@ Never log: API key, channel, access token, Authorization, full TCKN/VKN.
 
 - `Invoice`, `ExternalEntityLink`, enums — already migrated.
 - Phase 2–6 do **not** add migrations.
+## Phase 9 — Production hardening
+
+### Production checklist
+
+- [ ] `KOLAYBI_API_BASE_URL` (sandbox or live host from KolayBi docs)
+- [ ] `KOLAYBI_API_KEY` (secret manager / API env only — never admin/web/mobile)
+- [ ] `KOLAYBI_CHANNEL`
+- [ ] `KOLAYBI_SANDBOX=false` only for live
+- [ ] credentials in secret manager / server env
+- [ ] HTTPS on API + Admin
+- [ ] JWT access tokens
+- [ ] `invoice.read` / `invoice.create` / `invoice.update` seeded
+- [ ] logs sanitized (no API key / token / Authorization)
+- [ ] DB backup + restore drill
+- [ ] invoice foundation migration applied
+- [ ] monitoring / alerting on invoice FAILED rate + provider health
+- [ ] PDF/XML proxy verified with formalized sandbox invoice
+- [ ] retry policy understood (create ≠ formalize ≠ download)
+- [ ] idempotency verified (from-sale + formalize double-call)
+- [ ] timeout recovery (`FORMALIZE_UNKNOWN` + sync/detail)
+- [ ] R2 decision documented (default: fetch-through KolayBi)
+- [ ] sandbox E2E completed before go-live
+- [ ] rollback plan (clear/disable `KOLAYBI_*` → provider off)
+
+### R2 recommendation (not implemented)
+
+| Option | Pros | Cons |
+|--------|------|------|
+| A — Always fetch from KolayBi | Simple; always fresh; no extra storage ACL | Latency; KolayBi dependency on every view; rate limits |
+| B — KolayBi → private R2 → Admin proxy | Faster repeat views; offline if KolayBi blip | Storage cost; ACL must stay **private** (do not use public CDN); invalidate on cancel |
+
+**Recommendation:** stay on A until PDF traffic or SLA requires caching; if B, use private bucket + short-lived signed URLs or same JWT proxy — never public product CDN URLs.
+
+### Sandbox E2E
+
+Requires non-empty `KOLAYBI_*` on the API process. When empty, provider is disabled (`health.code=NOT_CONFIGURED`).
+
+Phase 2–9 hardening do **not** add migrations beyond Phase 1 foundation.

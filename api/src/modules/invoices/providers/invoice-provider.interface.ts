@@ -1,11 +1,15 @@
 import type {
   ProviderAddressInput,
   ProviderCustomerInput,
+  ProviderDocumentInput,
+  ProviderDocumentResult,
   ProviderEntitySyncResult,
   ProviderFormalizeInput,
   ProviderFormalizeResult,
   ProviderInvoiceCreateResult,
   ProviderInvoiceInput,
+  ProviderInvoiceRemoteState,
+  ProviderInvoiceRemoteStateInput,
   ProviderProductInput,
 } from './provider-customer.types';
 
@@ -19,11 +23,18 @@ export type InvoiceProviderHealth = {
   ok: boolean;
   sandbox: boolean;
   message: string;
+  /**
+   * Distinguishes config vs upstream auth vs other failures.
+   * OK | NOT_CONFIGURED | UNAUTHORIZED | FORBIDDEN | UPSTREAM | UNKNOWN
+   */
+  code: string;
 };
 
 /**
  * Pluggable e-document provider (KolayBi first; Logo/Paraşüt later).
- * Phase 5: createInvoice = draft. Phase 6: formalizeInvoice = GİB e-document.
+ * Phase 5: createInvoice = draft.
+ * Phase 6: formalizeInvoice = GİB e-document.
+ * Phase 8: getInvoiceDocument / getInvoiceRemoteState = retrieve + sync.
  */
 export interface InvoiceProvider {
   readonly code: string;
@@ -56,4 +67,18 @@ export interface InvoiceProvider {
   formalizeInvoice(
     input: ProviderFormalizeInput,
   ): Promise<ProviderFormalizeResult>;
+  /**
+   * Retrieve e-document bytes (PDF/XML per provider docs).
+   * KolayBi: GET /invoices/e-document/view?uuid=&output_type=
+   */
+  getInvoiceDocument(
+    input: ProviderDocumentInput,
+  ): Promise<ProviderDocumentResult>;
+  /**
+   * Lookup remote uuid / serial / e-document status without mutating Sale.
+   * KolayBi: GET detail + GET list (documented fields only).
+   */
+  getInvoiceRemoteState(
+    input: ProviderInvoiceRemoteStateInput,
+  ): Promise<ProviderInvoiceRemoteState>;
 }

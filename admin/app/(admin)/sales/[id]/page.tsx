@@ -8,10 +8,16 @@ import { ModulePage } from "@/components/auth/module-page";
 import { usePermissions } from "@/hooks/use-permissions";
 import { ApiError } from "@/lib/api-client";
 import {
+  invoiceDisplayStatusLabel,
+  invoiceDocumentTypeLabel,
   salePaymentMethodLabel,
   saleStatusLabel,
 } from "@/lib/enum-labels";
-import { salesService } from "@/services/admin-api.service";
+import {
+  customersAdminService,
+  invoicesService,
+  salesService,
+} from "@/services/admin-api.service";
 
 function money(value: string): string {
   const n = Number(value);
@@ -27,6 +33,16 @@ function personName(p: { firstName: string; lastName: string; email: string }) {
   return name || p.email;
 }
 
+function addressLabel(a: Record<string, unknown>): string {
+  const parts = [
+    a.title,
+    a.city,
+    a.district,
+    a.addressLine,
+  ].filter((v) => typeof v === "string" && v.trim());
+  return parts.length > 0 ? parts.join(" · ") : String(a.id ?? "Adres");
+}
+
 export default function SaleDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -35,10 +51,26 @@ export default function SaleDetailPage() {
   const queryClient = useQueryClient();
   const [cancelReason, setCancelReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [billingAddressId, setBillingAddressId] = useState("");
+  const [showCreateInvoice, setShowCreateInvoice] = useState(false);
 
   const saleQuery = useQuery({
     queryKey: ["admin-sale", id],
     queryFn: () => salesService.getById(id),
+  });
+
+  const invoicesQuery = useQuery({
+    queryKey: ["admin-sale-invoices", id],
+    queryFn: () => invoicesService.list(1, 20, { saleId: id }),
+    enabled: can("invoice.read"),
+  });
+
+  const customerAddressesQuery = useQuery({
+    queryKey: ["admin-customer-addresses", saleQuery.data?.customerId],
+    queryFn: () => customersAdminService.get(saleQuery.data!.customerId!),
+    enabled: Boolean(
+      showCreateInvoice && saleQuery.data?.customerId && can("invoice.create"),
+    ),
   });
 
   const cancelMutation = useMutation({
@@ -57,7 +89,42 @@ export default function SaleDetailPage() {
     },
   });
 
+  const createInvoiceMutation = useMutation({
+    mutationFn: () =>
+      invoicesService.createFromSale(id, {
+        billingAddressId: billingAddressId || undefined,
+      }),
+    onSuccess: async (res) => {
+      setError(null);
+      setShowCreateInvoice(false);
+      await queryClient.invalidateQueries({
+        queryKey: ["admin-sale-invoices", id],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["admin-invoices"] });
+      if (res.invoiceId) {
+        router.push(`/invoices/${res.invoiceId}`);
+      }
+    },
+    onError: (err: Error) => {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err.message || "Fatura oluşturulamadı",
+      );
+    },
+  });
+
   const sale = saleQuery.data;
+  const invoices = invoicesQuery.data?.items ?? [];
+  const addresses =
+    (customerAddressesQuery.data?.addresses as Array<Record<string, unknown>>) ??
+    [];
+  const canCreateInvoice =
+    Boolean(sale?.customerId) &&
+    sale?.status === "COMPLETED" &&
+    !invoicesQuery.isLoading &&
+    invoices.length === 0 &&
+    can("invoice.create");
 
   return (
     <ModulePage permission="sale.read">
@@ -193,6 +260,127 @@ export default function SaleDetailPage() {
                 <span className="tabular-nums">{money(sale.totalAmount)}</span>
               </div>
             </section>
+
+            {can("invoice.read") ? (
+              <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="font-semibold text-slate-900">Fatura</h2>
+                  {canCreateInvoice && !showCreateInvoice ? (
+                    <button
+                      type="button"
+                      className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-800"
+                      onClick={() => {
+                        setShowCreateInvoice(true);
+                        setBillingAddressId("");
+                      }}
+                    >
+                      Fatura Oluştur
+                    </button>
+                  ) : null}
+                </div>
+
+                {!sale.customerId ? (
+                  <p className="text-slate-500">
+                    Perakende satışlarda (müşterisiz) fatura oluşturulamaz.
+                  </p>
+                ) : invoicesQuery.isLoading ? (
+                  <p className="text-slate-500">Faturalar yükleniyor…</p>
+                ) : invoices.length > 0 ? (
+                  <ul className="space-y-2">
+                    {invoices.map((inv) => (
+                      <li
+                        key={inv.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2"
+                      >
+                        <div>
+                          <Link
+                            href={`/invoices/${inv.id}`}
+                            className="font-mono text-cyan-700 underline"
+                          >
+                            {inv.invoiceNumber ?? inv.id.slice(0, 8)}
+                          </Link>
+                          <p className="text-xs text-slate-500">
+                            {invoiceDocumentTypeLabel(inv.documentType)} ·{" "}
+                            {invoiceDisplayStatusLabel(inv.displayStatus)}
+                          </p>
+                        </div>
+                        <span className="tabular-nums text-slate-700">
+                          {money(inv.totalAmount)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : sale.status !== "COMPLETED" ? (
+                  <p className="text-slate-500">
+                    Fatura yalnızca tamamlanmış satışlar için oluşturulabilir.
+                  </p>
+                ) : (
+                  <p className="text-slate-500">Henüz fatura yok.</p>
+                )}
+
+                {showCreateInvoice && canCreateInvoice ? (
+                  <div className="space-y-3 rounded-lg border border-cyan-200 bg-cyan-50 p-4">
+                    <p className="text-cyan-950">
+                      KolayBi taslak fatura oluşturulur. Belge tipi (e-Fatura /
+                      e-Arşiv) müşteri kaydına göre backend tarafından seçilir.
+                    </p>
+                    {customerAddressesQuery.isLoading ? (
+                      <p className="text-xs text-cyan-800">Adresler yükleniyor…</p>
+                    ) : addresses.length > 1 ? (
+                      <label className="block space-y-1">
+                        <span className="text-xs font-medium text-cyan-900">
+                          Fatura adresi
+                        </span>
+                        <select
+                          className="w-full rounded-md border border-cyan-300 bg-white px-3 py-2 text-sm"
+                          value={billingAddressId}
+                          onChange={(e) => setBillingAddressId(e.target.value)}
+                        >
+                          <option value="">Seçin…</option>
+                          {addresses.map((a) => (
+                            <option key={String(a.id)} value={String(a.id)}>
+                              {addressLabel(a)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : addresses.length === 1 ? (
+                      <p className="text-xs text-cyan-800">
+                        Adres: {addressLabel(addresses[0]!)}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-800">
+                        Müşterinin kayıtlı adresi yok. Önce müşteri kartına adres
+                        ekleyin.
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={
+                          createInvoiceMutation.isPending ||
+                          addresses.length === 0 ||
+                          (addresses.length > 1 && !billingAddressId)
+                        }
+                        onClick={() => createInvoiceMutation.mutate()}
+                        className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-800 disabled:opacity-60"
+                      >
+                        {createInvoiceMutation.isPending
+                          ? "Oluşturuluyor…"
+                          : "Onayla ve oluştur"}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md border border-cyan-300 bg-white px-4 py-2 text-sm text-cyan-900"
+                        onClick={() => setShowCreateInvoice(false)}
+                      >
+                        Vazgeç
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
 
             {sale.status === "COMPLETED" && can("sale.update") ? (
               <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-3">

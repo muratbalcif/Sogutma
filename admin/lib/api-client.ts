@@ -160,3 +160,50 @@ export async function apiDownloadText(
   a.click();
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Authenticated binary download (PDF/XML).
+ * Opens in a new tab when `disposition` is inline/view; otherwise triggers download.
+ */
+export async function apiDownloadBlob(
+  path: string,
+  opts: { filename: string; accept: string; openInNewTab?: boolean },
+): Promise<void> {
+  const headers: Record<string, string> = { Accept: opts.accept };
+  const token = authStorage.getAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let response = await fetch(`${API_BASE}${path}`, { headers });
+  if (response.status === 401) {
+    const refreshed = await refreshOnce();
+    if (refreshed) {
+      const next = authStorage.getAccessToken();
+      if (next) headers.Authorization = `Bearer ${next}`;
+      response = await fetch(`${API_BASE}${path}`, { headers });
+    }
+  }
+  if (!response.ok) {
+    let message = `Download failed (${response.status})`;
+    try {
+      const body = (await response.json()) as ApiErrorBody;
+      if (typeof body?.message === "string") message = body.message;
+      else if (Array.isArray(body?.message)) message = body.message.join(", ");
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(response.status, message, null);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  if (opts.openInNewTab) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    // Revoke after a delay so the new tab can load
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = opts.filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

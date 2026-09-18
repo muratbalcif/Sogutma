@@ -135,3 +135,55 @@ export type ProviderFormalizeResult = {
   /** true when already formalized remotely and linked without a new create. */
   resolvedExisting: boolean;
 };
+
+/** Documented KolayBi output_type values for e-document/view. */
+export type ProviderDocumentOutputType = 'pdf' | 'xml';
+
+export type ProviderDocumentInput = {
+  /** GİB ETTN / provider uuid — required by KolayBi e-document/view. */
+  uuid: string;
+  outputType: ProviderDocumentOutputType;
+  /** Docs default: outbound. */
+  direction?: 'outbound' | 'inbound';
+};
+
+/**
+ * Binary document bytes decoded from provider response.
+ * KolayBi returns base64 in JSON (`data.src`); we decode server-side.
+ * Future R2 persist can accept this buffer without changing the admin API.
+ */
+export type ProviderDocumentResult = {
+  provider: string;
+  outputType: ProviderDocumentOutputType;
+  contentType: string;
+  body: Buffer;
+};
+
+/**
+ * Remote invoice snapshot for local sync.
+ * Built from documented detail + list endpoints (no invented status API).
+ */
+export type ProviderInvoiceRemoteStateInput = {
+  externalDocumentId: string;
+  /** Stable description SALE:{saleId} for list filter / orphan match. */
+  description: string;
+};
+
+export type ProviderInvoiceRemoteState = {
+  provider: string;
+  externalDocumentId: string;
+  /** From GET /invoices/{document_id} — may be null for drafts. */
+  uuid: string | null;
+  /** From list header.serial_no when row matched. */
+  invoiceNumber: string | null;
+  /**
+   * From list `e_document_status` when available.
+   * Ephemeral — not a local InvoiceStatus enum value.
+   */
+  providerEDocumentStatus: string | null;
+  /**
+   * From list `commercial_doc_status.value` when available.
+   * Ephemeral — not persisted without a dedicated schema field.
+   */
+  providerCommercialStatus: string | null;
+};

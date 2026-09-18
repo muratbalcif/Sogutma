@@ -7,17 +7,20 @@ import {
   Post,
   Query,
   Req,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
+  ApiProduces,
   ApiProperty,
   ApiTags,
 } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { Request } from 'express';
+import { PaginatedResponseDto } from '../../common/dto/pagination.dto';
 import { Permissions } from '../admin/decorators/permissions.decorator';
 import { PermissionsGuard } from '../admin/guards/permissions.guard';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard';
@@ -30,6 +33,13 @@ import {
   FormalizeInvoiceDto,
   FormalizeInvoiceResponseDto,
 } from './dto/formalize-invoice.dto';
+import { InvoiceSyncResponseDto } from './dto/invoice-document.dto';
+import {
+  AdminInvoiceListQueryDto,
+  InvoiceDetailDto,
+  InvoiceListItemDto,
+} from './dto/invoice-query.dto';
+import { InvoiceDocumentService } from './invoice-document.service';
 import { InvoiceFormalizeService } from './invoice-formalize.service';
 import { InvoiceFromSaleService } from './invoice-from-sale.service';
 import { InvoicesService } from './invoices.service';
@@ -58,6 +68,12 @@ class ProviderHealthResponseDto {
 
   @ApiProperty()
   message!: string;
+
+  @ApiProperty({
+    description:
+      'OK | NOT_CONFIGURED | UNAUTHORIZED | FORBIDDEN | UPSTREAM | UNKNOWN',
+  })
+  code!: string;
 }
 
 class SyncResultDto {
@@ -107,6 +123,7 @@ export class AdminInvoicesController {
     private readonly invoicesService: InvoicesService,
     private readonly invoiceFromSaleService: InvoiceFromSaleService,
     private readonly invoiceFormalizeService: InvoiceFormalizeService,
+    private readonly invoiceDocumentService: InvoiceDocumentService,
   ) {}
 
   @Get('provider/health')
@@ -125,6 +142,16 @@ export class AdminInvoicesController {
     );
   }
 
+  @Get()
+  @Permissions('invoice.read')
+  @ApiOperation({ summary: 'List invoices (admin)' })
+  @ApiOkResponse({ type: PaginatedResponseDto })
+  list(
+    @Query() query: AdminInvoiceListQueryDto,
+  ): Promise<PaginatedResponseDto<InvoiceListItemDto>> {
+    return this.invoicesService.list(query);
+  }
+
   @Post('from-sale/:saleId')
   @Permissions('invoice.create')
   @ApiOperation({
@@ -140,26 +167,6 @@ export class AdminInvoicesController {
   ): Promise<InvoiceFromSaleResponseDto> {
     return this.invoiceFromSaleService.createFromSale(
       saleId,
-      request.user.id,
-      dto,
-    );
-  }
-
-  @Post(':invoiceId/formalize')
-  @Permissions('invoice.create')
-  @ApiOperation({
-    summary: 'Formalize KolayBi draft invoice as e-document',
-    description:
-      'Calls KolayBi POST /invoices/e-document/create. Stores GİB uuid (ETTN) and formalized invoice number. Does not change Sale/stock/payment. Scenario (e-Fatura vs e-Arşiv) is chosen by KolayBi from the associate.',
-  })
-  @ApiOkResponse({ type: FormalizeInvoiceResponseDto })
-  formalize(
-    @Req() request: Request & { user: AuthenticatedUser },
-    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
-    @Body() dto: FormalizeInvoiceDto,
-  ): Promise<FormalizeInvoiceResponseDto> {
-    return this.invoiceFormalizeService.formalize(
-      invoiceId,
       request.user.id,
       dto,
     );
@@ -217,5 +224,85 @@ export class AdminInvoicesController {
       productId,
       providerCode.trim().toUpperCase(),
     );
+  }
+
+  @Get(':invoiceId/pdf')
+  @Permissions('invoice.read')
+  @ApiOperation({
+    summary: 'Download invoice PDF via KolayBi e-document/view',
+    description:
+      'Proxies KolayBi GET /invoices/e-document/view?uuid=&output_type=pdf. Requires formalized uuid. Does not expose provider credentials or URLs to the client.',
+  })
+  @ApiProduces('application/pdf')
+  async getPdf(
+    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
+  ): Promise<StreamableFile> {
+    const doc = await this.invoiceDocumentService.getDocument(invoiceId, 'pdf');
+    return new StreamableFile(doc.body, {
+      type: doc.contentType,
+      disposition: `inline; filename="${doc.filename}"`,
+    });
+  }
+
+  @Get(':invoiceId/xml')
+  @Permissions('invoice.read')
+  @ApiOperation({
+    summary: 'Download invoice UBL-XML via KolayBi e-document/view',
+    description:
+      'Proxies KolayBi GET /invoices/e-document/view?uuid=&output_type=xml (documented). Requires formalized uuid.',
+  })
+  @ApiProduces('application/xml')
+  async getXml(
+    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
+  ): Promise<StreamableFile> {
+    const doc = await this.invoiceDocumentService.getDocument(invoiceId, 'xml');
+    return new StreamableFile(doc.body, {
+      type: doc.contentType,
+      disposition: `attachment; filename="${doc.filename}"`,
+    });
+  }
+
+  @Post(':invoiceId/sync')
+  @Permissions('invoice.read')
+  @ApiOperation({
+    summary: 'Sync local Invoice uuid/number from KolayBi',
+    description:
+      'Uses documented GET /invoices/{document_id} + GET /invoices?description=. Does not change Sale/stock/payment. Provider e-document status is returned ephemerally (not persisted — no migration).',
+  })
+  @ApiOkResponse({ type: InvoiceSyncResponseDto })
+  sync(
+    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
+  ): Promise<InvoiceSyncResponseDto> {
+    return this.invoiceDocumentService.syncFromProvider(invoiceId);
+  }
+
+  @Post(':invoiceId/formalize')
+  @Permissions('invoice.create')
+  @ApiOperation({
+    summary: 'Formalize KolayBi draft invoice as e-document',
+    description:
+      'Calls KolayBi POST /invoices/e-document/create. Stores GİB uuid (ETTN) and formalized invoice number. Does not change Sale/stock/payment. Scenario (e-Fatura vs e-Arşiv) is chosen by KolayBi from the associate.',
+  })
+  @ApiOkResponse({ type: FormalizeInvoiceResponseDto })
+  formalize(
+    @Req() request: Request & { user: AuthenticatedUser },
+    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
+    @Body() dto: FormalizeInvoiceDto,
+  ): Promise<FormalizeInvoiceResponseDto> {
+    return this.invoiceFormalizeService.formalize(
+      invoiceId,
+      request.user.id,
+      dto,
+    );
+  }
+
+  @Get(':invoiceId')
+  @Permissions('invoice.read')
+  @ApiOperation({ summary: 'Invoice detail (admin)' })
+  @ApiOkResponse({ type: InvoiceDetailDto })
+  getById(
+    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
+  ): Promise<InvoiceDetailDto> {
+    return this.invoicesService.getDetail(invoiceId);
   }
 }

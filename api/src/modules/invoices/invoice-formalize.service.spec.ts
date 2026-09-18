@@ -18,6 +18,8 @@ describe('InvoiceFormalizeService', () => {
     ensureProduct: jest.fn(),
     createInvoice: jest.fn(),
     formalizeInvoice,
+    getInvoiceDocument: jest.fn(),
+    getInvoiceRemoteState: jest.fn(),
   };
 
   const invoices = {

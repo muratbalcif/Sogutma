@@ -65,6 +65,26 @@ export const SALE_PAYMENT_METHOD_LABEL: Record<string, string> = {
   BANK_TRANSFER: "Havale / EFT",
 };
 
+export const INVOICE_STATUS_LABEL: Record<string, string> = {
+  PENDING: "Bekliyor",
+  SUCCESS: "Başarılı",
+  FAILED: "Başarısız",
+  CANCELLED: "İptal",
+};
+
+export const INVOICE_DISPLAY_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Taslak",
+  FORMALIZED: "Resmileştirilmiş",
+  PENDING: "Bekliyor",
+  FAILED: "Başarısız",
+  CANCELLED: "İptal",
+};
+
+export const INVOICE_DOCUMENT_TYPE_LABEL: Record<string, string> = {
+  E_INVOICE: "e-Fatura",
+  E_ARCHIVE: "e-Arşiv",
+};
+
 export const SHIPPING_STATUS_LABEL: Record<string, string> = {
   PENDING: "Beklemede",
   READY: "Kargoya hazır",
@@ -188,4 +208,13 @@ export function saleStatusLabel(v?: string | null) {
 }
 export function salePaymentMethodLabel(v?: string | null) {
   return labelOrFallback(SALE_PAYMENT_METHOD_LABEL, v);
+}
+export function invoiceStatusLabel(v?: string | null) {
+  return labelOrFallback(INVOICE_STATUS_LABEL, v);
+}
+export function invoiceDisplayStatusLabel(v?: string | null) {
+  return labelOrFallback(INVOICE_DISPLAY_STATUS_LABEL, v);
+}
+export function invoiceDocumentTypeLabel(v?: string | null) {
+  return labelOrFallback(INVOICE_DOCUMENT_TYPE_LABEL, v);
 }

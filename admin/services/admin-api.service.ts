@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api-client";
+import { apiDownloadBlob, apiRequest } from "@/lib/api-client";
 import type { PaginatedResponse } from "@/types/api";
 
 export type AdminProduct = {
@@ -1310,6 +1310,160 @@ export type AdminSaleListParams = {
   status?: SaleStatus;
   search?: string;
   retailOnly?: boolean;
+};
+
+export type InvoiceStatus = "PENDING" | "SUCCESS" | "FAILED" | "CANCELLED";
+export type InvoiceDisplayStatus =
+  | "DRAFT"
+  | "FORMALIZED"
+  | "PENDING"
+  | "FAILED"
+  | "CANCELLED";
+export type InvoiceDocumentType = "E_INVOICE" | "E_ARCHIVE";
+
+export type AdminInvoiceListItem = {
+  id: string;
+  saleId: string;
+  saleNumber: string;
+  customerId: string;
+  customerLabel: string;
+  provider: string;
+  documentType: InvoiceDocumentType;
+  status: InvoiceStatus;
+  displayStatus: InvoiceDisplayStatus;
+  externalDocumentId: string | null;
+  invoiceNumber: string | null;
+  uuid: string | null;
+  currency: string;
+  totalAmount: string;
+  errorCode: string | null;
+  canFormalize: boolean;
+  canRetry: boolean;
+  canDownloadPdf: boolean;
+  canDownloadXml: boolean;
+  canSync: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminInvoiceDetail = AdminInvoiceListItem & {
+  subtotal: string;
+  discountAmount: string;
+  taxAmount: string;
+  errorMessage: string | null;
+  billingAddressId: string | null;
+  billingAddressSnapshot: {
+    title?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    city?: string;
+    district?: string;
+    neighborhood?: string | null;
+    addressLine?: string;
+    postalCode?: string | null;
+    country?: string;
+    companyName?: string | null;
+  };
+  createdBy: { id: string; firstName: string; lastName: string; email: string };
+  customer: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
+  issuedAt: string | null;
+};
+
+export type AdminInvoiceListParams = {
+  status?: InvoiceStatus;
+  provider?: string;
+  documentType?: InvoiceDocumentType;
+  customerId?: string;
+  saleId?: string;
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  invoiceNumber?: string;
+  externalDocumentId?: string;
+  uuid?: string;
+  formalized?: boolean;
+};
+
+export const invoicesService = {
+  list(page = 1, limit = 50, params?: AdminInvoiceListParams) {
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (params?.status) query.set("status", params.status);
+    if (params?.provider) query.set("provider", params.provider);
+    if (params?.documentType) query.set("documentType", params.documentType);
+    if (params?.customerId) query.set("customerId", params.customerId);
+    if (params?.saleId) query.set("saleId", params.saleId);
+    if (params?.search) query.set("search", params.search);
+    if (params?.dateFrom) query.set("dateFrom", params.dateFrom);
+    if (params?.dateTo) query.set("dateTo", params.dateTo);
+    if (params?.invoiceNumber) query.set("invoiceNumber", params.invoiceNumber);
+    if (params?.externalDocumentId) {
+      query.set("externalDocumentId", params.externalDocumentId);
+    }
+    if (params?.uuid) query.set("uuid", params.uuid);
+    if (params?.formalized === true) query.set("formalized", "true");
+    if (params?.formalized === false) query.set("formalized", "false");
+    return apiRequest<PaginatedResponse<AdminInvoiceListItem>>(
+      `/admin/invoices?${query.toString()}`,
+    );
+  },
+  getById(id: string) {
+    return apiRequest<AdminInvoiceDetail>(`/admin/invoices/${id}`);
+  },
+  createFromSale(
+    saleId: string,
+    body?: { billingAddressId?: string; documentType?: InvoiceDocumentType },
+  ) {
+    return apiRequest<{ invoiceId: string; saleId: string; status: string }>(
+      `/admin/invoices/from-sale/${saleId}`,
+      { method: "POST", body: body ?? {} },
+    );
+  },
+  formalize(invoiceId: string, body?: { prefix?: string }) {
+    return apiRequest<{
+      invoiceId: string;
+      uuid: string;
+      invoiceNumber: string | null;
+      alreadyFormalized: boolean;
+    }>(`/admin/invoices/${invoiceId}/formalize`, {
+      method: "POST",
+      body: body ?? {},
+    });
+  },
+  sync(invoiceId: string) {
+    return apiRequest<{
+      invoiceId: string;
+      status: InvoiceStatus;
+      displayStatus: InvoiceDisplayStatus;
+      uuid: string | null;
+      invoiceNumber: string | null;
+      externalDocumentId: string | null;
+      providerEDocumentStatus: string | null;
+      providerCommercialStatus: string | null;
+      updated: boolean;
+    }>(`/admin/invoices/${invoiceId}/sync`, { method: "POST", body: {} });
+  },
+  async downloadPdf(invoiceId: string, filename: string, view = false) {
+    await apiDownloadBlob(`/admin/invoices/${invoiceId}/pdf`, {
+      filename,
+      accept: "application/pdf",
+      openInNewTab: view,
+    });
+  },
+  async downloadXml(invoiceId: string, filename: string) {
+    await apiDownloadBlob(`/admin/invoices/${invoiceId}/xml`, {
+      filename,
+      accept: "application/xml",
+    });
+  },
 };
 
 export const salesService = {

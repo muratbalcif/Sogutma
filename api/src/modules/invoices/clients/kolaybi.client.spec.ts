@@ -311,6 +311,7 @@ describe('KolayBiInvoiceProvider health', () => {
     const health = await provider.healthCheck();
     expect(health.enabled).toBe(false);
     expect(health.ok).toBe(false);
+    expect(health.code).toBe('NOT_CONFIGURED');
     expect(health.provider).toBe('KOLAYBI');
   });
 
@@ -335,6 +336,7 @@ describe('KolayBiInvoiceProvider health', () => {
       enabled: true,
       ok: true,
       sandbox: true,
+      code: 'OK',
     });
   });
 
@@ -352,7 +354,25 @@ describe('KolayBiInvoiceProvider health', () => {
     const health = await provider.healthCheck();
     expect(health.ok).toBe(false);
     expect(health.enabled).toBe(true);
+    expect(health.code).toBe('FORBIDDEN');
     expect(health.message).toContain('forbidden');
+  });
+
+  it('distinguishes 401 unauthorized from missing config', async () => {
+    global.fetch = jest.fn().mockResolvedValue(jsonResponse(401, 'bad key'));
+
+    const client = new KolayBiClient(
+      mockConfig({
+        KOLAYBI_API_BASE_URL: 'https://ofis-sandbox-api.kolaybi.com',
+        KOLAYBI_API_KEY: 'k',
+        KOLAYBI_CHANNEL: 'c',
+      }),
+    );
+    const provider = new KolayBiInvoiceProvider(client);
+    const health = await provider.healthCheck();
+    expect(health.enabled).toBe(true);
+    expect(health.ok).toBe(false);
+    expect(health.code).toBe('UNAUTHORIZED');
   });
 });
 

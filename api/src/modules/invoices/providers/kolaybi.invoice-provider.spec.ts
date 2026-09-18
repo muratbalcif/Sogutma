@@ -669,3 +669,154 @@ describe('KolayBiInvoiceProvider formalizeInvoice', () => {
     expect(logged).not.toContain('Bearer ');
   });
 });
+
+describe('KolayBiInvoiceProvider document view + remote state', () => {
+  const originalFetch = global.fetch;
+  let provider: KolayBiInvoiceProvider;
+
+  beforeEach(() => {
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const client = new KolayBiClient(
+      mockConfig({
+        KOLAYBI_API_BASE_URL: 'https://ofis-sandbox-api.kolaybi.com',
+        KOLAYBI_API_KEY: 'key',
+        KOLAYBI_CHANNEL: 'ch',
+        KOLAYBI_SANDBOX: true,
+      }),
+    );
+    provider = new KolayBiInvoiceProvider(client);
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  it('getInvoiceDocument decodes base64 PDF', async () => {
+    const pdfB64 = Buffer.from('%PDF-1.4 test').toString('base64');
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'tok' }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: { src: pdfB64, output_type: 'pdf' },
+        }),
+      );
+
+    const result = await provider.getInvoiceDocument({
+      uuid: 'f46d5a8d-7726-4b37-bba4-973c7ab50a5b',
+      outputType: 'pdf',
+    });
+    expect(result.contentType).toBe('application/pdf');
+    expect(result.body.toString()).toContain('%PDF');
+    expect(requestUrl(1)).toContain('/invoices/e-document/view');
+    expect(requestUrl(1)).toContain('output_type=pdf');
+  });
+
+  it('getInvoiceDocument supports xml output_type', async () => {
+    const xmlB64 = Buffer.from('<Invoice xmlns="urn:ubl"/>').toString('base64');
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'tok' }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: { src: xmlB64, output_type: 'xml' },
+        }),
+      );
+
+    const result = await provider.getInvoiceDocument({
+      uuid: 'f46d5a8d-7726-4b37-bba4-973c7ab50a5b',
+      outputType: 'xml',
+    });
+    expect(result.outputType).toBe('xml');
+    expect(result.contentType).toBe('application/xml');
+    expect(requestUrl(1)).toContain('output_type=xml');
+  });
+
+  it('getInvoiceDocument maps 404', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'tok' }))
+      .mockResolvedValueOnce(jsonResponse(404, { message: 'missing' }));
+
+    await expect(
+      provider.getInvoiceDocument({ uuid: 'x', outputType: 'pdf' }),
+    ).rejects.toMatchObject({ statusCode: 404, code: 'KOLAYBI_NOT_FOUND' });
+  });
+
+  it('getInvoiceDocument maps 429', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'tok' }))
+      .mockResolvedValueOnce(jsonResponse(429, { message: 'slow' }));
+
+    await expect(
+      provider.getInvoiceDocument({ uuid: 'x', outputType: 'pdf' }),
+    ).rejects.toMatchObject({
+      statusCode: 429,
+      code: 'KOLAYBI_RATE_LIMITED',
+      retryable: true,
+    });
+  });
+
+  it('getInvoiceDocument maps 500', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'tok' }))
+      .mockResolvedValueOnce(jsonResponse(500, { message: 'boom' }));
+
+    await expect(
+      provider.getInvoiceDocument({ uuid: 'x', outputType: 'pdf' }),
+    ).rejects.toMatchObject({
+      statusCode: 500,
+      code: 'KOLAYBI_UPSTREAM_ERROR',
+    });
+  });
+
+  it('getInvoiceDocument maps timeout', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'tok' }))
+      .mockImplementationOnce(() => {
+        const err = new Error('Aborted');
+        err.name = 'AbortError';
+        return Promise.reject(err);
+      });
+
+    await expect(
+      provider.getInvoiceDocument({ uuid: 'x', outputType: 'pdf' }),
+    ).rejects.toMatchObject({ code: 'KOLAYBI_TIMEOUT', retryable: true });
+  });
+
+  it('getInvoiceRemoteState combines detail uuid + list serial/status', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'tok' }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: { uuid: 'ettn-z' } }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: [
+            {
+              commercial_doc_id: 18,
+              e_document_status: 'sent_to_receiver',
+              commercial_doc_status: { value: 'sent' },
+              header: {
+                serial_no: 'HDB2021000008464',
+                description: 'SALE:sale1',
+              },
+            },
+          ],
+        }),
+      );
+
+    const state = await provider.getInvoiceRemoteState({
+      externalDocumentId: '18',
+      description: 'SALE:sale1',
+    });
+    expect(state.uuid).toBe('ettn-z');
+    expect(state.invoiceNumber).toBe('HDB2021000008464');
+    expect(state.providerEDocumentStatus).toBe('sent_to_receiver');
+    expect(state.providerCommercialStatus).toBe('sent');
+  });
+});

@@ -10,11 +10,28 @@ import {
 import {
   ExternalEntityType,
   InvoiceProviderCode,
+  Prisma,
   UserStatus,
   UserType,
 } from '@prisma/client';
+import {
+  buildPaginatedResponse,
+  PaginatedResponseDto,
+} from '../../common/dto/pagination.dto';
+import { toMoneyString } from '../../common/utils/money.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { KolayBiApiError } from './clients/kolaybi.errors';
+import {
+  AdminInvoiceListQueryDto,
+  InvoiceBillingSnapshotDto,
+  InvoiceDetailDto,
+  InvoiceListItemDto,
+  resolveCanDownloadDocument,
+  resolveCanFormalize,
+  resolveCanRetry,
+  resolveCanSync,
+  resolveInvoiceDisplayStatus,
+} from './dto/invoice-query.dto';
 import {
   INVOICE_PROVIDERS,
   InvoiceProvider,
@@ -75,6 +92,246 @@ export class InvoicesService {
     } catch (err) {
       throw this.toHttpException(err);
     }
+  }
+
+  async list(
+    query: AdminInvoiceListQueryDto,
+  ): Promise<PaginatedResponseDto<InvoiceListItemDto>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const where = this.buildListWhere(query);
+
+    const [rows, total] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          sale: { select: { id: true, saleNumber: true } },
+          customer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      }),
+      this.prisma.invoice.count({ where }),
+    ]);
+
+    return buildPaginatedResponse(
+      rows.map((row) => this.toListItem(row)),
+      total,
+      page,
+      limit,
+    );
+  }
+
+  async getDetail(invoiceId: string): Promise<InvoiceDetailDto> {
+    const row = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        sale: { select: { id: true, saleNumber: true } },
+        customer: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+    if (!row) {
+      throw new NotFoundException('Fatura bulunamadı');
+    }
+
+    const list = this.toListItem(row);
+    return {
+      ...list,
+      subtotal: toMoneyString(row.subtotal),
+      discountAmount: toMoneyString(row.discountAmount),
+      taxAmount: toMoneyString(row.taxAmount),
+      errorMessage: row.errorMessage,
+      billingAddressId: row.billingAddressId,
+      billingAddressSnapshot: this.toBillingSnapshot(
+        row.billingAddressSnapshot,
+      ),
+      createdBy: {
+        id: row.createdBy.id,
+        firstName: row.createdBy.firstName,
+        lastName: row.createdBy.lastName,
+        email: row.createdBy.email,
+      },
+      customer: row.customer
+        ? {
+            id: row.customer.id,
+            firstName: row.customer.firstName,
+            lastName: row.customer.lastName,
+            email: row.customer.email,
+          }
+        : null,
+      issuedAt: row.issuedAt,
+    };
+  }
+
+  private buildListWhere(
+    query: AdminInvoiceListQueryDto,
+  ): Prisma.InvoiceWhereInput {
+    const where: Prisma.InvoiceWhereInput = {};
+
+    if (query.status) where.status = query.status;
+    if (query.provider) where.provider = query.provider;
+    if (query.documentType) where.documentType = query.documentType;
+    if (query.customerId) where.customerId = query.customerId;
+    if (query.saleId) where.saleId = query.saleId;
+    if (query.invoiceNumber?.trim()) {
+      where.invoiceNumber = {
+        contains: query.invoiceNumber.trim(),
+        mode: 'insensitive',
+      };
+    }
+    if (query.externalDocumentId?.trim()) {
+      where.externalDocumentId = query.externalDocumentId.trim();
+    }
+    if (query.uuid?.trim()) {
+      where.uuid = query.uuid.trim();
+    }
+
+    if (query.formalized === 'true') {
+      where.uuid = { not: null };
+    } else if (query.formalized === 'false') {
+      where.uuid = null;
+    }
+
+    if (query.dateFrom || query.dateTo) {
+      where.createdAt = {};
+      if (query.dateFrom) {
+        where.createdAt.gte = new Date(`${query.dateFrom}T00:00:00.000Z`);
+      }
+      if (query.dateTo) {
+        where.createdAt.lte = new Date(`${query.dateTo}T23:59:59.999Z`);
+      }
+    }
+
+    const search = query.search?.trim();
+    if (search) {
+      where.OR = [
+        { invoiceNumber: { contains: search, mode: 'insensitive' } },
+        { externalDocumentId: { contains: search, mode: 'insensitive' } },
+        { uuid: { contains: search, mode: 'insensitive' } },
+        { sale: { saleNumber: { contains: search, mode: 'insensitive' } } },
+        {
+          customer: {
+            OR: [
+              { firstName: { contains: search, mode: 'insensitive' } },
+              { lastName: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } },
+            ],
+          },
+        },
+      ];
+    }
+
+    return where;
+  }
+
+  private toListItem(row: {
+    id: string;
+    saleId: string;
+    customerId: string;
+    provider: string;
+    documentType: InvoiceListItemDto['documentType'];
+    status: InvoiceListItemDto['status'];
+    externalDocumentId: string | null;
+    invoiceNumber: string | null;
+    uuid: string | null;
+    currency: string;
+    totalAmount: Prisma.Decimal;
+    errorCode: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    sale: { id: string; saleNumber: string };
+    customer: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+    };
+  }): InvoiceListItemDto {
+    const actions = {
+      status: row.status,
+      uuid: row.uuid,
+      externalDocumentId: row.externalDocumentId,
+      errorCode: row.errorCode,
+    };
+    const name =
+      `${row.customer.firstName} ${row.customer.lastName}`.trim() ||
+      row.customer.email;
+
+    return {
+      id: row.id,
+      saleId: row.saleId,
+      saleNumber: row.sale.saleNumber,
+      customerId: row.customerId,
+      customerLabel: name,
+      provider: row.provider,
+      documentType: row.documentType,
+      status: row.status,
+      displayStatus: resolveInvoiceDisplayStatus(row.status, row.uuid),
+      externalDocumentId: row.externalDocumentId,
+      invoiceNumber: row.invoiceNumber,
+      uuid: row.uuid,
+      currency: row.currency,
+      totalAmount: toMoneyString(row.totalAmount),
+      errorCode: row.errorCode,
+      canFormalize: resolveCanFormalize(actions),
+      canRetry: resolveCanRetry(actions),
+      canDownloadPdf: resolveCanDownloadDocument(actions),
+      canDownloadXml: resolveCanDownloadDocument(actions),
+      canSync: resolveCanSync(actions),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  private toBillingSnapshot(
+    value: Prisma.JsonValue,
+  ): InvoiceBillingSnapshotDto {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+    const o = value as Record<string, unknown>;
+    const str = (k: string): string | undefined =>
+      typeof o[k] === 'string' ? o[k] : undefined;
+    const strOrNull = (k: string): string | null | undefined => {
+      if (o[k] === null) return null;
+      return str(k);
+    };
+    return {
+      title: str('title'),
+      firstName: str('firstName'),
+      lastName: str('lastName'),
+      phone: str('phone'),
+      city: str('city'),
+      district: str('district'),
+      neighborhood: strOrNull('neighborhood') ?? null,
+      addressLine: str('addressLine'),
+      postalCode: strOrNull('postalCode') ?? null,
+      country: str('country'),
+      companyName: strOrNull('companyName') ?? null,
+    };
   }
 
   async syncCustomer(

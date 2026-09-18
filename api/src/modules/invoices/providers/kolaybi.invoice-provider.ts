@@ -9,11 +9,15 @@ import {
 import type {
   ProviderAddressInput,
   ProviderCustomerInput,
+  ProviderDocumentInput,
+  ProviderDocumentResult,
   ProviderEntitySyncResult,
   ProviderFormalizeInput,
   ProviderFormalizeResult,
   ProviderInvoiceCreateResult,
   ProviderInvoiceInput,
+  ProviderInvoiceRemoteState,
+  ProviderInvoiceRemoteStateInput,
   ProviderProductInput,
 } from './provider-customer.types';
 
@@ -44,6 +48,12 @@ type KolayBiInvoiceCreateData = {
 
 type KolayBiInvoiceListRow = {
   commercial_doc_id?: number | string;
+  e_document_status?: string;
+  commercial_doc_status?: {
+    value?: string;
+    key?: string;
+    description?: string;
+  };
   header?: {
     serial_no?: string;
     description?: string;
@@ -66,6 +76,17 @@ type KolayBiInvoiceDetailData = {
   uuid?: string;
 };
 
+type KolayBiEDocumentViewData = {
+  src?: string;
+  output_type?: string;
+};
+
+/** Document retrieve can return large base64 payloads.
+ * Production note (Phase 9): 30s is adequate for typical e-docs;
+ * bump only after measuring sandbox large-PDF latency — do not invent.
+ */
+const DOCUMENT_VIEW_TIMEOUT_MS = 30_000;
+
 /**
  * KolayBi adapter.
  * Associate/Product/Invoice HTTP details stay here — domain uses Customer/Address/Product terminology.
@@ -83,10 +104,12 @@ type KolayBiInvoiceDetailData = {
  * - GET /invoices?description=|&associate_id= — list (orphan recovery)
  * - POST /invoices/e-document/create (form) — formalize (Phase 6)
  * - GET /invoices/{document_id} — detail (uuid after formalize; timeout recovery)
+ * - GET /invoices/e-document/view?uuid=&output_type= — PDF/XML (Phase 8)
  *
  * Product UPDATE (PUT) exists in KolayBi docs but Phase 4 ensure does not auto-push local edits.
  * Associate/address have no public UPDATE as of Phase 3.
  * E-document request does NOT accept scenario — KolayBi derives e-Fatura vs e-Arşiv from associate.
+ * No public webhook endpoints in KolayBi developer sitemap (Phase 8).
  */
 @Injectable()
 export class KolayBiInvoiceProvider implements InvoiceProvider {
@@ -112,6 +135,7 @@ export class KolayBiInvoiceProvider implements InvoiceProvider {
         enabled: false,
         ok: false,
         sandbox,
+        code: 'NOT_CONFIGURED',
         message:
           'KolayBi not configured (set KOLAYBI_API_BASE_URL, KOLAYBI_API_KEY, KOLAYBI_CHANNEL)',
       };
@@ -125,9 +149,11 @@ export class KolayBiInvoiceProvider implements InvoiceProvider {
         enabled: true,
         ok: true,
         sandbox,
+        code: 'OK',
         message: 'KolayBi authentication and companies endpoint OK',
       };
     } catch (err) {
+      const errCode = err instanceof KolayBiApiError ? err.code : 'UNKNOWN';
       const message =
         err instanceof KolayBiApiError
           ? err.message
@@ -136,14 +162,21 @@ export class KolayBiInvoiceProvider implements InvoiceProvider {
         JSON.stringify({
           provider: this.code,
           event: 'health_failed',
-          code: err instanceof KolayBiApiError ? err.code : 'UNKNOWN',
+          code: errCode,
         }),
       );
+
+      let code = 'UPSTREAM';
+      if (errCode === 'KOLAYBI_UNAUTHORIZED') code = 'UNAUTHORIZED';
+      else if (errCode === 'KOLAYBI_FORBIDDEN') code = 'FORBIDDEN';
+      else if (errCode === 'KOLAYBI_NOT_CONFIGURED') code = 'NOT_CONFIGURED';
+
       return {
         provider: this.code,
         enabled: true,
         ok: false,
         sandbox,
+        code,
         message,
       };
     }
@@ -614,6 +647,168 @@ export class KolayBiInvoiceProvider implements InvoiceProvider {
       }
       return null;
     }
+  }
+
+  /**
+   * GET /invoices/e-document/view — documented PDF/XML retrieve.
+   * Response is JSON `{ data: { src: base64, output_type } }` — decode server-side.
+   * Docs: https://developer.kolaybi.com/docs/invoices/e-document-view
+   */
+  async getInvoiceDocument(
+    input: ProviderDocumentInput,
+  ): Promise<ProviderDocumentResult> {
+    const uuid = input.uuid.trim();
+    if (!uuid) {
+      throw new KolayBiApiError(
+        'uuid required for e-document view',
+        400,
+        'KOLAYBI_VALIDATION_ERROR',
+        false,
+      );
+    }
+
+    const qs = new URLSearchParams({
+      uuid,
+      output_type: input.outputType,
+    });
+    if (input.direction) {
+      qs.set('direction', input.direction);
+    }
+
+    const started = Date.now();
+    const response = await this.client.request<
+      KolayBiDataEnvelope<KolayBiEDocumentViewData>
+    >(`/invoices/e-document/view?${qs.toString()}`, {
+      method: 'GET',
+      timeoutMs: DOCUMENT_VIEW_TIMEOUT_MS,
+    });
+
+    const src = response?.data?.src?.trim();
+    const outputTypeRaw = (response?.data?.output_type ?? input.outputType)
+      .toString()
+      .trim()
+      .toLowerCase();
+
+    if (!src) {
+      throw new KolayBiApiError(
+        'KolayBi e-document view response missing src',
+        502,
+        'KOLAYBI_INVALID_RESPONSE',
+        true,
+      );
+    }
+
+    let body: Buffer;
+    try {
+      body = Buffer.from(src, 'base64');
+    } catch {
+      throw new KolayBiApiError(
+        'KolayBi e-document view src is not valid base64',
+        502,
+        'KOLAYBI_INVALID_RESPONSE',
+        true,
+      );
+    }
+
+    if (body.length === 0) {
+      throw new KolayBiApiError(
+        'KolayBi e-document view returned empty document',
+        502,
+        'KOLAYBI_INVALID_RESPONSE',
+        true,
+      );
+    }
+
+    const outputType =
+      outputTypeRaw === 'xml' ? ('xml' as const) : ('pdf' as const);
+
+    this.logOp('get_invoice_document', null, null, {
+      invoiceId: null,
+      externalId: null,
+      durationMs: Date.now() - started,
+    });
+
+    return {
+      provider: this.code,
+      outputType,
+      contentType: outputType === 'xml' ? 'application/xml' : 'application/pdf',
+      body,
+    };
+  }
+
+  /**
+   * Sync lookup: GET /invoices/{document_id} (uuid) + GET /invoices?description=
+   * (serial_no, e_document_status). No dedicated status endpoint in public docs.
+   */
+  async getInvoiceRemoteState(
+    input: ProviderInvoiceRemoteStateInput,
+  ): Promise<ProviderInvoiceRemoteState> {
+    const documentId = String(input.externalDocumentId).trim();
+    const description = input.description.trim();
+
+    const uuid = await this.findFormalizedUuid(documentId);
+
+    let invoiceNumber: string | null = null;
+    let providerEDocumentStatus: string | null = null;
+    let providerCommercialStatus: string | null = null;
+
+    if (description) {
+      const qs = new URLSearchParams({
+        type: 'sale_invoice',
+        description,
+      }).toString();
+
+      try {
+        const response = await this.client.request<
+          KolayBiDataEnvelope<KolayBiInvoiceListRow[] | KolayBiInvoiceListRow>
+        >(`/invoices?${qs}`, { method: 'GET' });
+
+        const rows = Array.isArray(response?.data)
+          ? response.data
+          : response?.data
+            ? [response.data]
+            : [];
+
+        const match =
+          rows.find((row) => String(row.commercial_doc_id) === documentId) ??
+          rows.find((row) => row.header?.description === description) ??
+          null;
+
+        if (match) {
+          invoiceNumber = match.header?.serial_no?.trim() || null;
+          providerEDocumentStatus = match.e_document_status?.trim() || null;
+          providerCommercialStatus =
+            match.commercial_doc_status?.value?.trim() || null;
+        }
+      } catch (err) {
+        // Detail uuid is still useful; list failure should surface for auth/rate limits
+        if (
+          err instanceof KolayBiApiError &&
+          (err.statusCode === 401 ||
+            err.statusCode === 403 ||
+            err.statusCode === 429 ||
+            err.code === 'KOLAYBI_TIMEOUT')
+        ) {
+          throw err;
+        }
+        this.logger.warn(
+          JSON.stringify({
+            provider: this.code,
+            event: 'remote_state_list_failed',
+            documentId,
+          }),
+        );
+      }
+    }
+
+    return {
+      provider: this.code,
+      externalDocumentId: documentId,
+      uuid,
+      invoiceNumber,
+      providerEDocumentStatus,
+      providerCommercialStatus,
+    };
   }
 
   private async createOrResolveProduct(

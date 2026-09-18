@@ -294,6 +294,10 @@ async function readSafeErrorDetail(response: Response): Promise<string> {
     return text
       .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]')
       .replace(/api_key["']?\s*[:=]\s*["']?[^"',}\s]+/gi, 'api_key=[REDACTED]')
+      .replace(
+        /(?:identity_no|tax_number|tckn|vkn)["']?\s*[:=]\s*["']?\d{10,11}/gi,
+        'identity=[REDACTED]',
+      )
       .slice(0, 200);
   } catch {
     return '';
