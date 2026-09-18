@@ -389,6 +389,179 @@ export class InventoryService {
     return this.toResponse(updated);
   }
 
+  /**
+   * Converts a prior RESERVATION into a SALE:
+   * quantity -= sold, reservedQuantity -= sold.
+   * Caller must hold/own the surrounding order transaction; this locks inventory.
+   * Idempotent when referenceType+referenceId are provided (checks under row lock).
+   */
+  async commitSaleInTransaction(
+    tx: Prisma.TransactionClient,
+    productId: string,
+    quantity: number,
+    options?: {
+      note?: string;
+      createdBy?: string;
+      referenceType?: string;
+      referenceId?: string;
+    },
+  ): Promise<InventoryResponseDto> {
+    if (quantity <= 0) {
+      throw new ConflictException('Sale quantity must be positive');
+    }
+
+    await this.lockInventory(tx, productId);
+
+    if (options?.referenceType && options?.referenceId) {
+      const existingSale = await tx.inventoryTransaction.findFirst({
+        where: {
+          productId,
+          type: InventoryTransactionType.SALE,
+          referenceType: options.referenceType,
+          referenceId: options.referenceId,
+        },
+      });
+      if (existingSale) {
+        const current = await this.getOrCreateLocked(tx, productId);
+        return this.toResponse(current);
+      }
+    }
+
+    const inventory = await this.getOrCreateLocked(tx, productId);
+
+    if (inventory.reservedQuantity < quantity) {
+      throw new ConflictException(
+        'Cannot commit sale for more than reserved stock',
+      );
+    }
+    if (inventory.quantity < quantity) {
+      throw new ConflictException('Insufficient stock');
+    }
+
+    const nextQuantity = inventory.quantity - quantity;
+    const nextReserved = inventory.reservedQuantity - quantity;
+    if (nextQuantity < 0 || nextReserved < 0) {
+      throw new ConflictException('Insufficient stock');
+    }
+    if (nextReserved > nextQuantity) {
+      throw new ConflictException(
+        'Reserved quantity cannot exceed on-hand quantity',
+      );
+    }
+
+    const updated = await tx.inventory.update({
+      where: { id: inventory.id },
+      data: {
+        quantity: nextQuantity,
+        reservedQuantity: nextReserved,
+      },
+    });
+
+    try {
+      await tx.inventoryTransaction.create({
+        data: {
+          productId,
+          inventoryId: inventory.id,
+          type: InventoryTransactionType.SALE,
+          quantity,
+          previousQuantity: inventory.quantity,
+          newQuantity: nextQuantity,
+          note: options?.note,
+          createdBy: options?.createdBy,
+          referenceType: options?.referenceType,
+          referenceId: options?.referenceId,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        // Unique race: another txn committed the same SALE first — abort this txn's
+        // inventory update by throwing so the outer transaction rolls back.
+        throw new ConflictException('Sale already committed for this order item');
+      }
+      throw error;
+    }
+
+    return this.toResponse(updated);
+  }
+
+  /**
+   * Restocks on-hand quantity after a return (post-SALE).
+   * quantity += returned; reservedQuantity unchanged.
+   * Idempotent when referenceType+referenceId are provided (checks under row lock).
+   */
+  async commitReturnInTransaction(
+    tx: Prisma.TransactionClient,
+    productId: string,
+    quantity: number,
+    options?: {
+      note?: string;
+      createdBy?: string;
+      referenceType?: string;
+      referenceId?: string;
+    },
+  ): Promise<InventoryResponseDto> {
+    if (quantity <= 0) {
+      throw new ConflictException('Return quantity must be positive');
+    }
+
+    await this.lockInventory(tx, productId);
+
+    if (options?.referenceType && options?.referenceId) {
+      const existingReturn = await tx.inventoryTransaction.findFirst({
+        where: {
+          productId,
+          type: InventoryTransactionType.RETURN,
+          referenceType: options.referenceType,
+          referenceId: options.referenceId,
+        },
+      });
+      if (existingReturn) {
+        const current = await this.getOrCreateLocked(tx, productId);
+        return this.toResponse(current);
+      }
+    }
+
+    const inventory = await this.getOrCreateLocked(tx, productId);
+    const nextQuantity = inventory.quantity + quantity;
+
+    const updated = await tx.inventory.update({
+      where: { id: inventory.id },
+      data: { quantity: nextQuantity },
+    });
+
+    try {
+      await tx.inventoryTransaction.create({
+        data: {
+          productId,
+          inventoryId: inventory.id,
+          type: InventoryTransactionType.RETURN,
+          quantity,
+          previousQuantity: inventory.quantity,
+          newQuantity: nextQuantity,
+          note: options?.note,
+          createdBy: options?.createdBy,
+          referenceType: options?.referenceType,
+          referenceId: options?.referenceId,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'Return already committed for this order item',
+        );
+      }
+      throw error;
+    }
+
+    return this.toResponse(updated);
+  }
+
   private async mutateStock(input: {
     productId: string;
     delta: number;

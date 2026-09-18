@@ -79,8 +79,8 @@ export class OrderStatusService {
 
   /**
    * Single path for order status changes inside an existing DB transaction.
-   * Handles validation, history, inventory release (cancel), shipping sync,
-   * and return foundation rows.
+   * Handles validation, history, inventory release (cancel), sale commit (paid confirm),
+   * return restock (RETURNED), shipping sync, and OrderReturn rows.
    */
   async applyTransitionInTransaction(
     tx: Prisma.TransactionClient,
@@ -156,6 +156,16 @@ export class OrderStatusService {
       }
     }
 
+    if (input.toStatus === OrderStatus.CONFIRMED) {
+      const paidPayment = await tx.payment.findFirst({
+        where: { orderId: order.id, status: PaymentStatus.PAID },
+        select: { id: true },
+      });
+      if (paidPayment) {
+        await this.commitOrderSaleOnce(tx, order.id, input.changedByUserId);
+      }
+    }
+
     if (input.toStatus === OrderStatus.DELIVERED && order.shipping) {
       await tx.shipping.update({
         where: { orderId: order.id },
@@ -186,6 +196,7 @@ export class OrderStatusService {
           adminNote: input.adminReturnNote ?? undefined,
         },
       });
+      await this.restockOrderReturnOnce(tx, order.id, input.changedByUserId);
     }
 
     await tx.order.update({
@@ -210,6 +221,133 @@ export class OrderStatusService {
       fromStatus: order.status,
       toStatus: input.toStatus,
     };
+  }
+
+  /**
+   * Idempotent reservation → SALE commit for an order (paid fulfillment).
+   * Skips products that already have SALE or RELEASE for this order.
+   */
+  async commitOrderSaleOnce(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    actorUserId?: string | null,
+  ): Promise<void> {
+    const items = await tx.orderItem.findMany({
+      where: { orderId, productId: { not: null } },
+    });
+
+    for (const item of items) {
+      if (!item.productId) {
+        continue;
+      }
+
+      const alreadySold = await tx.inventoryTransaction.findFirst({
+        where: {
+          productId: item.productId,
+          referenceType: 'ORDER',
+          referenceId: orderId,
+          type: InventoryTransactionType.SALE,
+        },
+      });
+      if (alreadySold) {
+        continue;
+      }
+
+      const alreadyReleased = await tx.inventoryTransaction.findFirst({
+        where: {
+          productId: item.productId,
+          referenceType: 'ORDER',
+          referenceId: orderId,
+          type: InventoryTransactionType.RELEASE,
+        },
+      });
+      if (alreadyReleased) {
+        continue;
+      }
+
+      await this.inventoryService.commitSaleInTransaction(
+        tx,
+        item.productId,
+        item.quantity,
+        {
+          createdBy: actorUserId ?? undefined,
+          referenceType: 'ORDER',
+          referenceId: orderId,
+          note: 'Committed sale after payment',
+        },
+      );
+    }
+  }
+
+  /**
+   * Idempotent post-SALE restock for a returned order.
+   * Only restocks products that have a SALE (and no prior RETURN) for this order.
+   * Partial returns: pass returnedQuantitiesByProductId; otherwise full sold qty.
+   */
+  async restockOrderReturnOnce(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    actorUserId?: string | null,
+    returnedQuantitiesByProductId?: Record<string, number>,
+  ): Promise<void> {
+    const items = await tx.orderItem.findMany({
+      where: { orderId, productId: { not: null } },
+    });
+
+    for (const item of items) {
+      if (!item.productId) {
+        continue;
+      }
+
+      const alreadyReturned = await tx.inventoryTransaction.findFirst({
+        where: {
+          productId: item.productId,
+          referenceType: 'ORDER',
+          referenceId: orderId,
+          type: InventoryTransactionType.RETURN,
+        },
+      });
+      if (alreadyReturned) {
+        continue;
+      }
+
+      const sale = await tx.inventoryTransaction.findFirst({
+        where: {
+          productId: item.productId,
+          referenceType: 'ORDER',
+          referenceId: orderId,
+          type: InventoryTransactionType.SALE,
+        },
+      });
+      if (!sale) {
+        // No SALE (e.g. cancelled/released reservation) — do not inflate stock.
+        continue;
+      }
+
+      let returnQty = sale.quantity;
+      if (returnedQuantitiesByProductId) {
+        const requested = returnedQuantitiesByProductId[item.productId];
+        if (requested === undefined) {
+          continue;
+        }
+        if (requested <= 0) {
+          continue;
+        }
+        returnQty = Math.min(requested, sale.quantity);
+      }
+
+      await this.inventoryService.commitReturnInTransaction(
+        tx,
+        item.productId,
+        returnQty,
+        {
+          createdBy: actorUserId ?? undefined,
+          referenceType: 'ORDER',
+          referenceId: orderId,
+          note: 'Restocked after order return',
+        },
+      );
+    }
   }
 
   /**

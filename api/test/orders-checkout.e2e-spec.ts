@@ -4,6 +4,7 @@ import {
   AdminRoleCode,
   InventoryTransactionType,
   OrderStatus,
+  PaymentStatus,
   PriceType,
   UserType,
 } from '@prisma/client';
@@ -13,6 +14,7 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { AdminService } from '../src/modules/admin/admin.service';
 import { AuthService } from '../src/modules/auth/auth.service';
+import { OrderStatusService } from '../src/modules/orders/order-status.service';
 import { OrdersService } from '../src/modules/orders/orders.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
@@ -554,6 +556,64 @@ describe('Orders & Checkout (e2e)', () => {
       .expect(201);
   });
 
+  it('unpaid admin CONFIRMED keeps reservation and cancel still RELEASES', async () => {
+    await prisma.inventory.update({
+      where: { productId },
+      data: { quantity: 10, reservedQuantity: 0 },
+    });
+    await addToCart(userAToken, 1);
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({
+        shippingAddressId: addressAId,
+        billingAddressId: addressAId,
+      })
+      .expect(201);
+    const orderId = (created.body as OrderBody).id;
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/admin/orders/${orderId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: OrderStatus.CONFIRMED })
+      .expect(200);
+
+    const reserved = await prisma.inventory.findUniqueOrThrow({
+      where: { productId },
+    });
+    expect(reserved.quantity).toBe(10);
+    expect(reserved.reservedQuantity).toBe(1);
+    expect(
+      await prisma.inventoryTransaction.count({
+        where: {
+          productId,
+          type: InventoryTransactionType.SALE,
+          referenceId: orderId,
+        },
+      }),
+    ).toBe(0);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${orderId}/cancel`)
+      .set('Authorization', `Bearer ${userAToken}`)
+      .expect(201);
+
+    const afterCancel = await prisma.inventory.findUniqueOrThrow({
+      where: { productId },
+    });
+    expect(afterCancel.quantity).toBe(10);
+    expect(afterCancel.reservedQuantity).toBe(0);
+    expect(
+      await prisma.inventoryTransaction.count({
+        where: {
+          productId,
+          type: InventoryTransactionType.RELEASE,
+          referenceId: orderId,
+        },
+      }),
+    ).toBe(1);
+  });
+
   it('admin prepare → ship with tracking → deliver and customer sees shipping', async () => {
     await prisma.inventory.update({
       where: { productId },
@@ -631,5 +691,152 @@ describe('Orders & Checkout (e2e)', () => {
       .post(`/api/v1/orders/${orderId}/cancel`)
       .set('Authorization', `Bearer ${userAToken}`)
       .expect(409);
+  });
+
+  it('PAID SALE then RETURNED restocks quantity and is idempotent', async () => {
+    await prisma.inventory.update({
+      where: { productId },
+      data: { quantity: 10, reservedQuantity: 0 },
+    });
+    await addToCart(userAToken, 2);
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({
+        shippingAddressId: addressAId,
+        billingAddressId: addressAId,
+      })
+      .expect(201);
+    const orderId = (created.body as OrderBody).id;
+
+    await prisma.payment.updateMany({
+      where: { orderId },
+      data: { status: PaymentStatus.PAID, paidAt: new Date() },
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/admin/orders/${orderId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: OrderStatus.CONFIRMED })
+      .expect(200);
+
+    const afterSale = await prisma.inventory.findUniqueOrThrow({
+      where: { productId },
+    });
+    expect(afterSale.quantity).toBe(8);
+    expect(afterSale.reservedQuantity).toBe(0);
+    expect(
+      await prisma.inventoryTransaction.count({
+        where: {
+          productId,
+          type: InventoryTransactionType.SALE,
+          referenceId: orderId,
+        },
+      }),
+    ).toBe(1);
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/admin/orders/${orderId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: OrderStatus.PREPARING })
+      .expect(200);
+    await request(app.getHttpServer())
+      .post(`/api/v1/admin/orders/${orderId}/ship`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ trackingNumber: 'TRK-RET-001' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/api/v1/admin/orders/${orderId}/deliver`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({})
+      .expect(201);
+
+    const returned = await request(app.getHttpServer())
+      .post(`/api/v1/admin/orders/${orderId}/return`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ returnReason: 'Hasarlı ürün', adminNote: 'Stok iadesi' })
+      .expect(201);
+    expect((returned.body as OrderBody).status).toBe(OrderStatus.RETURNED);
+
+    const afterReturn = await prisma.inventory.findUniqueOrThrow({
+      where: { productId },
+    });
+    expect(afterReturn.quantity).toBe(10);
+    expect(afterReturn.reservedQuantity).toBe(0);
+    expect(
+      await prisma.inventoryTransaction.count({
+        where: {
+          productId,
+          type: InventoryTransactionType.RETURN,
+          referenceType: 'ORDER',
+          referenceId: orderId,
+        },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.orderReturn.count({ where: { orderId } }),
+    ).toBe(1);
+
+    const orderStatus = app.get(OrderStatusService);
+    await Promise.all([
+      prisma.$transaction((tx) =>
+        orderStatus.restockOrderReturnOnce(tx, orderId, null),
+      ),
+      prisma.$transaction((tx) =>
+        orderStatus.restockOrderReturnOnce(tx, orderId, null),
+      ),
+    ]);
+    expect(
+      await prisma.inventoryTransaction.count({
+        where: {
+          productId,
+          type: InventoryTransactionType.RETURN,
+          referenceId: orderId,
+        },
+      }),
+    ).toBe(1);
+    const afterDup = await prisma.inventory.findUniqueOrThrow({
+      where: { productId },
+    });
+    expect(afterDup.quantity).toBe(10);
+    expect(afterDup.reservedQuantity).toBe(0);
+  });
+
+  it('CANCELLED order cannot transition to RETURNED', async () => {
+    await prisma.inventory.update({
+      where: { productId },
+      data: { quantity: 10, reservedQuantity: 0 },
+    });
+    await addToCart(userAToken, 1);
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({
+        shippingAddressId: addressAId,
+        billingAddressId: addressAId,
+      })
+      .expect(201);
+    const orderId = (created.body as OrderBody).id;
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${orderId}/cancel`)
+      .set('Authorization', `Bearer ${userAToken}`)
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/admin/orders/${orderId}/return`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ returnReason: 'should fail' })
+      .expect(400);
+
+    expect(
+      await prisma.inventoryTransaction.count({
+        where: {
+          productId,
+          type: InventoryTransactionType.RETURN,
+          referenceId: orderId,
+        },
+      }),
+    ).toBe(0);
   });
 });

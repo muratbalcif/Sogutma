@@ -17,6 +17,7 @@ import { AdminService } from '../src/modules/admin/admin.service';
 import { AuthService } from '../src/modules/auth/auth.service';
 import { EmailOutboxService } from '../src/modules/payments/email-outbox.service';
 import { PaymentExpirationService } from '../src/modules/payments/payment-expiration.service';
+import { OrderStatusService } from '../src/modules/orders/order-status.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { flushTestRedis } from './flush-redis';
 
@@ -269,6 +270,9 @@ describe('Payments & Accounting (e2e)', () => {
   });
 
   it('bank transfer approval marks payment PAID and updates accounting', async () => {
+    const inventoryBefore = await prisma.inventory.findUniqueOrThrow({
+      where: { productId },
+    });
     const order = await createOrder();
     expect(order.payment?.id).toBeTruthy();
 
@@ -350,6 +354,51 @@ describe('Payments & Accounting (e2e)', () => {
       where: { reference: `PAYMENT:BANK_TRANSFER:${notificationId}` },
     });
     expect(txCount).toBe(1);
+
+    const inventory = await prisma.inventory.findUniqueOrThrow({
+      where: { productId },
+    });
+    // createOrder reserves 1; SALE commits quantity and reserved (net reserved unchanged vs before).
+    expect(inventory.quantity).toBe(inventoryBefore.quantity - 1);
+    expect(inventory.reservedQuantity).toBe(inventoryBefore.reservedQuantity);
+
+    const saleCount = await prisma.inventoryTransaction.count({
+      where: {
+        productId,
+        type: 'SALE',
+        referenceType: 'ORDER',
+        referenceId: order.id,
+      },
+    });
+    expect(saleCount).toBe(1);
+
+    // Concurrent duplicate SALE commits must remain idempotent.
+    const orderStatus = app.get(OrderStatusService);
+    await Promise.all([
+      prisma.$transaction((tx) =>
+        orderStatus.commitOrderSaleOnce(tx, order.id, null),
+      ),
+      prisma.$transaction((tx) =>
+        orderStatus.commitOrderSaleOnce(tx, order.id, null),
+      ),
+    ]);
+    expect(
+      await prisma.inventoryTransaction.count({
+        where: {
+          productId,
+          type: 'SALE',
+          referenceType: 'ORDER',
+          referenceId: order.id,
+        },
+      }),
+    ).toBe(1);
+    const inventoryAfterDup = await prisma.inventory.findUniqueOrThrow({
+      where: { productId },
+    });
+    expect(inventoryAfterDup.quantity).toBe(inventoryBefore.quantity - 1);
+    expect(inventoryAfterDup.reservedQuantity).toBe(
+      inventoryBefore.reservedQuantity,
+    );
   });
 
   it('supports partial bank transfers 300+200+500 → PAID', async () => {

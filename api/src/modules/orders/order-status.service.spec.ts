@@ -43,6 +43,8 @@ describe('OrderStatusService matrix', () => {
 describe('OrderStatusService.applyTransitionInTransaction', () => {
   const inventoryService = {
     releaseStockInTransaction: jest.fn(),
+    commitSaleInTransaction: jest.fn(),
+    commitReturnInTransaction: jest.fn(),
   };
   const accountingService = {
     reverseSaleForCancelledOrder: jest.fn(),
@@ -82,13 +84,13 @@ describe('OrderStatusService.applyTransitionInTransaction', () => {
     jest.clearAllMocks();
   });
 
-  it('PENDING → CONFIRMED', async () => {
+  it('PENDING → CONFIRMED without paid payment does not commit SALE', async () => {
     const tx = makeTx({
       id: 'o1',
       userId: 'u1',
       orderNumber: 'FS-1',
       status: OrderStatus.PENDING,
-      items: [],
+      items: [{ productId: 'p1', quantity: 2 }],
       shipping: null,
     });
     const result = await service.applyTransitionInTransaction(tx as never, {
@@ -97,6 +99,63 @@ describe('OrderStatusService.applyTransitionInTransaction', () => {
       changedByUserId: 'admin',
     });
     expect(result.toStatus).toBe(OrderStatus.CONFIRMED);
+    expect(inventoryService.commitSaleInTransaction).not.toHaveBeenCalled();
+  });
+
+  it('PENDING → CONFIRMED with PAID payment commits SALE', async () => {
+    const tx = makeTx({
+      id: 'o1',
+      userId: 'u1',
+      orderNumber: 'FS-1',
+      status: OrderStatus.PENDING,
+      items: [
+        { productId: 'p1', quantity: 2 },
+        { productId: 'p2', quantity: 1 },
+      ],
+      shipping: null,
+    });
+    tx.payment.findFirst.mockResolvedValue({ id: 'pay1' });
+
+    await service.applyTransitionInTransaction(tx as never, {
+      orderId: 'o1',
+      toStatus: OrderStatus.CONFIRMED,
+      changedByUserId: 'admin',
+    });
+
+    expect(inventoryService.commitSaleInTransaction).toHaveBeenCalledTimes(2);
+    expect(inventoryService.commitSaleInTransaction).toHaveBeenCalledWith(
+      tx,
+      'p1',
+      2,
+      expect.objectContaining({
+        referenceType: 'ORDER',
+        referenceId: 'o1',
+      }),
+    );
+  });
+
+  it('duplicate SALE commit is skipped when SALE row exists', async () => {
+    const tx = makeTx({
+      id: 'o1',
+      userId: 'u1',
+      orderNumber: 'FS-1',
+      status: OrderStatus.PENDING,
+      items: [{ productId: 'p1', quantity: 2 }],
+      shipping: null,
+    });
+    tx.payment.findFirst.mockResolvedValue({ id: 'pay1' });
+    tx.inventoryTransaction.findFirst.mockResolvedValue({
+      id: 'sale1',
+      type: InventoryTransactionType.SALE,
+    });
+
+    await service.applyTransitionInTransaction(tx as never, {
+      orderId: 'o1',
+      toStatus: OrderStatus.CONFIRMED,
+      changedByUserId: 'admin',
+    });
+
+    expect(inventoryService.commitSaleInTransaction).not.toHaveBeenCalled();
   });
 
   it('rejects cancel when a PAID payment exists', async () => {
@@ -150,7 +209,6 @@ describe('OrderStatusService.applyTransitionInTransaction', () => {
       type: InventoryTransactionType.RELEASE,
     });
     inventoryService.releaseStockInTransaction.mockClear();
-    // Simulate already cancelled conflict on second cancel attempt
     tx.order.findUnique.mockResolvedValue({
       id: 'o1',
       userId: 'u1',
@@ -185,5 +243,168 @@ describe('OrderStatusService.applyTransitionInTransaction', () => {
         changedByUserId: 'admin',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('DELIVERED → RETURNED restocks SALE quantities', async () => {
+    const tx = makeTx({
+      id: 'o1',
+      userId: 'u1',
+      orderNumber: 'FS-1',
+      status: OrderStatus.DELIVERED,
+      items: [
+        { productId: 'p1', quantity: 2 },
+        { productId: 'p2', quantity: 1 },
+      ],
+      shipping: null,
+    });
+    tx.inventoryTransaction.findFirst.mockImplementation(
+      (args: {
+        where: { type?: InventoryTransactionType; productId?: string };
+      }) => {
+        if (args.where.type === InventoryTransactionType.RETURN) {
+          return Promise.resolve(null);
+        }
+        if (args.where.type === InventoryTransactionType.SALE) {
+          return Promise.resolve({
+            id: 'sale',
+            quantity: args.where.productId === 'p2' ? 1 : 2,
+            type: InventoryTransactionType.SALE,
+          });
+        }
+        return Promise.resolve(null);
+      },
+    );
+
+    await service.applyTransitionInTransaction(tx as never, {
+      orderId: 'o1',
+      toStatus: OrderStatus.RETURNED,
+      changedByUserId: 'admin',
+      returnReason: 'defect',
+    });
+
+    expect(tx.orderReturn.upsert).toHaveBeenCalled();
+    expect(inventoryService.commitReturnInTransaction).toHaveBeenCalledTimes(2);
+    expect(inventoryService.commitReturnInTransaction).toHaveBeenCalledWith(
+      tx,
+      'p1',
+      2,
+      expect.objectContaining({
+        referenceType: 'ORDER',
+        referenceId: 'o1',
+      }),
+    );
+  });
+
+  it('RETURNED skips restock when no SALE (e.g. cancelled reservation)', async () => {
+    const tx = makeTx({
+      id: 'o1',
+      userId: 'u1',
+      orderNumber: 'FS-1',
+      status: OrderStatus.DELIVERED,
+      items: [{ productId: 'p1', quantity: 2 }],
+      shipping: null,
+    });
+    // findFirst always null → no RETURN, no SALE
+    await service.applyTransitionInTransaction(tx as never, {
+      orderId: 'o1',
+      toStatus: OrderStatus.RETURNED,
+      changedByUserId: 'admin',
+    });
+    expect(inventoryService.commitReturnInTransaction).not.toHaveBeenCalled();
+  });
+
+  it('duplicate RETURN is skipped when RETURN row exists', async () => {
+    const tx = makeTx({
+      id: 'o1',
+      userId: 'u1',
+      orderNumber: 'FS-1',
+      status: OrderStatus.DELIVERED,
+      items: [{ productId: 'p1', quantity: 2 }],
+      shipping: null,
+    });
+    tx.inventoryTransaction.findFirst.mockResolvedValue({
+      id: 'ret1',
+      type: InventoryTransactionType.RETURN,
+    });
+
+    await service.applyTransitionInTransaction(tx as never, {
+      orderId: 'o1',
+      toStatus: OrderStatus.RETURNED,
+      changedByUserId: 'admin',
+    });
+
+    expect(inventoryService.commitReturnInTransaction).not.toHaveBeenCalled();
+  });
+
+  it('partial return restocks only requested quantity', async () => {
+    const tx = makeTx({
+      id: 'o1',
+      userId: 'u1',
+      orderNumber: 'FS-1',
+      status: OrderStatus.DELIVERED,
+      items: [{ productId: 'p1', quantity: 5 }],
+      shipping: null,
+    });
+    tx.inventoryTransaction.findFirst.mockImplementation(
+      (args: { where: { type?: InventoryTransactionType } }) => {
+        if (args.where.type === InventoryTransactionType.RETURN) {
+          return Promise.resolve(null);
+        }
+        if (args.where.type === InventoryTransactionType.SALE) {
+          return Promise.resolve({
+            id: 'sale',
+            quantity: 5,
+            type: InventoryTransactionType.SALE,
+          });
+        }
+        return Promise.resolve(null);
+      },
+    );
+
+    await service.restockOrderReturnOnce(tx as never, 'o1', 'admin', {
+      p1: 2,
+    });
+
+    expect(inventoryService.commitReturnInTransaction).toHaveBeenCalledWith(
+      tx,
+      'p1',
+      2,
+      expect.objectContaining({ referenceId: 'o1' }),
+    );
+  });
+
+  it('rolls back RETURNED transition when restock throws', async () => {
+    const tx = makeTx({
+      id: 'o1',
+      userId: 'u1',
+      orderNumber: 'FS-1',
+      status: OrderStatus.DELIVERED,
+      items: [{ productId: 'p1', quantity: 1 }],
+      shipping: null,
+    });
+    tx.inventoryTransaction.findFirst.mockImplementation(
+      (args: { where: { type?: InventoryTransactionType } }) => {
+        if (args.where.type === InventoryTransactionType.SALE) {
+          return Promise.resolve({
+            id: 'sale',
+            quantity: 1,
+            type: InventoryTransactionType.SALE,
+          });
+        }
+        return Promise.resolve(null);
+      },
+    );
+    inventoryService.commitReturnInTransaction.mockRejectedValue(
+      new ConflictException('boom'),
+    );
+
+    await expect(
+      service.applyTransitionInTransaction(tx as never, {
+        orderId: 'o1',
+        toStatus: OrderStatus.RETURNED,
+        changedByUserId: 'admin',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.order.update).not.toHaveBeenCalled();
   });
 });

@@ -350,6 +350,10 @@ model InventoryTransaction {
   @@index([createdAt])
   @@index([referenceId])
   @@index([type])
+  /// DB: UNIQUE (productId, referenceId) WHERE type=SALE AND referenceType=ORDER
+  /// — see migration 20260918150000
+  /// DB: UNIQUE (productId, referenceId) WHERE type=RETURN AND referenceType=ORDER
+  /// — see migration 20260918160000
   @@map("inventory_transactions")
 }
 

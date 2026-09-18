@@ -463,16 +463,24 @@ export class PaymentsService {
     if (!order) {
       return;
     }
-    if (order.status !== OrderStatus.PENDING) {
+    if (order.status === OrderStatus.PENDING) {
+      await this.orderStatusService.applyTransitionInTransaction(tx, {
+        orderId,
+        toStatus: OrderStatus.CONFIRMED,
+        note: 'Confirmed after successful payment',
+        changedByUserId: changedBy,
+        cancelPendingPayments: false,
+      });
       return;
     }
-    await this.orderStatusService.applyTransitionInTransaction(tx, {
-      orderId,
-      toStatus: OrderStatus.CONFIRMED,
-      note: 'Confirmed after successful payment',
-      changedByUserId: changedBy,
-      cancelPendingPayments: false,
-    });
+
+    // Order already advanced (e.g. admin confirmed unpaid) — still commit SALE.
+    if (
+      order.status !== OrderStatus.CANCELLED &&
+      order.status !== OrderStatus.RETURNED
+    ) {
+      await this.orderStatusService.commitOrderSaleOnce(tx, orderId, changedBy);
+    }
   }
 
   private requireProvider(name: string): PaymentProvider {
