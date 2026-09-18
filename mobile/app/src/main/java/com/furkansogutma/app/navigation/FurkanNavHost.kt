@@ -400,7 +400,13 @@ fun FurkanNavHost(
                         }
                     }
                 } else {
-                    OrderDetailRoute(orderId = id, onBack = { navController.popBackStack() })
+                    OrderDetailRoute(
+                        orderId = id,
+                        onBack = { navController.popBackStack() },
+                        onPayBankTransfer = { orderId ->
+                            navController.navigate("bank_transfers?orderId=$orderId")
+                        },
+                    )
                 }
             }
             composable(AppRoute.Favorites.route) {

@@ -59,8 +59,11 @@ export type OrderWithRelations = {
   }>;
   bankTransfers?: Array<{
     id: string;
+    paymentId?: string;
     amount: Prisma.Decimal;
     status: string;
+    referenceNumber?: string | null;
+    bankAccount?: { bankName: string } | null;
   }>;
   shipping?: {
     id: string;
@@ -107,6 +110,11 @@ export function mapOrderToResponse(
         return rem.lt(0) ? new Prisma.Decimal(0) : rem;
       })()
     : null;
+  const pendingTransfer = (order.bankTransfers ?? []).find(
+    (t) =>
+      t.status === 'PENDING' &&
+      (!latestPayment || !t.paymentId || t.paymentId === latestPayment.id),
+  );
   const allowedTransitions = orderStatusService
     ? orderStatusService.getAllowedTransitions(order.status)
     : [];
@@ -162,6 +170,14 @@ export function mapOrderToResponse(
             remainingAmount ?? new Prisma.Decimal(0),
           ),
           paymentReference: latestPayment.paymentReference ?? null,
+          pendingBankTransferId: pendingTransfer?.id ?? null,
+          pendingBankTransferAmount: pendingTransfer
+            ? toMoneyString(pendingTransfer.amount)
+            : null,
+          pendingBankTransferBankName:
+            pendingTransfer?.bankAccount?.bankName ?? null,
+          pendingBankTransferReference:
+            pendingTransfer?.referenceNumber ?? null,
         }
       : null,
     shipping: order.shipping
@@ -208,8 +224,15 @@ export const orderDetailInclude = {
   statusHistory: { orderBy: { createdAt: 'asc' as const } },
   payments: { orderBy: { createdAt: 'desc' as const } },
   bankTransfers: {
-    select: { id: true, amount: true, status: true },
-    orderBy: { createdAt: 'asc' as const },
+    select: {
+      id: true,
+      paymentId: true,
+      amount: true,
+      status: true,
+      referenceNumber: true,
+      bankAccount: { select: { bankName: true } },
+    },
+    orderBy: { createdAt: 'desc' as const },
   },
   shipping: true,
   orderReturn: true,

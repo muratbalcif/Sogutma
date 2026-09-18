@@ -10,6 +10,29 @@ import {
 
 type ImportKind = "products" | "prices" | "stock";
 
+const SAMPLE_BY_KIND: Record<
+  ImportKind,
+  { href: string; label: string; columns: string }
+> = {
+  products: {
+    href: "/samples/ornek-urun-aktarimi.xlsx",
+    label: "Örnek ürün Excel indir",
+    columns:
+      "sku, name, brand, category, vatRate, retailPrice, campaignPrice, wholesalePrice, corporatePrice, stock, minimumStock, active, slug, barcode, description",
+  },
+  prices: {
+    href: "/samples/ornek-fiyat-guncelleme.xlsx",
+    label: "Örnek fiyat Excel indir",
+    columns:
+      "sku, priceType (RETAIL|CAMPAIGN|WHOLESALE|CORPORATE), price, validFrom, validTo",
+  },
+  stock: {
+    href: "/samples/ornek-stok-guncelleme.xlsx",
+    label: "Örnek stok Excel indir",
+    columns: "sku, quantity, operation (SET|INCREASE|DECREASE), reason",
+  },
+};
+
 export function ImportFlow({
   kind,
   title,
@@ -22,6 +45,7 @@ export function ImportFlow({
   const queryClient = useQueryClient();
   const [job, setJob] = useState<AdminImportJob | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const sample = SAMPLE_BY_KIND[kind];
 
   const previewMutation = useMutation({
     mutationFn: previewFn,
@@ -56,21 +80,35 @@ export function ImportFlow({
     return [];
   })();
 
-  const canImport =
-    !!job &&
-    job.status === "READY" &&
-    job.validRows > 0;
+  const canImport = !!job && job.status === "READY" && job.validRows > 0;
 
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">{title}</h3>
       <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6">
-        <p className="mb-3 text-sm text-slate-600">
+        <p className="mb-2 text-sm text-slate-600">
           Desteklenen formatlar: CSV, XLSX
         </p>
+        <p className="mb-3 text-xs text-slate-500">
+          Beklenen kolonlar:{" "}
+          <span className="font-mono">{sample.columns}</span>
+        </p>
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <a
+            href={sample.href}
+            download
+            className="inline-flex min-h-11 items-center rounded-md border border-cyan-600 bg-cyan-50 px-4 py-2 text-sm font-medium text-cyan-900 hover:bg-cyan-100"
+          >
+            {sample.label}
+          </a>
+          <span className="text-xs text-slate-500">
+            Örnek dosyayı indirip düzenleyerek yükleyebilirsiniz.
+          </span>
+        </div>
         <input
           type="file"
           accept=".csv,.xlsx,.xls"
+          aria-label="İçe aktarım dosyası seç"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) previewMutation.mutate(file);

@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { CancelOrderButton } from "@/components/account/cancel-order-button";
 import { Badge } from "@/components/ui/badge";
+import { CopyButton } from "@/components/ui/copy-button";
 import { serverApiFetch } from "@/lib/api/server";
+import { formatMoney } from "@/lib/money";
 import {
   orderStatusLabel,
   orderStatusTone,
@@ -29,6 +31,8 @@ type Order = {
     amount: string;
     approvedTotal?: string;
     remainingAmount?: string;
+    paymentReference?: string | null;
+    pendingBankTransferId?: string | null;
   } | null;
   shipping: {
     provider: string;
@@ -63,6 +67,16 @@ export default async function OrderDetailPage({ params }: Props) {
     notFound();
   }
 
+  const currency = order.currency;
+  const isBankTransfer = order.payment?.method === "BANK_TRANSFER";
+  const remaining = order.payment?.remainingAmount;
+  const approved = order.payment?.approvedTotal;
+  const canPayBankTransfer =
+    isBankTransfer &&
+    (order.payment?.status === "PENDING" ||
+      order.payment?.status === "PARTIALLY_PAID") &&
+    Number(remaining ?? order.payment?.amount) > 0;
+
   return (
     <div className="space-y-6">
       <div>
@@ -80,16 +94,16 @@ export default async function OrderDetailPage({ params }: Props) {
             {new Date(order.createdAt).toLocaleString("tr-TR")}
           </span>
         </div>
-        {order.payment?.method === "BANK_TRANSFER" &&
-        (order.payment.status === "PENDING" ||
-          order.payment.status === "PARTIALLY_PAID") ? (
+        {canPayBankTransfer ? (
           <a
             href={`/account/bank-transfers?orderId=${order.id}`}
-            className="mt-3 inline-flex text-sm font-semibold text-accent"
+            className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-accent"
           >
-            Havale / EFT ile Öde
-            {order.payment.remainingAmount
-              ? ` · Kalan ${order.payment.remainingAmount} ${order.currency}`
+            {order.payment?.pendingBankTransferId
+              ? "Ödeme bildiriminiz inceleniyor"
+              : "Havale / EFT ile Öde"}
+            {remaining
+              ? ` · Kalan ${formatMoney(remaining, currency)}`
               : ""}
           </a>
         ) : null}
@@ -100,6 +114,63 @@ export default async function OrderDetailPage({ params }: Props) {
         ) : null}
       </div>
 
+      {isBankTransfer && order.payment ? (
+        <section className="rounded-lg border bg-white p-4 text-sm">
+          <h2 className="font-semibold text-navy">Havale / EFT ödeme</h2>
+          <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs text-slate-500">Ödeme durumu</dt>
+              <dd className="mt-0.5 font-medium">
+                {paymentStatusLabel(order.payment.status)}
+                {order.payment.status === "PARTIALLY_PAID" ? (
+                  <span className="ml-2 inline-flex">
+                    <Badge tone="warning">Kısmi ödeme</Badge>
+                  </span>
+                ) : null}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Sipariş tutarı</dt>
+              <dd className="mt-0.5 font-medium">
+                {formatMoney(order.payment.amount, currency)}
+              </dd>
+            </div>
+            {approved != null ? (
+              <div>
+                <dt className="text-xs text-slate-500">Ödenen</dt>
+                <dd className="mt-0.5 font-medium">
+                  {formatMoney(approved, currency)}
+                </dd>
+              </div>
+            ) : null}
+            {remaining != null &&
+            (order.payment.status === "PENDING" ||
+              order.payment.status === "PARTIALLY_PAID") ? (
+              <div>
+                <dt className="text-xs text-slate-500">Kalan</dt>
+                <dd className="mt-0.5 font-medium">
+                  {formatMoney(remaining, currency)}
+                </dd>
+              </div>
+            ) : null}
+            {order.payment.paymentReference ? (
+              <div className="sm:col-span-2">
+                <dt className="text-xs text-slate-500">Ödeme referansı</dt>
+                <dd className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs sm:text-sm">
+                    {order.payment.paymentReference}
+                  </span>
+                  <CopyButton
+                    value={order.payment.paymentReference}
+                    label="Referansı Kopyala"
+                  />
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        </section>
+      ) : null}
+
       <section className="rounded-lg border bg-white p-4">
         <h2 className="font-semibold">Ürünler</h2>
         <ul className="mt-3 space-y-2 text-sm">
@@ -108,27 +179,16 @@ export default async function OrderDetailPage({ params }: Props) {
               <span>
                 {item.productName} × {item.quantity}
               </span>
-              <span>
-                {item.totalAmount} {order.currency}
-              </span>
+              <span>{formatMoney(item.totalAmount, currency)}</span>
             </li>
           ))}
         </ul>
         <p className="mt-4 border-t pt-3 font-semibold">
-          Toplam: {order.totalAmount} {order.currency}
+          Toplam: {formatMoney(order.totalAmount, currency)}
         </p>
         <p className="mt-1 text-sm text-slate-600">
           Ödeme: {paymentMethodLabel(order.payment?.method)} ·{" "}
           {paymentStatusLabel(order.payment?.status)}
-          {order.payment?.approvedTotal != null &&
-          order.payment.status !== "PENDING"
-            ? ` · Ödenen ${order.payment.approvedTotal} ${order.currency}`
-            : ""}
-          {order.payment?.remainingAmount != null &&
-          (order.payment.status === "PENDING" ||
-            order.payment.status === "PARTIALLY_PAID")
-            ? ` · Kalan ${order.payment.remainingAmount} ${order.currency}`
-            : ""}
         </p>
       </section>
 
@@ -174,7 +234,7 @@ export default async function OrderDetailPage({ params }: Props) {
               href={order.shipping.trackingUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-4 inline-flex rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-dark"
+              className="mt-4 inline-flex min-h-11 items-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-dark"
             >
               Kargoyu Takip Et
             </a>

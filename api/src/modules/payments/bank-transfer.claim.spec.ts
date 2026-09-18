@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { PaymentStatus, Prisma } from '@prisma/client';
 import { BankTransferService } from './bank-transfer.service';
 
@@ -61,6 +61,23 @@ describe('BankTransferService claim validation', () => {
       service.createNotification('user-1', 'order-1', {} as never),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(bankAccounts.requireActive).not.toHaveBeenCalled();
+  });
+
+  it('maps unique constraint race to ConflictException', async () => {
+    bankAccounts.requireActive.mockResolvedValue({ id: 'bank-1' });
+    prisma.bankTransferNotification.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: ['paymentId'] },
+      }),
+    );
+
+    await expect(
+      service.createNotification('user-1', 'order-1', {
+        bankAccountId: 'bank-1',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('stores paymentReference as claim referenceNumber', async () => {

@@ -38,7 +38,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.text.NumberFormat
+import java.util.Locale
+import java.util.Currency as JavaCurrency
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -590,29 +596,55 @@ fun CurrentAccountRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hilt
 fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewModel()) {
     var items by remember { mutableStateOf<List<BankTransfer>?>(null) }
     var banks by remember { mutableStateOf<List<com.furkansogutma.domain.account.CompanyBankAccount>>(emptyList()) }
+    var banksLoading by remember { mutableStateOf(true) }
+    var banksError by remember { mutableStateOf<String?>(null) }
     var order by remember { mutableStateOf<Order?>(null) }
+    var orderError by remember { mutableStateOf<String?>(null) }
     var selectedBankId by remember { mutableStateOf<String?>(null) }
+    var amountInput by remember { mutableStateOf("") }
+    var submitting by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val selectedColor = Color(0xFF0F766E)
 
     fun load() {
         scope.launch {
             items = null
             error = null
+            banksLoading = true
+            banksError = null
+            orderError = null
             when (val banksResult = vm.accountRepository.getBankAccounts()) {
-                is Result.Success -> banks = banksResult.data
-                is Result.Error -> error = banksResult.error.message
+                is Result.Success -> {
+                    banks = banksResult.data
+                    banksError = null
+                }
+                is Result.Error -> {
+                    banks = emptyList()
+                    banksError = banksResult.error.message
+                }
             }
+            banksLoading = false
             when (val result = vm.accountRepository.getBankTransfers()) {
                 is Result.Success -> items = result.data
                 is Result.Error -> if (error == null) error = result.error.message
             }
             if (orderId != null) {
                 when (val orderResult = vm.getOrder(orderId)) {
-                    is Result.Success -> order = orderResult.data
-                    is Result.Error -> if (error == null) error = orderResult.error.message
+                    is Result.Success -> {
+                        order = orderResult.data
+                        val remaining = orderResult.data.paymentRemainingAmount
+                            ?: orderResult.data.total
+                        if (orderResult.data.pendingBankTransferId.isNullOrBlank()) {
+                            amountInput = remaining
+                        }
+                    }
+                    is Result.Error -> {
+                        orderError = orderResult.error.message
+                        if (error == null) error = orderResult.error.message
+                    }
                 }
             }
         }
@@ -627,76 +659,189 @@ fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: Acc
         message = "$label kopyalandı"
     }
 
+    val claimState = bankTransferClaimUiState(
+        paymentMethod = order?.paymentMethod ?: "BANK_TRANSFER",
+        paymentStatus = order?.paymentStatus,
+        remainingAmount = order?.paymentRemainingAmount ?: order?.total,
+        pendingBankTransferId = order?.pendingBankTransferId,
+    )
+    val isPendingReview = claimState == BankTransferClaimUiState.PendingReview
+    val formDisabled = isPendingReview || submitting
+    val remaining = order?.paymentRemainingAmount ?: order?.total
+    val pendingAmount = order?.pendingBankTransferAmount
+        ?: items?.firstOrNull {
+            it.status == "PENDING" && (orderId == null || it.orderId == orderId)
+        }?.amount
+    val pendingBankName = order?.pendingBankTransferBankName
+        ?: items?.firstOrNull {
+            it.status == "PENDING" && (orderId == null || it.orderId == orderId)
+        }?.bankName
+    val pendingReference = order?.pendingBankTransferReference
+        ?: items?.firstOrNull {
+            it.status == "PENDING" && (orderId == null || it.orderId == orderId)
+        }?.referenceNumber
+        ?: order?.paymentReference
+
     Column(Modifier.fillMaxSize()) {
         FurkanTopBar("Havale / EFT ile Öde", onBack = onBack)
         Column(Modifier.padding(FurkanSpacing.md).verticalScroll(rememberScrollState())) {
-            if (orderId != null) {
+            if (orderId != null && orderError != null && order == null) {
+                Text(orderError!!, color = MaterialTheme.colorScheme.error)
+                FurkanOutlinedButton("Tekrar dene", Modifier.fillMaxWidth()) { load() }
+                Spacer(Modifier.height(FurkanSpacing.lg))
+            }
+            if (orderId != null && claimState == BankTransferClaimUiState.Hidden && order != null) {
+                Text(
+                    "Bu sipariş için yeni havale bildirimi gerekmiyor.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(FurkanSpacing.lg))
+            }
+            if (orderId != null && claimState != BankTransferClaimUiState.Hidden) {
+                if (isPendingReview) {
+                    Text(
+                        "Ödeme bildiriminiz inceleniyor",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF92400E),
+                    )
+                    Text(
+                        "İnceleme tamamlanana kadar yeni bildirim gönderemezsiniz.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text("Bildirilen tutar: ${formatTryDisplay(pendingAmount)}")
+                    Text("Banka: ${pendingBankName ?: "—"}")
+                    Text("Referans: ${pendingReference ?: "—"}")
+                    Spacer(Modifier.height(FurkanSpacing.md))
+                }
+
                 Text("Banka hesapları", style = MaterialTheme.typography.titleLarge)
                 Text(
                     "Bu bankada hesabınız olmasa da kendi bankanızdan EFT/havale yapabilirsiniz.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(FurkanSpacing.sm))
-                banks.forEach { bank ->
-                    val selected = selectedBankId == bank.id
-                    val selectedColor = Color(0xFF0F766E)
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = FurkanSpacing.sm)
-                            .border(
-                                width = if (selected) 2.dp else 1.dp,
-                                color = if (selected) selectedColor else MaterialTheme.colorScheme.outline,
-                                shape = RoundedCornerShape(12.dp),
+                when {
+                    banksLoading -> FurkanLoading()
+                    banksError != null -> {
+                        Text(banksError!!, color = MaterialTheme.colorScheme.error)
+                        FurkanOutlinedButton("Tekrar dene", Modifier.fillMaxWidth()) { load() }
+                    }
+                    banks.isEmpty() -> FurkanEmptyState(
+                        "Aktif banka hesabı yok",
+                        "Şu an havale için gösterilecek şirket hesabı bulunmuyor.",
+                    )
+                    else -> banks.forEach { bank ->
+                        val selected = selectedBankId == bank.id
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = FurkanSpacing.sm)
+                                .border(
+                                    width = if (selected) 2.dp else 1.dp,
+                                    color = if (selected) selectedColor else MaterialTheme.colorScheme.outline,
+                                    shape = RoundedCornerShape(12.dp),
+                                )
+                                .clickable(enabled = !formDisabled) { selectedBankId = bank.id }
+                                .padding(FurkanSpacing.sm),
+                        ) {
+                            Text(
+                                bank.bankName,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (selected) selectedColor else MaterialTheme.colorScheme.onSurface,
                             )
-                            .clickable { selectedBankId = bank.id }
-                            .padding(FurkanSpacing.sm),
-                    ) {
-                        Text(
-                            bank.bankName,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (selected) selectedColor else MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(bank.accountName)
-                        Text(bank.iban, fontWeight = FontWeight.Medium)
-                        bank.branch?.let { Text("Şube: $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        if (selected) {
-                            Text("Seçildi", color = selectedColor, fontWeight = FontWeight.Bold)
-                        }
-                        FurkanOutlinedButton("IBAN'ı Kopyala", Modifier.fillMaxWidth()) {
-                            copy("IBAN", bank.iban)
+                            Text(bank.accountName)
+                            Text(bank.iban, fontWeight = FontWeight.Medium)
+                            bank.branch?.let { Text("Şube: $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            if (selected) {
+                                Text("Seçildi", color = selectedColor, fontWeight = FontWeight.Bold)
+                            }
+                            FurkanOutlinedButton("IBAN'ı Kopyala", Modifier.fillMaxWidth()) {
+                                copy("IBAN", bank.iban)
+                            }
                         }
                     }
                 }
 
                 Spacer(Modifier.height(FurkanSpacing.md))
                 Text("Ödeme özeti", style = MaterialTheme.typography.titleMedium)
-                Text("Toplam: ${order?.total.orEmpty()} ${order?.currency.orEmpty()}")
-                Text("Ödenen: ${order?.paymentApprovedTotal ?: "0.00"} ${order?.currency.orEmpty()}")
-                val remaining = order?.paymentRemainingAmount ?: order?.total
-                Text("Kalan: ${remaining.orEmpty()} ${order?.currency.orEmpty()}")
+                Text("Toplam: ${formatTryDisplay(order?.total)}")
+                Text("Ödenen: ${formatTryDisplay(order?.paymentApprovedTotal ?: "0.00")}")
+                Text("Kalan: ${formatTryDisplay(remaining)}")
                 val reference = order?.paymentReference
                 Text("Referans: ${reference ?: "—"}")
                 remaining?.let {
-                    FurkanOutlinedButton("Tutarı Kopyala", Modifier.fillMaxWidth()) { copy("Tutar", it) }
+                    FurkanOutlinedButton("Kalan Tutarı Kopyala", Modifier.fillMaxWidth()) {
+                        copy("Tutar", it)
+                    }
                 }
                 reference?.let {
-                    FurkanOutlinedButton("Referansı Kopyala", Modifier.fillMaxWidth()) { copy("Referans", it) }
+                    FurkanOutlinedButton("Referansı Kopyala", Modifier.fillMaxWidth()) {
+                        copy("Referans", it)
+                    }
+                }
+
+                if (!isPendingReview) {
+                    Spacer(Modifier.height(FurkanSpacing.sm))
+                    FurkanTextField(
+                        value = amountInput,
+                        onValueChange = { amountInput = it },
+                        label = "Ödeme tutarı",
+                        keyboardType = KeyboardType.Decimal,
+                        enabled = !formDisabled,
+                        supportingText = remaining?.let {
+                            "Varsayılan kalan: ${formatTryDisplay(it)}" +
+                                (toApiMoneyAmount(amountInput)?.let { api ->
+                                    " · Bildirilecek: ${formatTryDisplay(api)}"
+                                } ?: "")
+                        },
+                    )
+                    toApiMoneyAmount(amountInput)?.let { apiAmount ->
+                        FurkanOutlinedButton("Tutarı Kopyala", Modifier.fillMaxWidth()) {
+                            copy("Tutar", apiAmount)
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(FurkanSpacing.sm))
-                FurkanButton("Ödemeyi Yaptım", Modifier.fillMaxWidth()) {
+                FurkanButton(
+                    text = when {
+                        submitting -> "Gönderiliyor…"
+                        isPendingReview -> "İnceleniyor"
+                        else -> "Ödemeyi Yaptım"
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !formDisabled && claimState == BankTransferClaimUiState.CanClaim && selectedBankId != null,
+                    loading = submitting,
+                ) {
                     scope.launch {
+                        if (claimState != BankTransferClaimUiState.CanClaim) {
+                            message = "Ödeme bildiriminiz inceleniyor"
+                            return@launch
+                        }
                         val bankId = selectedBankId
                         if (bankId == null) {
                             message = "Lütfen bir banka hesabı seçin"
                             return@launch
                         }
+                        val amount = toApiMoneyAmount(amountInput)
+                        if (amount == null) {
+                            message = "Geçerli bir tutar girin (0'dan büyük)"
+                            return@launch
+                        }
+                        val remainingValue = remaining?.let { runCatching { BigDecimal(it) }.getOrNull() }
+                        val claimValue = BigDecimal(amount)
+                        if (remainingValue != null && claimValue > remainingValue) {
+                            message = "Tutar kalan bakiyeyi aşamaz (${formatTryDisplay(remaining)})"
+                            return@launch
+                        }
+                        submitting = true
+                        message = null
                         when (
                             val result = vm.accountRepository.createBankTransfer(
                                 orderId = orderId,
                                 bankAccountId = bankId,
-                                amount = remaining,
+                                amount = amount,
                             )
                         ) {
                             is Result.Success -> {
@@ -706,9 +851,19 @@ fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: Acc
                             }
                             is Result.Error -> message = result.error.message
                         }
+                        submitting = false
                     }
                 }
-                message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+                message?.let {
+                    Text(
+                        it,
+                        color = if (it.contains("aşamaz") || it.contains("seçin") || it.contains("Geçerli") || it.contains("inceleniyor")) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            selectedColor
+                        },
+                    )
+                }
                 Spacer(Modifier.height(FurkanSpacing.lg))
             }
             Text("Bildirim geçmişi", style = MaterialTheme.typography.titleMedium)
@@ -718,14 +873,17 @@ fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: Acc
                 items == null -> FurkanLoading()
                 items!!.isEmpty() -> FurkanEmptyState("Havale yok", "Havale bildirimleriniz burada.")
                 else -> items!!.forEach {
-                    Text("${it.amount} — ${it.status}", fontWeight = FontWeight.Medium)
+                    Text(
+                        "${formatTryDisplay(it.amount)} — ${transferStatusLabel(it.status)}",
+                        fontWeight = FontWeight.Medium,
+                    )
                     it.bankName?.let { name -> Text(name) }
                     it.referenceNumber?.let { ref -> Text("Referans: $ref") }
                     it.paymentStatus?.let { status ->
                         Text(
                             "Ödeme: $status" +
-                                (it.approvedTotal?.let { t -> " · Ödenen $t" } ?: "") +
-                                (it.remainingAmount?.let { r -> " · Kalan $r" } ?: ""),
+                                (it.approvedTotal?.let { t -> " · Ödenen ${formatTryDisplay(t)}" } ?: "") +
+                                (it.remainingAmount?.let { r -> " · Kalan ${formatTryDisplay(r)}" } ?: ""),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -736,6 +894,57 @@ fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: Acc
             }
         }
     }
+}
+
+private fun transferStatusLabel(status: String): String = when (status) {
+    "PENDING" -> "İnceleniyor"
+    "APPROVED" -> "Onaylandı"
+    "REJECTED" -> "Reddedildi"
+    else -> status
+}
+
+private fun formatTryDisplay(amount: String?): String {
+    if (amount.isNullOrBlank()) return "—"
+    val value = amount.toBigDecimalOrNull() ?: return "$amount ₺"
+    val formatter = NumberFormat.getCurrencyInstance(Locale("tr", "TR"))
+    formatter.currency = JavaCurrency.getInstance("TRY")
+    formatter.minimumFractionDigits = 2
+    formatter.maximumFractionDigits = 2
+    return formatter.format(value)
+}
+
+/** Normalize user input to API decimal string (`18000.00`). */
+private fun toApiMoneyAmount(raw: String): String? {
+    val trimmed = raw.trim().replace("\\s".toRegex(), "")
+    if (trimmed.isEmpty()) return null
+
+    var normalized = trimmed
+    when {
+        trimmed.contains(',') && trimmed.contains('.') -> {
+            val lastComma = trimmed.lastIndexOf(',')
+            val lastDot = trimmed.lastIndexOf('.')
+            normalized = if (lastComma > lastDot) {
+                trimmed.replace(".", "").replace(',', '.')
+            } else {
+                trimmed.replace(",", "")
+            }
+        }
+        trimmed.contains(',') -> {
+            val parts = trimmed.split(',')
+            normalized = if (parts.size == 2 && parts[1].length <= 2) {
+                parts[0].replace(".", "") + "." + parts[1]
+            } else {
+                trimmed.replace(",", "")
+            }
+        }
+        Regex("""^\d{1,3}(\.\d{3})+$""").matches(trimmed) -> {
+            normalized = trimmed.replace(".", "")
+        }
+    }
+
+    val value = normalized.toBigDecimalOrNull() ?: return null
+    if (value <= BigDecimal.ZERO) return null
+    return value.setScale(2, RoundingMode.HALF_UP).toPlainString()
 }
 
 @Composable

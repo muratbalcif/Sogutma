@@ -349,17 +349,15 @@ export class PaymentsService {
     const fullyPaid = approvedTotal.gte(input.orderTotal);
 
     if (fullyPaid) {
-      if (payment.status !== PaymentStatus.PAID) {
-        this.paymentStatusService.assertTransition(
-          payment.status,
-          PaymentStatus.PAID,
-        );
-        await tx.payment.update({
-          where: { id: input.paymentId },
-          data: { status: PaymentStatus.PAID, paidAt: new Date() },
-        });
-        await this.syncOrderOnPaid(tx, input.orderId, input.userId);
-      }
+      this.paymentStatusService.assertTransition(
+        payment.status,
+        PaymentStatus.PAID,
+      );
+      await tx.payment.update({
+        where: { id: input.paymentId },
+        data: { status: PaymentStatus.PAID, paidAt: new Date() },
+      });
+      await this.syncOrderOnPaid(tx, input.orderId, input.userId);
     } else if (payment.status !== PaymentStatus.PARTIALLY_PAID) {
       this.paymentStatusService.assertTransition(
         payment.status,

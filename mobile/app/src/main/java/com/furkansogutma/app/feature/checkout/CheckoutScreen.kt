@@ -26,14 +26,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.furkansogutma.app.feature.account.AccountDataViewModel
 import com.furkansogutma.core.common.result.Result
 import com.furkansogutma.core.designsystem.components.FurkanButton
 import com.furkansogutma.core.designsystem.components.FurkanCheckoutStepper
@@ -50,6 +54,7 @@ import com.furkansogutma.domain.account.CompanyBankAccount
 import com.furkansogutma.domain.cart.GetCartUseCase
 import com.furkansogutma.domain.order.CreateOrderInput
 import com.furkansogutma.domain.order.CreateOrderUseCase
+import com.furkansogutma.domain.order.Order
 import com.furkansogutma.domain.order.ValidateCheckoutUseCase
 import com.furkansogutma.domain.order.ValidateCouponUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -479,20 +484,146 @@ fun OrderSuccessRoute(
     onViewOrder: (String) -> Unit,
     onContinueShopping: () -> Unit,
     onBankTransfer: (String) -> Unit,
+    vm: AccountDataViewModel = hiltViewModel(),
 ) {
-    Column(Modifier.fillMaxSize().padding(FurkanSpacing.xl)) {
-        Text("Siparişiniz oluşturuldu.", style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(FurkanSpacing.sm))
-        Text("Sipariş No: $orderId")
-        Text("Ödeme yöntemi: Havale / EFT")
-        Text("Ödeme durumu: Ödeme bekleniyor")
-        Spacer(Modifier.height(FurkanSpacing.lg))
-        FurkanButton("Siparişi Görüntüle", Modifier.fillMaxWidth()) { onViewOrder(orderId) }
-        Spacer(Modifier.height(FurkanSpacing.sm))
-        FurkanOutlinedButton("Alışverişe Devam Et", Modifier.fillMaxWidth(), onClick = onContinueShopping)
-        if (paymentMethod == "BANK_TRANSFER") {
-            Spacer(Modifier.height(FurkanSpacing.sm))
-            FurkanButton("Havale Bildirimi Yap", Modifier.fillMaxWidth()) { onBankTransfer(orderId) }
+    var order by remember { mutableStateOf<Order?>(null) }
+    var banks by remember { mutableStateOf<List<CompanyBankAccount>>(emptyList()) }
+    var loading by remember { mutableStateOf(paymentMethod == "BANK_TRANSFER") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val teal = Color(0xFF0F766E)
+
+    fun load() {
+        if (paymentMethod != "BANK_TRANSFER") {
+            loading = false
+            return
+        }
+        scope.launch {
+            loading = true
+            error = null
+            when (val banksResult = vm.accountRepository.getBankAccounts()) {
+                is Result.Success -> banks = banksResult.data
+                is Result.Error -> error = banksResult.error.message
+            }
+            when (val orderResult = vm.getOrder(orderId)) {
+                is Result.Success -> order = orderResult.data
+                is Result.Error -> if (error == null) error = orderResult.error.message
+            }
+            loading = false
         }
     }
+
+    LaunchedEffect(orderId, paymentMethod) { load() }
+
+    fun copy(label: String, value: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
+        message = "$label kopyalandı"
+    }
+
+    val selectedBank = banks.firstOrNull()
+    val remaining = order?.paymentRemainingAmount ?: order?.total
+    val reference = order?.paymentReference
+    val paymentStatusLabel = when (order?.paymentStatus) {
+        "PENDING" -> "Ödeme bekleniyor"
+        "PARTIALLY_PAID" -> "Kısmi ödeme alındı"
+        "PAID" -> "Ödeme alındı"
+        else -> order?.paymentStatus ?: "Ödeme bekleniyor"
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(FurkanSpacing.xl),
+    ) {
+        Text("Siparişiniz oluşturuldu.", style = MaterialTheme.typography.headlineLarge)
+        Spacer(Modifier.height(FurkanSpacing.sm))
+        Text("Sipariş No: ${order?.orderNumber ?: orderId}")
+        if (paymentMethod == "BANK_TRANSFER") {
+            Text("Ödeme yöntemi: Havale / EFT")
+            if (loading) {
+                Spacer(Modifier.height(FurkanSpacing.md))
+                FurkanLoading()
+            } else {
+                Text("Ödeme durumu: $paymentStatusLabel")
+                remaining?.let {
+                    Text("Kalan tutar: ${formatTryAmount(it)}")
+                }
+                reference?.let {
+                    Spacer(Modifier.height(FurkanSpacing.sm))
+                    Text("Ödeme referansı", style = MaterialTheme.typography.titleMedium)
+                    Text(it, fontWeight = FontWeight.Medium)
+                    FurkanOutlinedButton(
+                        "Referansı Kopyala",
+                        Modifier.fillMaxWidth(),
+                        enabled = !loading,
+                    ) { copy("Referans", it) }
+                }
+                selectedBank?.let { bank ->
+                    Spacer(Modifier.height(FurkanSpacing.md))
+                    Text("Banka hesabı", style = MaterialTheme.typography.titleMedium)
+                    Text(bank.bankName, fontWeight = FontWeight.SemiBold, color = teal)
+                    Text(bank.accountName)
+                    Text(bank.iban, fontWeight = FontWeight.Medium)
+                    FurkanOutlinedButton(
+                        "IBAN'ı Kopyala",
+                        Modifier.fillMaxWidth(),
+                        enabled = !loading,
+                    ) { copy("IBAN", bank.iban) }
+                }
+                if (error != null && selectedBank == null) {
+                    Text(error!!, color = MaterialTheme.colorScheme.error)
+                    FurkanOutlinedButton("Tekrar dene", Modifier.fillMaxWidth()) { load() }
+                }
+                if (banks.isEmpty() && error == null && !loading) {
+                    Text(
+                        "Aktif banka hesabı bulunamadı. Sipariş detayından daha sonra deneyebilirsiniz.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        message?.let {
+            Spacer(Modifier.height(FurkanSpacing.sm))
+            Text(it, color = teal)
+        }
+        Spacer(Modifier.height(FurkanSpacing.lg))
+        FurkanButton("Siparişi Görüntüle", Modifier.fillMaxWidth(), enabled = !loading) {
+            onViewOrder(orderId)
+        }
+        Spacer(Modifier.height(FurkanSpacing.sm))
+        FurkanOutlinedButton(
+            "Alışverişe Devam Et",
+            Modifier.fillMaxWidth(),
+            enabled = !loading,
+            onClick = onContinueShopping,
+        )
+        if (paymentMethod == "BANK_TRANSFER") {
+            Spacer(Modifier.height(FurkanSpacing.sm))
+            FurkanButton(
+                text = if (loading) "Yükleniyor…" else "Havale / EFT ile Öde",
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !loading,
+                loading = loading,
+            ) { onBankTransfer(orderId) }
+            Text(
+                "Havale yaptıktan sonra “Ödemeyi Yaptım” ile bildiriminizi gönderin.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+private fun formatTryAmount(amount: String?): String {
+    if (amount.isNullOrBlank()) return "—"
+    val value = amount.toBigDecimalOrNull() ?: return "$amount ₺"
+    val formatter = java.text.NumberFormat.getCurrencyInstance(java.util.Locale("tr", "TR"))
+    formatter.currency = java.util.Currency.getInstance("TRY")
+    formatter.minimumFractionDigits = 2
+    formatter.maximumFractionDigits = 2
+    return formatter.format(value)
 }

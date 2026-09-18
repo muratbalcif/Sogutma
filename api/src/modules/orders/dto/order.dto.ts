@@ -249,6 +249,19 @@ export class PaymentResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   paymentReference!: string | null;
+
+  /** Present when a PENDING bank-transfer claim exists for this payment. */
+  @ApiPropertyOptional({ nullable: true })
+  pendingBankTransferId!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  pendingBankTransferAmount!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  pendingBankTransferBankName!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  pendingBankTransferReference!: string | null;
 }
 
 export class OrderCustomerResponseDto {

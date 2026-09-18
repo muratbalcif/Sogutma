@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 fun OrderDetailRoute(
     orderId: String,
     onBack: () -> Unit = {},
+    onPayBankTransfer: (String) -> Unit = {},
     vm: AccountDataViewModel = hiltViewModel(),
 ) {
     var order by remember { mutableStateOf<Order?>(null) }
@@ -70,6 +71,7 @@ fun OrderDetailRoute(
                 onOpenTracking = { url ->
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                 },
+                onPayBankTransfer = { onPayBankTransfer(orderId) },
                 onCancel = {
                     scope.launch {
                         cancelling = true
@@ -94,6 +96,7 @@ fun OrderDetailContent(
     cancelling: Boolean = false,
     actionError: String? = null,
     onOpenTracking: (String) -> Unit = {},
+    onPayBankTransfer: () -> Unit = {},
     onCancel: () -> Unit = {},
 ) {
     Column(
@@ -113,6 +116,29 @@ fun OrderDetailContent(
             }
         }
         Text("Toplam: ${order.total} ${order.currency}")
+
+        if (order.showsBankTransferPayCta()) {
+            Spacer(Modifier.height(FurkanSpacing.md))
+            val pendingReview = !order.pendingBankTransferId.isNullOrBlank()
+            FurkanButton(
+                text = if (pendingReview) {
+                    "Ödeme bildiriminiz inceleniyor"
+                } else {
+                    "Havale / EFT ile Öde"
+                },
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onPayBankTransfer,
+            )
+            order.paymentRemainingAmount?.takeIf {
+                order.paymentStatus == "PENDING" || order.paymentStatus == "PARTIALLY_PAID"
+            }?.let {
+                Text(
+                    "Kalan tutar: $it ${order.currency}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         order.shippingSummary?.let {
             Spacer(Modifier.height(FurkanSpacing.sm))
             Text("Teslimat adresi", style = MaterialTheme.typography.titleLarge)
@@ -172,4 +198,13 @@ fun OrderDetailContent(
             )
         }
     }
+}
+
+internal fun Order.showsBankTransferPayCta(): Boolean {
+    if (status == "CANCELLED" || status == "RETURNED") return false
+    if (paymentMethod != "BANK_TRANSFER") return false
+    if (paymentStatus != "PENDING" && paymentStatus != "PARTIALLY_PAID") return false
+    val remaining = (paymentRemainingAmount ?: total).toBigDecimalOrNull()
+    if (remaining != null && remaining <= java.math.BigDecimal.ZERO) return false
+    return true
 }

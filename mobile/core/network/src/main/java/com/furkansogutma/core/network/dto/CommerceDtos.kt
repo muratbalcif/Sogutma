@@ -207,6 +207,10 @@ data class PaymentDto(
     val approvedTotal: String? = null,
     val remainingAmount: String? = null,
     val paymentReference: String? = null,
+    val pendingBankTransferId: String? = null,
+    val pendingBankTransferAmount: String? = null,
+    val pendingBankTransferBankName: String? = null,
+    val pendingBankTransferReference: String? = null,
 )
 
 data class FavoriteDto(

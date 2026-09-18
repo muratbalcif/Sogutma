@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { clientApiFetch } from "@/lib/api/client";
+import { formatMoney } from "@/lib/money";
 import { orderService } from "@/services/order.service";
 
 type Address = {
@@ -18,7 +19,11 @@ type Address = {
 };
 
 type Cart = {
-  items: Array<{ product: { name: string }; quantity: number; subtotal: string | null }>;
+  items: Array<{
+    product: { name: string };
+    quantity: number;
+    subtotal: string | null;
+  }>;
   summary: { total: string; currency: string; subtotal: string };
 };
 
@@ -32,14 +37,24 @@ type BankAccount = {
   description: string | null;
 };
 
+function bankInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [shippingAddressId, setShippingAddressId] = useState("");
   const [billingAddressId, setBillingAddressId] = useState("");
+  const [selectedBankId, setSelectedBankId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [copiedIban, setCopiedIban] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [newAddress, setNewAddress] = useState({
     title: "Ev",
     firstName: "",
@@ -68,8 +83,14 @@ export default function CheckoutPage() {
     queryFn: () => clientApiFetch<BankAccount[]>("/payment/bank-accounts"),
   });
 
-  const addresses = useMemo(() => addressesQuery.data ?? [], [addressesQuery.data]);
+  const addresses = useMemo(
+    () => addressesQuery.data ?? [],
+    [addressesQuery.data],
+  );
   const banks = banksQuery.data ?? [];
+  const selectedBank = banks.find((b) => b.id === selectedBankId) ?? null;
+  const currency = cartQuery.data?.summary.currency ?? "TRY";
+  const payableAmount = cartQuery.data?.summary.total ?? "";
 
   async function validateCoupon() {
     setCouponMessage(null);
@@ -90,7 +111,9 @@ export default function CheckoutPage() {
       setCouponDiscount(result.discountAmount ?? null);
       setCouponMessage(result.message ?? "Kupon uygulandı");
     } catch (err) {
-      setCouponMessage(err instanceof Error ? err.message : "Kupon doğrulanamadı");
+      setCouponMessage(
+        err instanceof Error ? err.message : "Kupon doğrulanamadı",
+      );
     }
   }
 
@@ -104,9 +127,10 @@ export default function CheckoutPage() {
     setBillingAddressId(created.id);
   }
 
-  async function copyIban(iban: string) {
-    await navigator.clipboard.writeText(iban);
-    setCopiedIban(iban);
+  async function copyValue(key: string, value: string) {
+    await navigator.clipboard.writeText(value);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1500);
   }
 
   async function placeOrder() {
@@ -114,19 +138,27 @@ export default function CheckoutPage() {
       setError("Teslimat adresi seçin");
       return;
     }
+    if (!selectedBankId) {
+      setError("Havale için bir banka hesabı seçin");
+      return;
+    }
     setCreating(true);
     setError(null);
     setValidatedTotal(null);
     try {
       const billingId = billingAddressId || shippingAddressId;
-      const validation = await orderService.validateCheckout({
+      const validation = (await orderService.validateCheckout({
         shippingAddressId,
         billingAddressId: billingId,
         couponCode: couponCode.trim() || undefined,
-      }) as {
+      })) as {
         valid: boolean;
         issues?: Array<{ message: string; code?: string }>;
-        summary?: { total?: string; currency?: string; couponDiscount?: string };
+        summary?: {
+          total?: string;
+          currency?: string;
+          couponDiscount?: string;
+        };
       };
 
       if (!validation.valid) {
@@ -151,7 +183,11 @@ export default function CheckoutPage() {
         billingAddressId: billingId,
         couponCode: couponCode.trim() || undefined,
       })) as { id: string; orderNumber: string };
-      router.push(`/checkout/success?orderId=${order.id}`);
+      const qs = new URLSearchParams({
+        orderId: order.id,
+        bankAccountId: selectedBankId,
+      });
+      router.push(`/checkout/success?${qs.toString()}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sipariş oluşturulamadı");
     } finally {
@@ -165,18 +201,27 @@ export default function CheckoutPage() {
         Checkout
       </h1>
       <div className="flex gap-2 text-sm">
-        <span className={step === 1 ? "font-semibold text-accent" : ""}>1. Adres</span>
+        <span className={step === 1 ? "font-semibold text-accent" : ""}>
+          1. Adres
+        </span>
         <span>→</span>
-        <span className={step === 2 ? "font-semibold text-accent" : ""}>2. Ödeme</span>
+        <span className={step === 2 ? "font-semibold text-accent" : ""}>
+          2. Ödeme
+        </span>
         <span>→</span>
-        <span className={step === 3 ? "font-semibold text-accent" : ""}>3. Onay</span>
+        <span className={step === 3 ? "font-semibold text-accent" : ""}>
+          3. Onay
+        </span>
       </div>
 
       {step === 1 ? (
         <section className="space-y-4 rounded-lg border bg-white p-4">
           <h2 className="font-semibold">Teslimat adresi</h2>
           {addresses.map((address) => (
-            <label key={address.id} className="flex gap-2 rounded border p-3 text-sm">
+            <label
+              key={address.id}
+              className="flex gap-2 rounded border p-3 text-sm"
+            >
               <input
                 type="radio"
                 name="shipping"
@@ -236,7 +281,11 @@ export default function CheckoutPage() {
               }
             />
           </div>
-          <Button type="button" variant="secondary" onClick={() => void saveAddress()}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void saveAddress()}
+          >
             Yeni adres kaydet
           </Button>
           <Button
@@ -260,43 +309,150 @@ export default function CheckoutPage() {
             İlk sürümde tek ödeme yöntemi havale/EFT&apos;dir. Online kart ödeme
             aktif değildir.
           </p>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded border bg-slate-50 px-3 py-2 text-sm">
+              <p className="text-xs text-slate-500">Ödenecek tutar</p>
+              <p className="font-medium">
+                {payableAmount ? formatMoney(payableAmount, currency) : "—"}
+              </p>
+            </div>
+            <div className="rounded border bg-slate-50 px-3 py-2 text-sm">
+              <p className="text-xs text-slate-500">Kalan</p>
+              <p className="font-medium">
+                {payableAmount ? formatMoney(payableAmount, currency) : "—"}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Sipariş sonrası kısmi ödeme yapılabilir.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded border border-dashed bg-white px-3 py-2 text-sm">
+            <p className="text-xs text-slate-500">Ödeme referansı</p>
+            <p className="text-slate-600">
+              Sipariş oluşturulunca atanır. Success ve &quot;Ödemeyi Yaptım&quot;
+              ekranında kopyalayabilirsiniz.
+            </p>
+          </div>
+
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold">Banka bilgileri</h3>
+            <h3 className="text-sm font-semibold">Banka hesabı seçin</h3>
             {banksQuery.isLoading ? (
               <p className="text-sm text-slate-500">Hesaplar yükleniyor…</p>
+            ) : banksQuery.isError ? (
+              <p className="text-sm text-red-600">
+                Banka hesapları yüklenemedi. Tekrar deneyin.
+              </p>
             ) : banks.length === 0 ? (
               <p className="text-sm text-amber-700">
-                Aktif banka hesabı bulunamadı. Lütfen destek ile iletişime geçin.
+                Aktif banka hesabı bulunamadı. Lütfen destek ile iletişime
+                geçin.
               </p>
             ) : (
-              banks.map((bank) => (
-                <div key={bank.id} className="rounded border border-dashed p-3 text-sm">
-                  <p>
-                    <strong>Banka:</strong> {bank.bankName}
-                  </p>
-                  <p>
-                    <strong>Hesap sahibi:</strong> {bank.accountName}
-                  </p>
-                  <p className="font-mono">
-                    <strong>IBAN:</strong> {bank.iban}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="mt-2"
-                    onClick={() => void copyIban(bank.iban)}
-                  >
-                    {copiedIban === bank.iban ? "Kopyalandı" : "IBAN Kopyala"}
-                  </Button>
-                </div>
-              ))
+              <div className="grid gap-3 sm:grid-cols-2">
+                {banks.map((bank) => {
+                  const selected = selectedBankId === bank.id;
+                  return (
+                    <button
+                      key={bank.id}
+                      type="button"
+                      onClick={() => setSelectedBankId(bank.id)}
+                      className={`rounded-lg border p-4 text-left transition ${
+                        selected
+                          ? "border-[#0F766E] bg-[#0F766E]/5 ring-2 ring-[#0F766E]"
+                          : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="mb-2 flex items-center gap-3">
+                        <span
+                          className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold ${
+                            selected
+                              ? "bg-[#0F766E] text-white"
+                              : "bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {bankInitials(bank.bankName)}
+                        </span>
+                        <div>
+                          <p className="font-semibold text-navy">
+                            {bank.bankName}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {bank.accountName}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="font-mono text-sm break-all">{bank.iban}</p>
+                      {bank.branch ? (
+                        <p className="mt-1 text-xs text-slate-500">
+                          Şube: {bank.branch}
+                        </p>
+                      ) : null}
+                      <div
+                        className="mt-2 flex flex-wrap gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-8 px-2 text-xs"
+                          onClick={() =>
+                            void copyValue(`iban-${bank.id}`, bank.iban)
+                          }
+                        >
+                          {copiedKey === `iban-${bank.id}`
+                            ? "Kopyalandı"
+                            : "IBAN Kopyala"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-8 px-2 text-xs"
+                          onClick={() =>
+                            void copyValue(`name-${bank.id}`, bank.accountName)
+                          }
+                        >
+                          {copiedKey === `name-${bank.id}`
+                            ? "Kopyalandı"
+                            : "Hesap sahibi"}
+                        </Button>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             )}
+            <p className="text-xs text-slate-600">
+              Listelenen hesaplardan herhangi birine kendi bankanızdan
+              EFT/havale yapabilirsiniz.
+            </p>
           </div>
+
+          {selectedBank ? (
+            <div className="rounded-md border border-[#0F766E]/30 bg-[#0F766E]/5 p-3 text-sm">
+              <p className="font-semibold text-[#0F766E]">Seçilen hesap</p>
+              <p>
+                {selectedBank.bankName} · {selectedBank.accountName}
+              </p>
+              <p className="font-mono text-xs break-all">{selectedBank.iban}</p>
+            </div>
+          ) : (
+            <p className="text-sm font-medium text-amber-800">
+              Devam etmek için bir banka hesabı seçin.
+            </p>
+          )}
+
           <div className="flex gap-2">
             <Button type="button" variant="secondary" onClick={() => setStep(1)}>
               Geri
             </Button>
-            <Button type="button" onClick={() => setStep(3)}>
+            <Button
+              type="button"
+              disabled={!selectedBankId || banks.length === 0}
+              onClick={() => setStep(3)}
+            >
               Devam
             </Button>
           </div>
@@ -339,9 +495,23 @@ export default function CheckoutPage() {
           <p className="font-semibold">
             Toplam:{" "}
             {validatedTotal ??
-              `${cartQuery.data?.summary.total ?? ""} ${cartQuery.data?.summary.currency ?? ""}`}
+              (payableAmount ? formatMoney(payableAmount, currency) : "—")}
           </p>
           <p className="text-sm text-slate-600">Ödeme: Havale / EFT</p>
+          {selectedBank ? (
+            <div className="rounded border bg-slate-50 p-3 text-sm">
+              <p className="font-medium text-[#0F766E]">Seçilen banka</p>
+              <p>
+                {selectedBank.bankName} · {selectedBank.accountName}
+              </p>
+              <p className="font-mono text-xs">{selectedBank.iban}</p>
+            </div>
+          ) : null}
+          <p className="text-xs text-slate-500">
+            Sipariş sonrası ödeme referansı oluşturulur. Success ekranından
+            &quot;Ödemeyi Yaptım&quot; ile claim gönderebilir; kısmi tutar
+            girebilirsiniz.
+          </p>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <div className="flex gap-2">
             <Button type="button" variant="secondary" onClick={() => setStep(2)}>
@@ -349,8 +519,9 @@ export default function CheckoutPage() {
             </Button>
             <Button
               type="button"
-              disabled={creating}
+              disabled={creating || !selectedBankId}
               onClick={() => void placeOrder()}
+              className="bg-[#0F766E] hover:bg-[#0d635c]"
             >
               {creating ? "Oluşturuluyor…" : "Siparişi Oluştur"}
             </Button>

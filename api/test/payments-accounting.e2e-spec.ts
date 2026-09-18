@@ -18,12 +18,21 @@ import { AuthService } from '../src/modules/auth/auth.service';
 import { EmailOutboxService } from '../src/modules/payments/email-outbox.service';
 import { PaymentExpirationService } from '../src/modules/payments/payment-expiration.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
+import { flushTestRedis } from './flush-redis';
 
 type OrderBody = {
   id: string;
   orderNumber: string;
   status: string;
-  payment: { id: string; status: string; method: string } | null;
+  payment: {
+    id: string;
+    status: string;
+    method: string;
+    pendingBankTransferId?: string | null;
+    pendingBankTransferAmount?: string | null;
+    pendingBankTransferBankName?: string | null;
+    pendingBankTransferReference?: string | null;
+  } | null;
   bankAccounts?: Array<{ iban: string }>;
 };
 type PaymentBody = {
@@ -47,6 +56,7 @@ describe('Payments & Accounting (e2e)', () => {
   const suffix = Date.now();
 
   beforeAll(async () => {
+    await flushTestRedis();
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -154,6 +164,11 @@ describe('Payments & Accounting (e2e)', () => {
       },
     });
     bankAccountId = bank.id;
+  });
+
+  beforeEach(async () => {
+    // Bank-transfer endpoint is throttled (10/min); flush so suite volume does not 429.
+    await flushTestRedis();
   });
 
   afterAll(async () => {
@@ -439,6 +454,157 @@ describe('Payments & Accounting (e2e)', () => {
         bankAccountId,
       })
       .expect(400);
+  });
+
+  it('allows only one concurrent PENDING claim per payment', async () => {
+    const order = await createOrder();
+    const payload = {
+      senderName: 'Murat Balci',
+      transferDate: '2026-09-18',
+      amount: '300.00',
+      bankAccountId,
+    };
+
+    const [first, second] = await Promise.all([
+      request(app.getHttpServer())
+        .post(`/api/v1/orders/${order.id}/bank-transfer`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send(payload),
+      request(app.getHttpServer())
+        .post(`/api/v1/orders/${order.id}/bank-transfer`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send(payload),
+    ]);
+
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([201, 409]);
+
+    const pendingCount = await prisma.bankTransferNotification.count({
+      where: { orderId: order.id, status: 'PENDING' },
+    });
+    expect(pendingCount).toBe(1);
+
+    const orderDetail = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${order.id}`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+    expect(
+      (orderDetail.body as OrderBody).payment?.pendingBankTransferId,
+    ).toBeTruthy();
+    expect(
+      (orderDetail.body as OrderBody).payment?.pendingBankTransferAmount,
+    ).toBe('300.00');
+  });
+
+  it('allows a new claim after REJECT', async () => {
+    const order = await createOrder();
+    const first = await request(app.getHttpServer())
+      .post(`/api/v1/orders/${order.id}/bank-transfer`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        senderName: 'Murat Balci',
+        transferDate: '2026-09-18',
+        bankAccountId,
+      })
+      .expect(201);
+
+    let orderDetail = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${order.id}`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+    expect(
+      (orderDetail.body as OrderBody).payment?.pendingBankTransferId,
+    ).toBe((first.body as { id: string }).id);
+
+    await request(app.getHttpServer())
+      .post(
+        `/api/v1/admin/bank-transfers/${(first.body as { id: string }).id}/reject`,
+      )
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ rejectionReason: 'Eksik dekont' })
+      .expect(201);
+
+    orderDetail = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${order.id}`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+    expect(
+      (orderDetail.body as OrderBody).payment?.pendingBankTransferId,
+    ).toBeNull();
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${order.id}/bank-transfer`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        senderName: 'Murat Balci',
+        transferDate: '2026-09-18',
+        bankAccountId,
+      })
+      .expect(201);
+  });
+
+  it('allows a new claim after APPROVED when remaining > 0', async () => {
+    const order = await createOrder();
+    const first = await request(app.getHttpServer())
+      .post(`/api/v1/orders/${order.id}/bank-transfer`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        senderName: 'Murat Balci',
+        transferDate: '2026-09-18',
+        amount: '300.00',
+        bankAccountId,
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(
+        `/api/v1/admin/bank-transfers/${(first.body as { id: string }).id}/approve`,
+      )
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({})
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${order.id}/bank-transfer`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        senderName: 'Murat Balci',
+        transferDate: '2026-09-18',
+        amount: '200.00',
+        bankAccountId,
+      })
+      .expect(201);
+  });
+
+  it('blocks a new claim when remaining is 0', async () => {
+    const order = await createOrder();
+    const full = await request(app.getHttpServer())
+      .post(`/api/v1/orders/${order.id}/bank-transfer`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        senderName: 'Murat Balci',
+        transferDate: '2026-09-18',
+        bankAccountId,
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(
+        `/api/v1/admin/bank-transfers/${(full.body as { id: string }).id}/approve`,
+      )
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({})
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${order.id}/bank-transfer`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        senderName: 'Murat Balci',
+        transferDate: '2026-09-18',
+        bankAccountId,
+      })
+      .expect(409);
   });
 
   it('reject keeps payment pending and blocks double reject after approve', async () => {

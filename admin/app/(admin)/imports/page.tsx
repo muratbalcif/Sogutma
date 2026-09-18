@@ -5,6 +5,27 @@ import { useQuery } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
 import { importsService } from "@/services/admin-api.service";
 
+const IMPORT_CARDS = [
+  {
+    href: "/imports/products",
+    title: "Toplu Ürün Aktarımı",
+    sampleHref: "/samples/ornek-urun-aktarimi.xlsx",
+    sampleLabel: "Örnek Excel",
+  },
+  {
+    href: "/imports/prices",
+    title: "Toplu Fiyat Güncelleme",
+    sampleHref: "/samples/ornek-fiyat-guncelleme.xlsx",
+    sampleLabel: "Örnek Excel",
+  },
+  {
+    href: "/imports/stock",
+    title: "Toplu Stok Güncelleme",
+    sampleHref: "/samples/ornek-stok-guncelleme.xlsx",
+    sampleLabel: "Örnek Excel",
+  },
+] as const;
+
 export default function ImportsHubPage() {
   const history = useQuery({
     queryKey: ["admin-imports"],
@@ -19,29 +40,31 @@ export default function ImportsHubPage() {
             Toplu İşlemler
           </h2>
           <p className="text-sm text-slate-500">
-            CSV / XLSX — önce preview, sonra confirm
+            CSV / XLSX — önce preview, sonra confirm. Örnek Excel şablonlarını
+            indirip düzenleyebilirsiniz.
           </p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <Link
-            href="/imports/products"
-            className="rounded-xl border bg-white p-4 hover:border-cyan-300"
-          >
-            Toplu Ürün Aktarımı
-          </Link>
-          <Link
-            href="/imports/prices"
-            className="rounded-xl border bg-white p-4 hover:border-cyan-300"
-          >
-            Toplu Fiyat Güncelleme
-          </Link>
-          <Link
-            href="/imports/stock"
-            className="rounded-xl border bg-white p-4 hover:border-cyan-300"
-          >
-            Toplu Stok Güncelleme
-          </Link>
+          {IMPORT_CARDS.map((card) => (
+            <div
+              key={card.href}
+              className="rounded-xl border bg-white p-4 hover:border-cyan-300"
+            >
+              <Link href={card.href} className="font-medium text-slate-900">
+                {card.title}
+              </Link>
+              <p className="mt-2">
+                <a
+                  href={card.sampleHref}
+                  download
+                  className="text-xs font-medium text-cyan-700 underline"
+                >
+                  {card.sampleLabel} indir
+                </a>
+              </p>
+            </div>
+          ))}
         </div>
 
         <section className="space-y-2">

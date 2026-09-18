@@ -96,13 +96,13 @@ export class BankTransferService {
       throw new ConflictException('Payment is no longer payable');
     }
 
+    const pendingConflictMessage =
+      'Bu sipariş için zaten bekleyen bir havale bildiriminiz bulunuyor.';
     const pending = await this.prisma.bankTransferNotification.findFirst({
-      where: { orderId, status: BankTransferStatus.PENDING },
+      where: { paymentId: payment.id, status: BankTransferStatus.PENDING },
     });
     if (pending) {
-      throw new ConflictException(
-        'Bu sipariş için zaten bekleyen bir havale bildiriminiz bulunuyor.',
-      );
+      throw new ConflictException(pendingConflictMessage);
     }
 
     if (!dto.bankAccountId) {
@@ -152,24 +152,35 @@ export class BankTransferService {
       ? new Date(dto.transferDate)
       : new Date();
 
-    const created = await this.prisma.bankTransferNotification.create({
-      data: {
-        orderId,
-        userId,
-        paymentId: payment.id,
-        bankAccountId: dto.bankAccountId,
-        amount: reportedAmount,
-        currency: order.currency,
-        amountMismatch,
-        senderName,
-        senderIban: dto.senderIban?.toUpperCase(),
-        transferDate,
-        referenceNumber: paymentReference,
-        note: dto.note,
-        status: BankTransferStatus.PENDING,
-      },
-      include: this.detailInclude,
-    });
+    let created;
+    try {
+      created = await this.prisma.bankTransferNotification.create({
+        data: {
+          orderId,
+          userId,
+          paymentId: payment.id,
+          bankAccountId: dto.bankAccountId,
+          amount: reportedAmount,
+          currency: order.currency,
+          amountMismatch,
+          senderName,
+          senderIban: dto.senderIban?.toUpperCase(),
+          transferDate,
+          referenceNumber: paymentReference,
+          note: dto.note,
+          status: BankTransferStatus.PENDING,
+        },
+        include: this.detailInclude,
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(pendingConflictMessage);
+      }
+      throw error;
+    }
 
     await this.notificationsService?.enqueuePaymentEvent({
       userId,

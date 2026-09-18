@@ -736,6 +736,7 @@ model BankTransferNotification {
   @@index([bankAccountId])
   @@index([status])
   @@index([createdAt])
+  /// DB: UNIQUE (paymentId) WHERE status = 'PENDING' — see migration 20260918140000
   @@map("bank_transfer_notifications")
 }
 

@@ -21,6 +21,10 @@ data class Order(
     val paymentApprovedTotal: String? = null,
     val paymentRemainingAmount: String? = null,
     val paymentReference: String? = null,
+    val pendingBankTransferId: String? = null,
+    val pendingBankTransferAmount: String? = null,
+    val pendingBankTransferBankName: String? = null,
+    val pendingBankTransferReference: String? = null,
 )
 
 data class OrderShipping(

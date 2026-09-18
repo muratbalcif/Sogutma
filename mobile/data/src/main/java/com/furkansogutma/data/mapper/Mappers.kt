@@ -206,6 +206,10 @@ fun OrderDto.toDomain() = Order(
     paymentApprovedTotal = payment?.approvedTotal,
     paymentRemainingAmount = payment?.remainingAmount,
     paymentReference = payment?.paymentReference,
+    pendingBankTransferId = payment?.pendingBankTransferId,
+    pendingBankTransferAmount = payment?.pendingBankTransferAmount,
+    pendingBankTransferBankName = payment?.pendingBankTransferBankName,
+    pendingBankTransferReference = payment?.pendingBankTransferReference,
 )
 
 fun NotificationDto.toDomain() = AppNotification(
