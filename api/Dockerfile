@@ -25,7 +25,7 @@ RUN apk add --no-cache wget \
   && addgroup -S app && adduser -S app -G app
 COPY package.json package-lock.json ./
 COPY api/package.json ./api/
-RUN npm ci -w furkansogutma-api --omit=dev --include-workspace-root=false \
+RUN npm ci -w furkansogutma-api --omit=dev --include-workspace-root=false --ignore-scripts \
   && npm cache clean --force
 COPY --from=build /app/api/dist ./api/dist
 COPY --from=build /app/api/prisma ./api/prisma
