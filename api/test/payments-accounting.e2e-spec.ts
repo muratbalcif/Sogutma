@@ -52,6 +52,8 @@ describe('Payments & Accounting (e2e)', () => {
   let adminToken: string;
   let userId: string;
   let productId: string;
+  let categoryId: string;
+  let brandId: string;
   let addressId: string;
   let bankAccountId: string;
   const suffix = Date.now();
@@ -110,12 +112,14 @@ describe('Payments & Accounting (e2e)', () => {
     const brand = await prisma.brand.create({
       data: { name: `Brand Pay ${suffix}`, slug: `brand-pay-${suffix}` },
     });
+    brandId = brand.id;
     const category = await prisma.category.create({
       data: {
         name: `Category Pay ${suffix}`,
         slug: `category-pay-${suffix}`,
       },
     });
+    categoryId = category.id;
     const product = await prisma.product.create({
       data: {
         sku: `PAY-${suffix}`,
@@ -193,6 +197,8 @@ describe('Payments & Accounting (e2e)', () => {
     await prisma.inventory.deleteMany({ where: { productId } });
     await prisma.productPrice.deleteMany({ where: { productId } });
     await prisma.product.deleteMany({ where: { id: productId } });
+    await prisma.category.deleteMany({ where: { id: categoryId } });
+    await prisma.brand.deleteMany({ where: { id: brandId } });
     await prisma.user.deleteMany({
       where: {
         email: {

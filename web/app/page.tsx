@@ -124,12 +124,15 @@ export default async function HomePage() {
                     {label.slice(0, 1).toLocaleUpperCase("tr-TR")}
                   </span>
                 </div>
-                <div className="flex flex-1 flex-col gap-1 p-4">
-                  <span className="line-clamp-2 text-[15px] font-semibold text-foreground">
+                <div className="flex min-w-0 flex-1 flex-col gap-1 p-4">
+                  <span
+                    title={label}
+                    className="line-clamp-2 break-words text-[15px] font-semibold text-foreground"
+                  >
                     {label}
                   </span>
                   <span className="text-sm font-semibold text-primary">
-                    Klimayı keşfet →
+                    Ürünleri Gör →
                   </span>
                 </div>
               </Link>
@@ -168,7 +171,7 @@ export default async function HomePage() {
 
       {brands.length > 0 ? (
         <section>
-          <SectionHeader title="Markalar" href="/products" />
+          <SectionHeader title="Markalar" href="/brands" />
           <div className="flex flex-wrap gap-3">
             {brands.map((brand) => (
               <Link
