@@ -71,7 +71,9 @@ const redisHost = process.env.REDIS_HOST ?? 'localhost';
 // (not hardcoded) then POSTGRES_PORT from env/.env, then 5432.
 const postgresPort =
   exportedPostgresPort ??
-  (exportedDatabaseUrl ? undefined : composePublishedPort('postgres', '5432')) ??
+  (exportedDatabaseUrl
+    ? undefined
+    : composePublishedPort('postgres', '5432')) ??
   process.env.POSTGRES_PORT ??
   '5432';
 const redisPort =

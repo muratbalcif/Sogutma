@@ -15,10 +15,7 @@ export const envValidationSchema = Joi.object({
   }),
   JWT_REFRESH_SECRET: Joi.when('NODE_ENV', {
     is: 'production',
-    then: Joi.string()
-      .min(32)
-      .invalid(Joi.ref('JWT_ACCESS_SECRET'))
-      .required(),
+    then: Joi.string().min(32).invalid(Joi.ref('JWT_ACCESS_SECRET')).required(),
     otherwise: Joi.string()
       .min(16)
       .invalid(Joi.ref('JWT_ACCESS_SECRET'))
@@ -76,6 +73,11 @@ export const envValidationSchema = Joi.object({
   AUTH_THROTTLE_LIMIT: Joi.number().integer().min(3).default(10),
   BACKUP_RETENTION_DAYS: Joi.number().integer().min(1).max(365).default(14),
   BUSINESS_TIMEZONE: Joi.string().default('Europe/Istanbul'),
+  // KolayBi e-document (optional until invoices module is enabled)
+  KOLAYBI_API_BASE_URL: Joi.string().uri().allow('').optional(),
+  KOLAYBI_API_KEY: Joi.string().allow('').optional(),
+  KOLAYBI_CHANNEL: Joi.string().allow('').optional(),
+  KOLAYBI_SANDBOX: Joi.boolean().truthy('true').falsy('false').default(true),
 });
 
 export interface EnvironmentVariables {
@@ -122,4 +124,8 @@ export interface EnvironmentVariables {
   AUTH_THROTTLE_LIMIT?: number;
   BACKUP_RETENTION_DAYS?: number;
   BUSINESS_TIMEZONE?: string;
+  KOLAYBI_API_BASE_URL?: string;
+  KOLAYBI_API_KEY?: string;
+  KOLAYBI_CHANNEL?: string;
+  KOLAYBI_SANDBOX?: boolean;
 }

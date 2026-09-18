@@ -38,7 +38,8 @@ describe('sanitizeProductHtml', () => {
   });
 
   it('strips inline event handlers', () => {
-    const html = '<p onclick="alert(1)">x</p><a href="https://a.com" onmouseover="evil()">y</a>';
+    const html =
+      '<p onclick="alert(1)">x</p><a href="https://a.com" onmouseover="evil()">y</a>';
     const out = sanitizeProductHtml(html)!;
     expect(out).not.toMatch(/on\w+=/i);
     expect(out).not.toContain('alert');

@@ -479,7 +479,86 @@ export class InventoryService {
       ) {
         // Unique race: another txn committed the same SALE first — abort this txn's
         // inventory update by throwing so the outer transaction rolls back.
-        throw new ConflictException('Sale already committed for this order item');
+        throw new ConflictException(
+          'Sale already committed for this order item',
+        );
+      }
+      throw error;
+    }
+
+    return this.toResponse(updated);
+  }
+
+  /**
+   * POS / günlük satış: decrease on-hand from available stock (no prior reservation).
+   * available = quantity - reservedQuantity must be >= sold qty.
+   * Idempotent when referenceType+referenceId are provided.
+   */
+  async sellAvailableInTransaction(
+    tx: Prisma.TransactionClient,
+    productId: string,
+    quantity: number,
+    options?: {
+      note?: string;
+      createdBy?: string;
+      referenceType?: string;
+      referenceId?: string;
+    },
+  ): Promise<InventoryResponseDto> {
+    if (quantity <= 0) {
+      throw new ConflictException('Sale quantity must be positive');
+    }
+
+    await this.lockInventory(tx, productId);
+
+    if (options?.referenceType && options?.referenceId) {
+      const existingSale = await tx.inventoryTransaction.findFirst({
+        where: {
+          productId,
+          type: InventoryTransactionType.SALE,
+          referenceType: options.referenceType,
+          referenceId: options.referenceId,
+        },
+      });
+      if (existingSale) {
+        const current = await this.getOrCreateLocked(tx, productId);
+        return this.toResponse(current);
+      }
+    }
+
+    const inventory = await this.getOrCreateLocked(tx, productId);
+    const available = inventory.quantity - inventory.reservedQuantity;
+    if (available < quantity) {
+      throw new ConflictException('Insufficient stock');
+    }
+
+    const nextQuantity = inventory.quantity - quantity;
+    const updated = await tx.inventory.update({
+      where: { id: inventory.id },
+      data: { quantity: nextQuantity },
+    });
+
+    try {
+      await tx.inventoryTransaction.create({
+        data: {
+          productId,
+          inventoryId: inventory.id,
+          type: InventoryTransactionType.SALE,
+          quantity,
+          previousQuantity: inventory.quantity,
+          newQuantity: nextQuantity,
+          note: options?.note,
+          createdBy: options?.createdBy,
+          referenceType: options?.referenceType,
+          referenceId: options?.referenceId,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('Sale already committed for this item');
       }
       throw error;
     }

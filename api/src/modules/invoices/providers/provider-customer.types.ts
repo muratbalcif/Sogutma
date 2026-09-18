@@ -1,0 +1,110 @@
+/**
+ * Provider-neutral customer/address payloads for InvoiceProvider adapters.
+ * KolayBi-specific field names stay inside KolayBiInvoiceProvider.
+ */
+
+export type ProviderCustomerType = 'INDIVIDUAL' | 'CORPORATE';
+
+export type ProviderCustomerInput = {
+  localUserId: string;
+  type: ProviderCustomerType;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+  /** TCKN (individual) or VKN (corporate) — never invent. */
+  taxOrIdentityNumber: string;
+  companyName?: string | null;
+  taxOffice?: string | null;
+};
+
+export type ProviderAddressInput = {
+  localAddressId: string;
+  localUserId: string;
+  /** Provider associate/customer id — required before address sync. */
+  providerCustomerId: string;
+  addressLine: string;
+  city: string;
+  district: string;
+  countryCode: string;
+  postalCode: string | null;
+  neighborhood: string | null;
+};
+
+/**
+ * Provider-neutral product payload for InvoiceProvider adapters.
+ * Price is intentionally omitted — invoice lines use SaleItem.unitPrice later.
+ */
+export type ProviderProductInput = {
+  localProductId: string;
+  /** Stable product code (FurkanSoğutma SKU → provider code). */
+  sku: string;
+  name: string;
+  description: string | null;
+  barcode: string | null;
+  /**
+   * VAT percent as decimal string (e.g. "20.00") — never invent a rate.
+   * Adapter maps to provider field (KolayBi: vat_rate).
+   */
+  vatRate: string;
+};
+
+export type ProviderEntitySyncResult = {
+  provider: string;
+  localEntityId: string;
+  externalId: string;
+  created: boolean;
+  /** true when an existing remote record was verified / resolved (not newly created). */
+  verifiedExisting: boolean;
+};
+
+/** One invoice line — prices from SaleItem snapshot (not live ProductPrice). */
+export type ProviderInvoiceLineInput = {
+  /** Provider product id (KolayBi product id). */
+  providerProductId: string;
+  description: string;
+  quantity: number;
+  /**
+   * Unit price as decimal string, VAT-exclusive (SaleItem lineSubtotal / qty).
+   * Sale unitPrice is tax-inclusive; never send inclusive price as unit_price.
+   */
+  unitPriceExclusive: string;
+  /** VAT percent string, e.g. "20.00". */
+  vatRate: string;
+  /** Line discount in TRY (optional); prefer baking into unit when already applied. */
+  discountAmount?: string;
+};
+
+export type ProviderInvoiceInput = {
+  localInvoiceId: string;
+  localSaleId: string;
+  saleNumber: string;
+  /** Provider associate/customer id. */
+  providerCustomerId: string;
+  /** Provider billing address id. */
+  providerAddressId: string;
+  /** YYYY-MM-DD in business timezone. */
+  orderDate: string;
+  /** ISO currency; adapter lowercases for KolayBi (try). */
+  currency: string;
+  /** Stable description used for orphan lookup: SALE:{saleId}. */
+  description: string;
+  receiverEmail?: string | null;
+  lines: ProviderInvoiceLineInput[];
+  /** Expected grand total (tax-inclusive) for post-create comparison. */
+  expectedGrandTotal: string;
+};
+
+export type ProviderInvoiceCreateResult = {
+  provider: string;
+  externalDocumentId: string;
+  /** Provider serial / invoice number when known. */
+  invoiceNumber: string | null;
+  /** GİB ETTN — usually null until Phase 6 formalize. */
+  uuid: string | null;
+  /** Provider-reported grand total (string decimal) when available. */
+  grandTotal: string | null;
+  created: boolean;
+  /** true when an existing remote invoice was resolved (timeout/orphan recovery). */
+  resolvedExisting: boolean;
+};

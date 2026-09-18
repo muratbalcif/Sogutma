@@ -1,9 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import {
-  AccountTransactionType,
-  PaymentStatus,
-  Prisma,
-} from '@prisma/client';
+import { AccountTransactionType, PaymentStatus, Prisma } from '@prisma/client';
 import { BankTransferService } from './bank-transfer.service';
 import { PaymentsService } from './payments.service';
 
@@ -83,7 +79,7 @@ describe('PaymentsService.applyApprovedBankTransfer', () => {
   const service = new PaymentsService(
     prisma as never,
     accountingService as never,
-    paymentStatusService as never,
+    paymentStatusService,
     orderStatusService as never,
     config as never,
     developmentProvider as never,

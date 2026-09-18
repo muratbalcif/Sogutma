@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { InventoryTransactionType, OrderStatus } from '@prisma/client';
 import { OrderStatusService } from './order-status.service';
 
@@ -177,7 +174,9 @@ describe('OrderStatusService.applyTransitionInTransaction', () => {
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(inventoryService.releaseStockInTransaction).not.toHaveBeenCalled();
-    expect(accountingService.reverseSaleForCancelledOrder).not.toHaveBeenCalled();
+    expect(
+      accountingService.reverseSaleForCancelledOrder,
+    ).not.toHaveBeenCalled();
   });
 
   it('cancel releases stock once and reverses SALE', async () => {

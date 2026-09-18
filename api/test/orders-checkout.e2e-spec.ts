@@ -773,9 +773,7 @@ describe('Orders & Checkout (e2e)', () => {
         },
       }),
     ).toBe(1);
-    expect(
-      await prisma.orderReturn.count({ where: { orderId } }),
-    ).toBe(1);
+    expect(await prisma.orderReturn.count({ where: { orderId } })).toBe(1);
 
     const orderStatus = app.get(OrderStatusService);
     await Promise.all([

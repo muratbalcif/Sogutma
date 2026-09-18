@@ -19,6 +19,12 @@ export const ADMIN_PERMISSION_CODES = [
   'pricing.delete',
   'order.read',
   'order.update',
+  'sale.read',
+  'sale.create',
+  'sale.update',
+  'invoice.read',
+  'invoice.create',
+  'invoice.update',
   'customer.read',
   'customer.update',
   'payment.read',
@@ -85,6 +91,15 @@ export const PRODUCT_MANAGER_PERMISSION_CODES = [
 export const ORDER_MANAGER_PERMISSION_CODES = [
   'order.read',
   'order.update',
+  'sale.read',
+  'sale.create',
+  'sale.update',
+  'invoice.read',
+  'invoice.create',
+  'invoice.update',
+  'product.read',
+  'customer.read',
+  'stock.read',
 ] as const;
 
 export const STOCK_MANAGER_PERMISSION_CODES = [
@@ -116,4 +131,7 @@ export const ACCOUNTING_PERMISSION_CODES = [
   'bank_transfer.approve',
   'bank_transfer.reject',
   'customer.read',
+  'invoice.read',
+  'invoice.create',
+  'invoice.update',
 ] as const;

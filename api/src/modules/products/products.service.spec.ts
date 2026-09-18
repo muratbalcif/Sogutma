@@ -207,11 +207,13 @@ describe('ProductsService', () => {
         minimumQuantity: 0,
       },
     };
-    prisma.product.create.mockImplementation(async (args: { data: { technicalHtml?: string | null } }) => {
-      expect(args.data.technicalHtml).toBe('<p>OK</p>');
-      expect(args.data.technicalHtml).not.toContain('script');
-      return created;
-    });
+    prisma.product.create.mockImplementation(
+      async (args: { data: { technicalHtml?: string | null } }) => {
+        expect(args.data.technicalHtml).toBe('<p>OK</p>');
+        expect(args.data.technicalHtml).not.toContain('script');
+        return created;
+      },
+    );
     prisma.inventory.create.mockResolvedValue({});
     prisma.product.findUniqueOrThrow.mockResolvedValue(created);
 

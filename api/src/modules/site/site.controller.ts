@@ -49,7 +49,8 @@ export class SiteController {
         this.config.get('SITE_TERMS_URL', { infer: true }) ??
         '/kullanim-kosullari',
       bankTransferInfo: {
-        bankName: this.config.get('BANK_TRANSFER_BANK_NAME', { infer: true }) ?? '',
+        bankName:
+          this.config.get('BANK_TRANSFER_BANK_NAME', { infer: true }) ?? '',
         iban: this.config.get('BANK_TRANSFER_IBAN', { infer: true }) ?? '',
         accountName:
           this.config.get('BANK_TRANSFER_ACCOUNT_NAME', { infer: true }) ?? '',

@@ -60,4 +60,11 @@ export default (): EnvironmentVariables => ({
     10,
   ),
   BUSINESS_TIMEZONE: process.env.BUSINESS_TIMEZONE ?? 'Europe/Istanbul',
+  KOLAYBI_API_BASE_URL: process.env.KOLAYBI_API_BASE_URL,
+  KOLAYBI_API_KEY: process.env.KOLAYBI_API_KEY,
+  KOLAYBI_CHANNEL: process.env.KOLAYBI_CHANNEL,
+  KOLAYBI_SANDBOX:
+    process.env.KOLAYBI_SANDBOX === undefined
+      ? true
+      : process.env.KOLAYBI_SANDBOX === 'true',
 });

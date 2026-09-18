@@ -23,9 +23,7 @@ type MessagingLike = {
 
 type FirebaseAppModule = {
   getApps: () => unknown[];
-  initializeApp: (options: {
-    credential: unknown;
-  }) => unknown;
+  initializeApp: (options: { credential: unknown }) => unknown;
   cert: (serviceAccount: {
     projectId: string;
     clientEmail: string;
@@ -53,9 +51,7 @@ export class FcmPushProvider implements PushNotificationProvider {
 
   constructor(private readonly config: ConfigService) {
     this.projectId = this.config.get<string>('FIREBASE_PROJECT_ID')?.trim();
-    this.clientEmail = this.config
-      .get<string>('FIREBASE_CLIENT_EMAIL')
-      ?.trim();
+    this.clientEmail = this.config.get<string>('FIREBASE_CLIENT_EMAIL')?.trim();
     this.privateKey = this.config.get<string>('FIREBASE_PRIVATE_KEY')?.trim();
     this.enabled = Boolean(
       this.projectId && this.clientEmail && this.privateKey,
@@ -117,7 +113,7 @@ export class FcmPushProvider implements PushNotificationProvider {
         code === 'messaging/invalid-registration-token' ||
         code === 'messaging/invalid-argument'
       ) {
-        invalidTokens.push(tokens[index]!);
+        invalidTokens.push(tokens[index]);
       }
     });
 
@@ -140,9 +136,8 @@ export class FcmPushProvider implements PushNotificationProvider {
     messaging: FirebaseMessagingModule;
   }> {
     const app = (await import('firebase-admin/app')) as FirebaseAppModule;
-    const messaging = (await import(
-      'firebase-admin/messaging'
-    )) as FirebaseMessagingModule;
+    const messaging =
+      (await import('firebase-admin/messaging')) as FirebaseMessagingModule;
     return { app, messaging };
   }
 

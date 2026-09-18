@@ -11,8 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { renderOrderEmailHtml } from './email-templates';
 
 type SendResult =
-  | { ok: true }
-  | { ok: false; error: string; retryable: boolean };
+  { ok: true } | { ok: false; error: string; retryable: boolean };
 
 /** How long a PROCESSING claim is exclusive before another worker may reclaim. */
 const CLAIM_LEASE_MS = 5 * 60 * 1000;
@@ -159,9 +158,7 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
         const result = await this.sendEmail({
           to: item.toEmail,
           subject: item.subject,
-          html:
-            html ??
-            `<p>${item.subject}</p><p>Event: ${item.event}</p>`,
+          html: html ?? `<p>${item.subject}</p><p>Event: ${item.event}</p>`,
         });
 
         if (result.ok) {

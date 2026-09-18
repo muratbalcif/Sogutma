@@ -1239,6 +1239,129 @@ export type AdminRoleItem = {
   code: string;
 };
 
+export type SalePaymentMethod = "CASH" | "CREDIT_CARD" | "BANK_TRANSFER";
+export type SaleStatus = "COMPLETED" | "CANCELLED";
+
+export type AdminSalePerson = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+};
+
+export type AdminSaleItem = {
+  id: string;
+  productId: string | null;
+  productName: string;
+  sku: string;
+  quantity: number;
+  unitPrice: string;
+  discountAmount: string;
+  taxRate: string;
+  taxAmount: string;
+  lineSubtotal: string;
+  lineTotal: string;
+};
+
+export type AdminSale = {
+  id: string;
+  saleNumber: string;
+  customerId: string | null;
+  customerLabel: string;
+  customer: AdminSalePerson | null;
+  createdBy: AdminSalePerson;
+  status: SaleStatus;
+  paymentMethod: SalePaymentMethod;
+  currency: string;
+  subtotal: string;
+  discountAmount: string;
+  taxAmount: string;
+  totalAmount: string;
+  note: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  createdAt: string;
+  items: AdminSaleItem[];
+  itemCount: number;
+};
+
+export type DailySalesSummary = {
+  date: string;
+  totalSales: string;
+  saleCount: number;
+  itemCount: number;
+  refundTotal: string;
+  retailSaleCount: number;
+  customerSaleCount: number;
+  paymentBreakdown: {
+    cash: string;
+    card: string;
+    bankTransfer: string;
+  };
+};
+
+export type AdminSaleListParams = {
+  date?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  customerId?: string;
+  createdById?: string;
+  paymentMethod?: SalePaymentMethod;
+  status?: SaleStatus;
+  search?: string;
+  retailOnly?: boolean;
+};
+
+export const salesService = {
+  list(page = 1, limit = 50, params?: AdminSaleListParams) {
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (params?.date) query.set("date", params.date);
+    if (params?.dateFrom) query.set("dateFrom", params.dateFrom);
+    if (params?.dateTo) query.set("dateTo", params.dateTo);
+    if (params?.customerId) query.set("customerId", params.customerId);
+    if (params?.createdById) query.set("createdById", params.createdById);
+    if (params?.paymentMethod) query.set("paymentMethod", params.paymentMethod);
+    if (params?.status) query.set("status", params.status);
+    if (params?.search) query.set("search", params.search);
+    if (params?.retailOnly) query.set("retailOnly", "true");
+    return apiRequest<PaginatedResponse<AdminSale>>(
+      `/admin/sales?${query.toString()}`,
+    );
+  },
+  dailySummary(date: string) {
+    return apiRequest<DailySalesSummary>(
+      `/admin/sales/daily-summary?date=${encodeURIComponent(date)}`,
+    );
+  },
+  getById(id: string) {
+    return apiRequest<AdminSale>(`/admin/sales/${id}`);
+  },
+  create(body: {
+    customerId?: string | null;
+    items: Array<{
+      productId: string;
+      quantity: number;
+      discountAmount?: number;
+    }>;
+    paymentMethod: SalePaymentMethod;
+    note?: string;
+  }) {
+    return apiRequest<AdminSale>("/admin/sales", {
+      method: "POST",
+      body,
+    });
+  },
+  cancel(id: string, reason?: string) {
+    return apiRequest<AdminSale>(`/admin/sales/${id}/cancel`, {
+      method: "POST",
+      body: { reason },
+    });
+  },
+};
+
 export const rbacService = {
   listRoles() {
     return apiRequest<AdminRoleItem[]>("/admin/rbac/roles");

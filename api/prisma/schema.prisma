@@ -35,6 +35,10 @@ model User {
   firstName    String
   lastName     String
   phone        String?
+  /// TCKN for INDIVIDUAL customers (e-document). Corporate VKN stays on CorporateCustomer.taxNumber.
+  identityNumber String?
+  /// Local cache only — GİB/KolayBi mükellef sorgusu ileride source of truth olabilir.
+  isEInvoiceTaxpayer Boolean @default(false)
   userType     UserType   @default(INDIVIDUAL)
   status       UserStatus @default(ACTIVE)
   createdAt    DateTime   @default(now())
@@ -56,6 +60,11 @@ model User {
   deviceTokens        DeviceToken[]
   orderReturnsCreated OrderReturn[] @relation("OrderReturnCreatedBy")
   couponUsages        CouponUsage[]
+  salesAsCustomer     Sale[] @relation("SaleCustomer")
+  salesCreated        Sale[] @relation("SaleCreatedBy")
+  salesCancelled      Sale[] @relation("SaleCancelledBy")
+  invoicesAsCustomer  Invoice[] @relation("InvoiceCustomer")
+  invoicesCreated     Invoice[] @relation("InvoiceCreatedBy")
 
   @@index([status])
   @@index([userType])
@@ -231,6 +240,7 @@ model Product {
   favorites       Favorite[]
   productAlerts   ProductAlert[]
   orderItems      OrderItem[]
+  saleItems       SaleItem[]
   campaignProducts CampaignProduct[]
 
   @@index([sku])
@@ -506,6 +516,7 @@ model Address {
   user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   shippingOrders  Order[] @relation("OrderShippingAddress")
   billingOrders   Order[] @relation("OrderBillingAddress")
+  billingInvoices Invoice[] @relation("InvoiceBillingAddress")
 
   @@index([userId])
   @@map("addresses")
@@ -1193,3 +1204,176 @@ model LegalPage {
 
   @@map("legal_pages")
 }
+
+/// Point-of-sale / günlük satış (admin counter sales). Separate from online Order.
+enum SaleStatus {
+  COMPLETED
+  CANCELLED
+}
+
+enum SalePaymentMethod {
+  CASH
+  CREDIT_CARD
+  BANK_TRANSFER
+}
+
+model Sale {
+  id             String            @id @default(uuid()) @db.Uuid
+  saleNumber     String            @unique
+  /// Null = perakende (walk-in) sale — never a fake customer id.
+  customerId     String?           @db.Uuid
+  createdById    String            @db.Uuid
+  status         SaleStatus        @default(COMPLETED)
+  paymentMethod  SalePaymentMethod
+  currency       String            @default("TRY") @db.Char(3)
+  subtotal       Decimal           @db.Decimal(12, 2)
+  discountAmount Decimal           @default(0) @db.Decimal(12, 2)
+  taxAmount      Decimal           @db.Decimal(12, 2)
+  totalAmount    Decimal           @db.Decimal(12, 2)
+  note           String?
+  cancelledAt    DateTime?
+  cancelledById  String?           @db.Uuid
+  cancelReason   String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  customer    User?     @relation("SaleCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  createdBy   User      @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cancelledBy User?     @relation("SaleCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  items       SaleItem[]
+  /// 0..n rows historically; at most one ACTIVE (PENDING|SUCCESS) via partial unique index.
+  invoices    Invoice[]
+
+  @@index([customerId])
+  @@index([createdById])
+  @@index([status])
+  @@index([paymentMethod])
+  @@index([createdAt])
+  @@index([saleNumber])
+  @@map("sales")
+}
+
+model SaleItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  saleId         String   @db.Uuid
+  productId      String?  @db.Uuid
+  productName    String
+  sku            String
+  quantity       Int
+  unitPrice      Decimal  @db.Decimal(12, 2)
+  discountAmount Decimal  @default(0) @db.Decimal(12, 2)
+  taxRate        Decimal  @db.Decimal(5, 2)
+  taxAmount      Decimal  @db.Decimal(12, 2)
+  lineSubtotal   Decimal  @db.Decimal(12, 2)
+  lineTotal      Decimal  @db.Decimal(12, 2)
+  createdAt      DateTime @default(now())
+
+  sale    Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([saleId])
+  @@index([productId])
+  @@index([sku])
+  @@map("sale_items")
+}
+
+model SaleNumberSequence {
+  dateKey   String @id @db.Char(8)
+  lastValue Int    @default(0)
+
+  @@map("sale_number_sequences")
+}
+
+/// e-Fatura / e-Arşiv document. Separate from Sale (POS source of truth).
+enum InvoiceProviderCode {
+  KOLAYBI
+}
+
+enum InvoiceDocumentType {
+  E_INVOICE
+  E_ARCHIVE
+}
+
+/// Distinct from PaymentStatus / OutboxStatus / OrderStatus naming.
+enum InvoiceStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+/// Provider-agnostic external IDs (KolayBi associate/product/address, future Logo/Paraşüt…).
+enum ExternalEntityType {
+  USER
+  ADDRESS
+  PRODUCT
+}
+
+model Invoice {
+  id                  String               @id @default(uuid()) @db.Uuid
+  saleId              String               @db.Uuid
+  /// Required for e-document — unlike Sale.customerId which may be null (perakende).
+  customerId          String               @db.Uuid
+  provider            InvoiceProviderCode  @default(KOLAYBI)
+  /// KolayBi document_id (or future provider invoice id).
+  externalDocumentId  String?
+  /// GİB ETTN / provider UUID after formalize.
+  uuid                String?
+  invoiceNumber       String?
+  documentType        InvoiceDocumentType
+  status              InvoiceStatus        @default(PENDING)
+  /// Stable key for in-place retry, e.g. SALE:{saleId}. Unique globally.
+  idempotencyKey      String               @unique
+  errorCode           String?
+  errorMessage        String?
+  pdfUrl              String?
+  xmlUrl              String?
+  currency            String               @default("TRY") @db.Char(3)
+  /// Money snapshot at invoice time (Sale may later cancel; history must not drift).
+  subtotal            Decimal              @db.Decimal(12, 2)
+  discountAmount      Decimal              @default(0) @db.Decimal(12, 2)
+  taxAmount           Decimal              @db.Decimal(12, 2)
+  totalAmount         Decimal              @db.Decimal(12, 2)
+  billingAddressId    String?              @db.Uuid
+  /// Snapshot like Order.billingAddressSnapshot — address edits must not rewrite history.
+  billingAddressSnapshot Json
+  createdById         String               @db.Uuid
+  issuedAt            DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  sale            Sale     @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  customer        User     @relation("InvoiceCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy       User     @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  billingAddress  Address? @relation("InvoiceBillingAddress", fields: [billingAddressId], references: [id], onDelete: SetNull)
+
+  @@index([saleId])
+  @@index([customerId])
+  @@index([createdById])
+  @@index([provider])
+  @@index([status])
+  @@index([documentType])
+  @@index([externalDocumentId])
+  @@index([uuid])
+  @@index([invoiceNumber])
+  @@index([createdAt])
+  /// DB: UNIQUE (saleId) WHERE status IN ('PENDING','SUCCESS') — see migration invoice_foundation
+  @@map("invoices")
+}
+
+model ExternalEntityLink {
+  id         String               @id @default(uuid()) @db.Uuid
+  provider   InvoiceProviderCode
+  entityType ExternalEntityType
+  entityId   String               @db.Uuid
+  externalId String
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  @@unique([provider, entityType, entityId])
+  @@unique([provider, entityType, externalId])
+  @@index([entityId])
+  @@index([externalId])
+  @@map("external_entity_links")
+}
+

@@ -324,10 +324,7 @@ export class PaymentsService {
       throw new NotFoundException('Payment not found');
     }
     if (payment.status === PaymentStatus.PAID) {
-      const approved = await this.sumApprovedTransfers(
-        tx,
-        input.orderId,
-      );
+      const approved = await this.sumApprovedTransfers(tx, input.orderId);
       return { fullyPaid: true, approvedTotal: approved };
     }
 
@@ -529,15 +526,14 @@ export class PaymentsService {
     if (pendingPaymentIds.length === 0) {
       return new Map();
     }
-    const notifications =
-      await this.prisma.bankTransferNotification.findMany({
-        where: {
-          paymentId: { in: pendingPaymentIds },
-          status: BankTransferStatus.PENDING,
-        },
-        select: { id: true, paymentId: true },
-        orderBy: { createdAt: 'desc' },
-      });
+    const notifications = await this.prisma.bankTransferNotification.findMany({
+      where: {
+        paymentId: { in: pendingPaymentIds },
+        status: BankTransferStatus.PENDING,
+      },
+      select: { id: true, paymentId: true },
+      orderBy: { createdAt: 'desc' },
+    });
     const map = new Map<string, string>();
     for (const row of notifications) {
       if (!map.has(row.paymentId)) {

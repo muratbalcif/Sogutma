@@ -22,6 +22,7 @@ import { FavoritesModule } from './modules/favorites/favorites.module';
 import { HealthModule } from './modules/health/health.module';
 import { ImportsModule } from './modules/imports/imports.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -31,6 +32,7 @@ import { ProductAlertsModule } from './modules/product-alerts/product-alerts.mod
 import { ProductsModule } from './modules/products/products.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { RedisThrottlerStorage } from './modules/redis/redis-throttler.storage';
+import { SalesModule } from './modules/sales/sales.module';
 import { SiteModule } from './modules/site/site.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { UsersModule } from './modules/users/users.module';
@@ -92,6 +94,8 @@ import { EnvironmentVariables } from './config/env.validation';
     ProductAlertsModule,
     AddressesModule,
     OrdersModule,
+    SalesModule,
+    InvoicesModule,
     PaymentsModule,
     BannersModule,
     NotificationsModule,

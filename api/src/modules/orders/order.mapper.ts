@@ -100,10 +100,7 @@ export function mapOrderToResponse(
   const latestPayment = order.payments[0] ?? null;
   const approvedTotal = (order.bankTransfers ?? [])
     .filter((t) => t.status === 'APPROVED')
-    .reduce(
-      (sum, t) => sum.add(t.amount),
-      new Prisma.Decimal(0),
-    );
+    .reduce((sum, t) => sum.add(t.amount), new Prisma.Decimal(0));
   const remainingAmount = latestPayment
     ? (() => {
         const rem = latestPayment.amount.sub(approvedTotal);

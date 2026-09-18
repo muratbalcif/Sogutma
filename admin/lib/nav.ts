@@ -22,6 +22,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/inventory", label: "Stok", permission: "stock.read" },
   { href: "/pricing", label: "Fiyatlandırma", permission: "pricing.read" },
   { href: "/orders", label: "Siparişler", permission: "order.read" },
+  { href: "/sales", label: "Satışlar", permission: "sale.read" },
   { href: "/customers", label: "Müşteriler", permission: "customer.read" },
   { href: "/payments", label: "Ödemeler", permission: "payment.read" },
   {

@@ -38,7 +38,7 @@ describe('EmailOutboxService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
     config.get.mockImplementation((key: string) => {
       if (key === 'EMAIL_OUTBOX_MAX_ATTEMPTS') return 8;
       if (key === 'SITE_NAME') return 'FurkanSoğutma';
@@ -166,7 +166,9 @@ describe('EmailOutboxService', () => {
     });
     service = new EmailOutboxService(prisma as never, config as never);
 
-    prisma.emailOutbox.findMany.mockResolvedValue([{ ...pendingRow, id: 'e-race' }]);
+    prisma.emailOutbox.findMany.mockResolvedValue([
+      { ...pendingRow, id: 'e-race' },
+    ]);
 
     let claimCount = 0;
     prisma.emailOutbox.updateMany.mockImplementation(async () => {
@@ -178,10 +180,12 @@ describe('EmailOutboxService', () => {
     const gate = new Promise<void>((resolve) => {
       releaseSend = resolve;
     });
-    const sendSpy = jest.spyOn(service, 'sendEmail').mockImplementation(async () => {
-      await gate;
-      return { ok: true };
-    });
+    const sendSpy = jest
+      .spyOn(service, 'sendEmail')
+      .mockImplementation(async () => {
+        await gate;
+        return { ok: true };
+      });
 
     const runA = service.processPending(10);
     const runB = service.processPending(10);

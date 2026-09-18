@@ -47,10 +47,7 @@ function escapeAttr(value: string): string {
     .replace(/>/g, '&gt;');
 }
 
-function sanitizeAttributes(
-  tag: string,
-  rawAttrs: string,
-): string {
+function sanitizeAttributes(tag: string, rawAttrs: string): string {
   const allowed = ATTR_ALLOWED[tag];
   if (!allowed || !rawAttrs.trim()) {
     return '';
@@ -103,7 +100,7 @@ export function sanitizeProductHtml(
   }
 
   // Drop dangerous blocks entirely (including content)
-  let html = trimmed
+  const html = trimmed
     .replace(
       /<(script|iframe|object|embed|form|style|link|meta|svg|math)(\s[^>]*)?>[\s\S]*?<\/\1>/gi,
       '',
@@ -143,7 +140,7 @@ export function sanitizeProductHtml(
       continue;
     }
 
-    if (tagName === 'br' || selfClosing && VOID_TAGS.has(tagName)) {
+    if (tagName === 'br' || (selfClosing && VOID_TAGS.has(tagName))) {
       parts.push('<br>');
       continue;
     }

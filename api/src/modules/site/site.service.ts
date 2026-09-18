@@ -13,10 +13,7 @@ export type LegalPageDto = {
   updatedAt: string;
 };
 
-const DEFAULT_PAGES: Record<
-  LegalSlug,
-  { title: string; body: string }
-> = {
+const DEFAULT_PAGES: Record<LegalSlug, { title: string; body: string }> = {
   kvkk: {
     title: 'KVKK Aydınlatma Metni',
     body: `Veri sorumlusu: FurkanSoğutma

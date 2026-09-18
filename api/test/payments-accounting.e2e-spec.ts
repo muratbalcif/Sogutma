@@ -435,12 +435,12 @@ describe('Payments & Accounting (e2e)', () => {
       .get(`/api/v1/orders/${order.id}/payment`)
       .set('Authorization', `Bearer ${userToken}`)
       .expect(200);
-    expect((payment.body as PaymentBody & { remainingAmount?: string }).status).toBe(
-      PaymentStatus.PARTIALLY_PAID,
-    );
     expect(
-      (payment.body as { remainingAmount: string }).remainingAmount,
-    ).toBe('700.00');
+      (payment.body as PaymentBody & { remainingAmount?: string }).status,
+    ).toBe(PaymentStatus.PARTIALLY_PAID);
+    expect((payment.body as { remainingAmount: string }).remainingAmount).toBe(
+      '700.00',
+    );
 
     await submitAndApprove('200.00');
     payment = await request(app.getHttpServer())
@@ -450,9 +450,9 @@ describe('Payments & Accounting (e2e)', () => {
     expect((payment.body as PaymentBody).status).toBe(
       PaymentStatus.PARTIALLY_PAID,
     );
-    expect(
-      (payment.body as { remainingAmount: string }).remainingAmount,
-    ).toBe('500.00');
+    expect((payment.body as { remainingAmount: string }).remainingAmount).toBe(
+      '500.00',
+    );
 
     const lastId = await submitAndApprove('500.00');
     payment = await request(app.getHttpServer())
@@ -567,9 +567,9 @@ describe('Payments & Accounting (e2e)', () => {
       .get(`/api/v1/orders/${order.id}`)
       .set('Authorization', `Bearer ${userToken}`)
       .expect(200);
-    expect(
-      (orderDetail.body as OrderBody).payment?.pendingBankTransferId,
-    ).toBe((first.body as { id: string }).id);
+    expect((orderDetail.body as OrderBody).payment?.pendingBankTransferId).toBe(
+      (first.body as { id: string }).id,
+    );
 
     await request(app.getHttpServer())
       .post(

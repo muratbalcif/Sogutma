@@ -51,6 +51,18 @@ export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   BANK_TRANSFER: "Havale / EFT",
   CREDIT_CARD: "Kredi kartı",
   CASH_ON_DELIVERY: "Kapıda ödeme",
+  CASH: "Nakit",
+};
+
+export const SALE_STATUS_LABEL: Record<string, string> = {
+  COMPLETED: "Tamamlandı",
+  CANCELLED: "İptal",
+};
+
+export const SALE_PAYMENT_METHOD_LABEL: Record<string, string> = {
+  CASH: "Nakit",
+  CREDIT_CARD: "Kredi Kartı",
+  BANK_TRANSFER: "Havale / EFT",
 };
 
 export const SHIPPING_STATUS_LABEL: Record<string, string> = {
@@ -170,4 +182,10 @@ export function importJobStatusLabel(v?: string | null) {
 }
 export function accountTxTypeLabel(v?: string | null) {
   return labelOrFallback(ACCOUNT_TX_TYPE_LABEL, v);
+}
+export function saleStatusLabel(v?: string | null) {
+  return labelOrFallback(SALE_STATUS_LABEL, v);
+}
+export function salePaymentMethodLabel(v?: string | null) {
+  return labelOrFallback(SALE_PAYMENT_METHOD_LABEL, v);
 }
