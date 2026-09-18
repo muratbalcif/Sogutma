@@ -1,3 +1,5 @@
+/** Turkish display labels for storefront enums. */
+
 export function orderStatusLabel(status: string): string {
   switch (status) {
     case "PENDING":
@@ -78,6 +80,67 @@ export function shippingProviderLabel(provider: string): string {
       return "Manuel kargo";
     default:
       return provider;
+  }
+}
+
+export function campaignTypeLabel(type?: string | null): string {
+  switch (type) {
+    case "PERCENTAGE":
+      return "Yüzde indirim";
+    case "FIXED_AMOUNT":
+      return "Sabit tutar";
+    case "SPECIAL_PRICE":
+      return "Özel fiyat";
+    default:
+      return type ?? "—";
+  }
+}
+
+export function bankTransferStatusLabel(status?: string | null): string {
+  switch (status) {
+    case "PENDING":
+      return "İnceleniyor";
+    case "APPROVED":
+      return "Onaylandı";
+    case "REJECTED":
+      return "Reddedildi";
+    default:
+      return status ?? "—";
+  }
+}
+
+export function accountTxTypeLabel(type?: string | null): string {
+  switch (type) {
+    case "DEBIT":
+      return "Borç";
+    case "CREDIT":
+      return "Alacak";
+    default:
+      return type ?? "—";
+  }
+}
+
+export function userTypeLabel(type?: string | null): string {
+  switch (type) {
+    case "INDIVIDUAL":
+      return "Bireysel";
+    case "CORPORATE":
+      return "Kurumsal";
+    default:
+      return type ?? "—";
+  }
+}
+
+export function alertStatusLabel(status?: string | null): string {
+  switch (status) {
+    case "ACTIVE":
+      return "Aktif";
+    case "TRIGGERED":
+      return "Tetiklendi";
+    case "CANCELLED":
+      return "İptal";
+    default:
+      return status ?? "—";
   }
 }
 

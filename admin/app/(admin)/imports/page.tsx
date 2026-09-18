@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { importJobStatusLabel, importJobTypeLabel } from "@/lib/enum-labels";
 import { ModulePage } from "@/components/auth/module-page";
 import { importsService } from "@/services/admin-api.service";
 
@@ -84,8 +85,8 @@ export default function ImportsHubPage() {
                 {(history.data?.items ?? []).map((job) => (
                   <tr key={job.id} className="border-t">
                     <td className="px-3 py-2">{job.filename}</td>
-                    <td className="px-3 py-2">{job.type}</td>
-                    <td className="px-3 py-2">{job.status}</td>
+                    <td className="px-3 py-2">{importJobTypeLabel(job.type)}</td>
+                    <td className="px-3 py-2">{importJobStatusLabel(job.status)}</td>
                     <td className="px-3 py-2">
                       {job.successRows}/{job.failedRows}
                     </td>

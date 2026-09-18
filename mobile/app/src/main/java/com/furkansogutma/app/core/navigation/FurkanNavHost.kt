@@ -197,7 +197,7 @@ fun FurkanNavHost(
         NavHost(
             navController = navController,
             startDestination = AppRoute.Splash.route,
-            modifier = Modifier.padding(padding),
+            modifier = Modifier.padding(16.dp),
         ) {
             composable(AppRoute.Splash.route) {
                 SplashRoute(

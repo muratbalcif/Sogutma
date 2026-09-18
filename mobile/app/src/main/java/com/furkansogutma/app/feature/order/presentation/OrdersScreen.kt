@@ -127,9 +127,11 @@ fun OrdersRoute(onOrderClick: (String) -> Unit, onBack: () -> Unit = {}, vm: Ord
                             .padding(vertical = FurkanSpacing.sm),
                     ) {
                         Text(order.orderNumber, style = MaterialTheme.typography.titleMedium)
-                        Text("${order.createdAt} · ${order.status}")
+                        Text("${order.createdAt} · ${com.furkansogutma.app.core.common.labels.EnumLabels.orderStatus(order.status)}")
                         Text("${order.total} ${order.currency}")
-                        order.paymentStatus?.let { Text("Ödeme: $it") }
+                        order.paymentStatus?.let {
+                            Text("Ödeme: ${com.furkansogutma.app.core.common.labels.EnumLabels.paymentStatus(it)}")
+                        }
                     }
                 }
             }

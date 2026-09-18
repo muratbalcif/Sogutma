@@ -6,6 +6,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
 import { usePermissions } from "@/hooks/use-permissions";
 import { ApiError } from "@/lib/api-client";
+import {
+  PAYMENT_METHOD_LABEL,
+  PAYMENT_STATUS_LABEL,
+  paymentMethodLabel,
+  paymentStatusLabel,
+} from "@/lib/enum-labels";
 import { paymentsService } from "@/services/admin-api.service";
 
 const STATUS_FILTERS = [
@@ -161,7 +167,7 @@ export default function PaymentsPage() {
             >
               {STATUS_FILTERS.map((value) => (
                 <option key={value} value={value}>
-                  {value === "ALL" ? "Tüm durumlar" : value}
+                  {value === "ALL" ? "Tüm durumlar" : (PAYMENT_STATUS_LABEL[value] ?? value)}
                 </option>
               ))}
             </select>
@@ -175,7 +181,7 @@ export default function PaymentsPage() {
             >
               {METHOD_FILTERS.map((value) => (
                 <option key={value} value={value}>
-                  {value === "ALL" ? "Tüm yöntemler" : value}
+                  {value === "ALL" ? "Tüm yöntemler" : (PAYMENT_METHOD_LABEL[value] ?? value)}
                 </option>
               ))}
             </select>
@@ -243,14 +249,14 @@ export default function PaymentsPage() {
                         {row.id.slice(0, 8)}…
                       </td>
                       <td className="px-4 py-3">
-                        {row.status}
+                        {paymentStatusLabel(row.status)}
                         {row.pendingBankTransferId ? (
                           <span className="ml-1 text-xs text-amber-700">
                             onay bekliyor
                           </span>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3">{row.method}</td>
+                      <td className="px-4 py-3">{paymentMethodLabel(row.method)}</td>
                       <td className="px-4 py-3">
                         {row.amount} {row.currency}
                       </td>
@@ -316,11 +322,11 @@ export default function PaymentsPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <dt className="text-xs text-slate-500">Durum</dt>
-                      <dd>{detail.status}</dd>
+                      <dd>{paymentStatusLabel(detail.status)}</dd>
                     </div>
                     <div>
                       <dt className="text-xs text-slate-500">Yöntem</dt>
-                      <dd>{detail.method}</dd>
+                      <dd>{paymentMethodLabel(detail.method)}</dd>
                     </div>
                   </div>
                   <div>

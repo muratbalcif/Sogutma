@@ -168,7 +168,7 @@ fun CurrentAccountRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hilt
                 } else {
                     txs.forEach {
                         Text("${it.createdAt}")
-                        Text("${it.description.orEmpty()} · ${it.type} ${it.amount}")
+                        Text("${it.description.orEmpty()} · ${com.furkansogutma.app.core.common.labels.EnumLabels.accountTxType(it.type)} ${it.amount}")
                         Spacer(Modifier.height(FurkanSpacing.sm))
                     }
                 }

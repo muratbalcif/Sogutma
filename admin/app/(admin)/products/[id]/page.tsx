@@ -6,7 +6,16 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
 import { RichHtmlEditor } from "@/components/catalog/rich-html-editor";
+import {
+  ProductAttributesEditor,
+  attributesToPayload,
+} from "@/components/products/ProductAttributesEditor";
+import {
+  ProductCompatibilityEditor,
+  compatibilityToPayload,
+} from "@/components/products/ProductCompatibilityEditor";
 import { usePermissions } from "@/hooks/use-permissions";
+import { priceTypeLabel } from "@/lib/enum-labels";
 import { catalogService, inventoryService } from "@/services/admin-api.service";
 
 const TABS = [
@@ -18,20 +27,6 @@ const TABS = [
   { id: "inventory", label: "Stok" },
   { id: "seo", label: "SEO" },
 ] as const;
-
-/** Suggested attribute names (not hardcoded fields — fill name when clicked). */
-const ATTRIBUTE_SUGGESTIONS = [
-  "Soğutma kapasitesi",
-  "Isıtma kapasitesi",
-  "Enerji sınıfı",
-  "Gaz tipi",
-  "Ses seviyesi",
-  "Enerji tüketimi",
-  "İç ünite boyutları",
-  "Dış ünite boyutları",
-  "Soğutucu akışkan",
-  "Çalışma aralığı",
-];
 
 type TabId = (typeof TABS)[number]["id"];
 
@@ -145,15 +140,8 @@ export default function ProductDetailPage() {
         metaDescription: form.metaDescription || null,
         technicalHtml: form.technicalHtml || null,
         compatibilityHtml: form.compatibilityHtml || null,
-        attributes: form.attributes.filter((a) => a.name && a.value),
-        compatibility: form.compatibility
-          .filter((c) => c.manufacturer && c.model)
-          .map((c) => ({
-            manufacturer: c.manufacturer,
-            model: c.model,
-            modelYear: c.modelYear ? Number(c.modelYear) : undefined,
-            notes: c.notes || undefined,
-          })),
+        attributes: attributesToPayload(form.attributes),
+        compatibility: compatibilityToPayload(form.compatibility),
       }),
     onSuccess: () => {
       setDirty(false);
@@ -514,90 +502,13 @@ export default function ProductDetailPage() {
 
               {tab === "attributes" && (
                 <div className="space-y-6">
-                  <div className="space-y-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-800">
-                        Yapısal özellikler
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Mevcut ürün attribute sistemi — önerilen isimleri
-                        kullanabilir veya özel alan ekleyebilirsiniz.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {ATTRIBUTE_SUGGESTIONS.map((name) => (
-                        <button
-                          key={name}
-                          type="button"
-                          className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs text-teal-900 hover:bg-teal-100"
-                          onClick={() => {
-                            setForm((f) => ({
-                              ...f,
-                              attributes: [...f.attributes, { name, value: "" }],
-                            }));
-                            setDirty(true);
-                          }}
-                        >
-                          + {name}
-                        </button>
-                      ))}
-                    </div>
-                    {form.attributes.map((attr, index) => (
-                      <div
-                        key={index}
-                        className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
-                      >
-                        <input
-                          className="rounded-md border px-3 py-2 text-sm"
-                          placeholder="Özellik adı"
-                          value={attr.name}
-                          onChange={(e) => {
-                            const next = [...form.attributes];
-                            next[index] = { ...attr, name: e.target.value };
-                            setForm((f) => ({ ...f, attributes: next }));
-                            setDirty(true);
-                          }}
-                        />
-                        <input
-                          className="rounded-md border px-3 py-2 text-sm"
-                          placeholder="Değer"
-                          value={attr.value}
-                          onChange={(e) => {
-                            const next = [...form.attributes];
-                            next[index] = { ...attr, value: e.target.value };
-                            setForm((f) => ({ ...f, attributes: next }));
-                            setDirty(true);
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="text-sm text-red-700"
-                          onClick={() => {
-                            setForm((f) => ({
-                              ...f,
-                              attributes: f.attributes.filter((_, i) => i !== index),
-                            }));
-                            setDirty(true);
-                          }}
-                        >
-                          Sil
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      className="rounded-md border px-3 py-2 text-sm"
-                      onClick={() => {
-                        setForm((f) => ({
-                          ...f,
-                          attributes: [...f.attributes, { name: "", value: "" }],
-                        }));
-                        setDirty(true);
-                      }}
-                    >
-                      Özellik ekle
-                    </button>
-                  </div>
+                  <ProductAttributesEditor
+                    value={form.attributes}
+                    onChange={(attributes) => {
+                      setForm((f) => ({ ...f, attributes }));
+                      setDirty(true);
+                    }}
+                  />
                   <div className="border-t border-slate-100 pt-4">
                     <RichHtmlEditor
                       label="Zengin teknik içerik (HTML)"
@@ -614,91 +525,13 @@ export default function ProductDetailPage() {
 
               {tab === "compatibility" && (
                 <div className="space-y-6">
-                  <div className="space-y-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-800">
-                        Uyumlu model / ürün listesi
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Mevcut uyumluluk satırları — marka, model ve not.
-                      </p>
-                    </div>
-                    {form.compatibility.map((row, index) => (
-                      <div
-                        key={index}
-                        className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2"
-                      >
-                        <input
-                          className="rounded-md border px-3 py-2 text-sm"
-                          placeholder="Marka"
-                          value={row.manufacturer}
-                          onChange={(e) => {
-                            const next = [...form.compatibility];
-                            next[index] = {
-                              ...row,
-                              manufacturer: e.target.value,
-                            };
-                            setForm((f) => ({ ...f, compatibility: next }));
-                            setDirty(true);
-                          }}
-                        />
-                        <input
-                          className="rounded-md border px-3 py-2 text-sm"
-                          placeholder="Model"
-                          value={row.model}
-                          onChange={(e) => {
-                            const next = [...form.compatibility];
-                            next[index] = { ...row, model: e.target.value };
-                            setForm((f) => ({ ...f, compatibility: next }));
-                            setDirty(true);
-                          }}
-                        />
-                        <input
-                          className="rounded-md border px-3 py-2 text-sm"
-                          placeholder="Model yılı"
-                          value={row.modelYear}
-                          onChange={(e) => {
-                            const next = [...form.compatibility];
-                            next[index] = { ...row, modelYear: e.target.value };
-                            setForm((f) => ({ ...f, compatibility: next }));
-                            setDirty(true);
-                          }}
-                        />
-                        <input
-                          className="rounded-md border px-3 py-2 text-sm"
-                          placeholder="Uyumluluk notu"
-                          value={row.notes}
-                          onChange={(e) => {
-                            const next = [...form.compatibility];
-                            next[index] = { ...row, notes: e.target.value };
-                            setForm((f) => ({ ...f, compatibility: next }));
-                            setDirty(true);
-                          }}
-                        />
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      className="rounded-md border px-3 py-2 text-sm"
-                      onClick={() => {
-                        setForm((f) => ({
-                          ...f,
-                          compatibility: [
-                            ...f.compatibility,
-                            {
-                              manufacturer: "",
-                              model: "",
-                              modelYear: "",
-                              notes: "",
-                            },
-                          ],
-                        }));
-                        setDirty(true);
-                      }}
-                    >
-                      Uyumluluk ekle
-                    </button>
-                  </div>
+                  <ProductCompatibilityEditor
+                    value={form.compatibility}
+                    onChange={(compatibility) => {
+                      setForm((f) => ({ ...f, compatibility }));
+                      setDirty(true);
+                    }}
+                  />
                   <div className="border-t border-slate-100 pt-4">
                     <RichHtmlEditor
                       label="Uyumluluk zengin içerik (HTML)"
@@ -729,7 +562,7 @@ export default function ProductDetailPage() {
                       <tbody>
                         {(pricesQuery.data ?? []).map((p) => (
                           <tr key={p.id} className="border-t">
-                            <td className="py-2">{p.type}</td>
+                            <td className="py-2">{priceTypeLabel(p.type)}</td>
                             <td>{p.price ?? p.amount}</td>
                             <td>{p.validFrom ?? "—"}</td>
                             <td>{p.validTo ?? "—"}</td>
@@ -748,10 +581,10 @@ export default function ProductDetailPage() {
                           setPriceForm((f) => ({ ...f, type: e.target.value }))
                         }
                       >
-                        <option value="RETAIL">RETAIL</option>
-                        <option value="CAMPAIGN">CAMPAIGN</option>
-                        <option value="WHOLESALE">WHOLESALE</option>
-                        <option value="CORPORATE">CORPORATE</option>
+                        <option value="RETAIL">Perakende</option>
+                        <option value="CAMPAIGN">Kampanya</option>
+                        <option value="WHOLESALE">Toptan</option>
+                        <option value="CORPORATE">Kurumsal</option>
                       </select>
                       <input
                         className="rounded-md border px-3 py-2 text-sm"

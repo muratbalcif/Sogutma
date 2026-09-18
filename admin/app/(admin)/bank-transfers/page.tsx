@@ -1,8 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
+import {
+  BANK_TRANSFER_STATUS_LABEL,
+  bankTransferStatusLabel,
+} from "@/lib/enum-labels";
 import { usePermissions } from "@/hooks/use-permissions";
 import { ApiError } from "@/lib/api-client";
 import { paymentsService } from "@/services/admin-api.service";
@@ -90,15 +94,6 @@ export default function BankTransfersPage() {
   const canApprove = can("bank_transfer.approve");
   const canReject = can("bank_transfer.reject");
 
-  const statusLabel = useMemo(
-    () => ({
-      PENDING: "Bekliyor",
-      APPROVED: "Onaylandı",
-      REJECTED: "Reddedildi",
-    }),
-    [],
-  );
-
   return (
     <ModulePage permission="bank_transfer.read">
       <div className="space-y-4">
@@ -109,7 +104,7 @@ export default function BankTransfersPage() {
             </h1>
             <p className="text-sm text-slate-600">
               Havale / EFT bildirimlerini inceleyin, onaylayın veya reddedin.
-              Onaylanmadan ödeme PAID olamaz.
+              Onaylanmadan ödeme “Ödendi” durumuna geçmez.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -140,7 +135,7 @@ export default function BankTransfersPage() {
             >
               {STATUS_FILTERS.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {value === "ALL" ? "Tümü" : (BANK_TRANSFER_STATUS_LABEL[value] ?? value)}
                 </option>
               ))}
             </select>
@@ -155,7 +150,7 @@ export default function BankTransfersPage() {
                   <th className="px-4 py-3 font-medium">Sipariş</th>
                   <th className="px-4 py-3 font-medium">Müşteri</th>
                   <th className="px-4 py-3 font-medium">Banka</th>
-                  <th className="px-4 py-3 font-medium">Claim</th>
+                  <th className="px-4 py-3 font-medium">Bildirim</th>
                   <th className="px-4 py-3 font-medium">Ödenen / Kalan</th>
                   <th className="px-4 py-3 font-medium">Referans</th>
                   <th className="px-4 py-3 font-medium">Tarih</th>
@@ -198,8 +193,7 @@ export default function BankTransfersPage() {
                       {new Date(row.createdAt).toLocaleDateString("tr-TR")}
                     </td>
                     <td className="px-4 py-3">
-                      {statusLabel[row.status as keyof typeof statusLabel] ??
-                        row.status}
+                      {bankTransferStatusLabel(row.status)}
                     </td>
                   </tr>
                 ))}
@@ -256,7 +250,7 @@ export default function BankTransfersPage() {
                   {new Date(detail.createdAt).toLocaleString("tr-TR")}
                 </p>
                 <p>
-                  <strong>Durum:</strong> {detail.status}
+                  <strong>Durum:</strong> {bankTransferStatusLabel(detail.status)}
                 </p>
                 {detail.timeline && detail.timeline.length > 0 ? (
                   <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -266,7 +260,7 @@ export default function BankTransfersPage() {
                         <li key={row.id} className="flex justify-between gap-2">
                           <span>
                             {new Date(row.createdAt).toLocaleString("tr-TR")} ·{" "}
-                            {row.status}
+                            {bankTransferStatusLabel(row.status)}
                           </span>
                           <span className="font-mono">{row.amount}</span>
                         </li>

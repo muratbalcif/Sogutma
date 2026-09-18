@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { accountTxTypeLabel } from "@/lib/enum-labels";
 import { ModulePage } from "@/components/auth/module-page";
 import { usePermissions } from "@/hooks/use-permissions";
 import { ApiError } from "@/lib/api-client";
@@ -331,7 +332,7 @@ export default function AccountingPage() {
               <tbody>
                 {(data?.items ?? []).map((row) => (
                   <tr key={row.id} className="border-t border-slate-100">
-                    <td className="px-4 py-3">{row.type}</td>
+                    <td className="px-4 py-3">{accountTxTypeLabel(row.type)}</td>
                     <td className="px-4 py-3 font-mono text-xs">
                       {row.reference}
                     </td>

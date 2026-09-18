@@ -6,12 +6,8 @@ import java.text.NumberFormat
 import java.util.Currency as JavaCurrency
 import java.util.Locale
 
-internal fun transferStatusLabel(status: String): String = when (status) {
-    "PENDING" -> "İnceleniyor"
-    "APPROVED" -> "Onaylandı"
-    "REJECTED" -> "Reddedildi"
-    else -> status
-}
+internal fun transferStatusLabel(status: String): String =
+    com.furkansogutma.app.core.common.labels.EnumLabels.bankTransferStatus(status)
 
 internal fun formatTryDisplay(amount: String?): String {
     if (amount.isNullOrBlank()) return "—"

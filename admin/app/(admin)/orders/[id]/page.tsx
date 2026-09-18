@@ -6,26 +6,11 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
 import { usePermissions } from "@/hooks/use-permissions";
+import {
+  orderStatusLabel,
+  paymentStatusLabel,
+} from "@/lib/enum-labels";
 import { ordersService, type AdminOrder } from "@/services/admin-api.service";
-
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  PENDING: "Bekliyor",
-  CONFIRMED: "Onaylandı",
-  PREPARING: "Hazırlanıyor",
-  SHIPPED: "Kargoda",
-  DELIVERED: "Teslim edildi",
-  CANCELLED: "İptal",
-  RETURNED: "İade",
-};
-
-const PAYMENT_STATUS_LABEL: Record<string, string> = {
-  PENDING: "Bekliyor",
-  AUTHORIZED: "Yetkilendirildi",
-  PAID: "Ödendi",
-  FAILED: "Başarısız",
-  REFUNDED: "İade",
-  CANCELLED: "İptal",
-};
 
 const ACTION_LABEL: Record<string, string> = {
   CONFIRMED: "Siparişi Onayla",
@@ -274,7 +259,7 @@ export default function AdminOrderDetailPage() {
                 {order.statusHistory.map((entry) => (
                   <li key={entry.id}>
                     <p className="font-medium">
-                      {ORDER_STATUS_LABEL[entry.toStatus] ?? entry.toStatus}
+                      {orderStatusLabel(entry.toStatus)}
                     </p>
                     <p className="text-slate-500">
                       {new Date(entry.createdAt).toLocaleString("tr-TR")}
@@ -432,14 +417,14 @@ function HeaderCard({ order }: { order: AdminOrder }) {
           <p className="text-slate-500">Ödeme durumu</p>
           <p className="font-medium">
             {order.payment
-              ? PAYMENT_STATUS_LABEL[order.payment.status] ?? order.payment.status
+              ? paymentStatusLabel(order.payment.status)
               : "—"}
           </p>
         </div>
         <div>
           <p className="text-slate-500">Sipariş durumu</p>
           <p className="font-medium">
-            {ORDER_STATUS_LABEL[order.status] ?? order.status}
+            {orderStatusLabel(order.status)}
           </p>
         </div>
         <div>

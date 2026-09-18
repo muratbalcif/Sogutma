@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
+import { couponTypeLabel } from "@/lib/enum-labels";
 import { usePermissions } from "@/hooks/use-permissions";
 import { couponsAdminService } from "@/services/admin-api.service";
 
@@ -75,8 +76,8 @@ export default function CouponsPage() {
               value={form.type}
               onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
             >
-              <option value="PERCENTAGE">PERCENTAGE</option>
-              <option value="FIXED_AMOUNT">FIXED_AMOUNT</option>
+              <option value="PERCENTAGE">Yüzde</option>
+              <option value="FIXED_AMOUNT">Sabit tutar</option>
             </select>
             <input
               className="rounded border px-3 py-2 text-sm"
@@ -157,7 +158,7 @@ export default function CouponsPage() {
               {(list.data ?? []).map((row) => (
                 <tr key={row.id} className="border-t">
                   <td className="px-3 py-2 font-mono">{row.code}</td>
-                  <td className="px-3 py-2">{row.type}</td>
+                  <td className="px-3 py-2">{couponTypeLabel(row.type)}</td>
                   <td className="px-3 py-2">{row.value}</td>
                   <td className="px-3 py-2">
                     {row.usageCount}

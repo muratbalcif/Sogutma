@@ -5,6 +5,10 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
+import {
+  orderStatusLabel,
+  userStatusLabel,
+} from "@/lib/enum-labels";
 import { usePermissions } from "@/hooks/use-permissions";
 import {
   accountingService,
@@ -99,7 +103,7 @@ export default function CustomerDetailPage() {
                     {c.firstName} {c.lastName}
                   </h1>
                   <p className="text-sm text-slate-600">
-                    {c.corporate?.companyName ?? c.email} · {c.status} · Bakiye{" "}
+                    {c.corporate?.companyName ?? c.email} · {userStatusLabel(c.status)} · Bakiye{" "}
                     <strong>{c.account.balance}</strong>
                   </p>
                 </div>
@@ -185,7 +189,7 @@ export default function CustomerDetailPage() {
                 <p>E-posta: {c.email}</p>
                 <p>Telefon: {c.phone ?? "—"}</p>
                 <p>Tip: {c.userType}</p>
-                <p>Durum: {c.status}</p>
+                <p>Durum: {userStatusLabel(c.status)}</p>
                 {c.corporate && (
                   <>
                     <p>Firma: {c.corporate.companyName}</p>
@@ -280,8 +284,8 @@ export default function CustomerDetailPage() {
                       }
                       className="rounded border px-2 py-1.5 text-sm"
                     >
-                      <option value="DEBIT">Borç (DEBIT)</option>
-                      <option value="CREDIT">Alacak (CREDIT)</option>
+                      <option value="DEBIT">Borç</option>
+                      <option value="CREDIT">Alacak</option>
                     </select>
                     <input
                       required
@@ -433,7 +437,7 @@ function OrdersTab({
                 </td>
                 <td className="px-3 py-2">{o.totalAmount}</td>
                 <td className="px-3 py-2">{o.paymentStatus ?? "—"}</td>
-                <td className="px-3 py-2">{o.status}</td>
+                <td className="px-3 py-2">{orderStatusLabel(o.status)}</td>
               </tr>
             ))}
           </tbody>

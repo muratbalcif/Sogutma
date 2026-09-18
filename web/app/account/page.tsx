@@ -1,12 +1,22 @@
 import Link from "next/link";
 import { serverApiFetch } from "@/lib/api/server";
+import { orderStatusLabel, userTypeLabel } from "@/lib/order-labels";
 import type { AuthUser, Paginated } from "@/types/api";
 
 export default async function AccountPage() {
   const user = await serverApiFetch<AuthUser>("/auth/me").catch(() => null);
-  const orders = await serverApiFetch<Paginated<{ id: string; orderNumber: string; status: string; totalAmount: string; createdAt: string }>>(
-    "/orders?page=1&limit=5",
-  ).catch(() => ({ items: [], meta: { page: 1, limit: 5, total: 0, totalPages: 0 } }));
+  const orders = await serverApiFetch<
+    Paginated<{
+      id: string;
+      orderNumber: string;
+      status: string;
+      totalAmount: string;
+      createdAt: string;
+    }>
+  >("/orders?page=1&limit=5").catch(() => ({
+    items: [],
+    meta: { page: 1, limit: 5, total: 0, totalPages: 0 },
+  }));
 
   return (
     <div className="space-y-6">
@@ -19,7 +29,7 @@ export default async function AccountPage() {
             {user.firstName} {user.lastName}
           </p>
           <p>{user.email}</p>
-          <p className="text-slate-500">{user.userType}</p>
+          <p className="text-slate-500">{userTypeLabel(user.userType)}</p>
         </div>
       ) : null}
       <section>
@@ -35,7 +45,9 @@ export default async function AccountPage() {
               <Link href={`/account/orders/${order.id}`} className="font-medium">
                 {order.orderNumber}
               </Link>
-              <span className="ml-2 text-slate-500">{order.status}</span>
+              <span className="ml-2 text-slate-500">
+                {orderStatusLabel(order.status)}
+              </span>
             </li>
           ))}
           {orders.items.length === 0 ? (

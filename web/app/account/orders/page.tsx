@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ApiError } from "@/lib/api/base";
 import { clientApiFetch } from "@/lib/api/client";
+import { orderStatusLabel } from "@/lib/order-labels";
 import type { Paginated } from "@/types/api";
 
 type OrderRow = {
@@ -94,7 +95,7 @@ export default function OrdersPage() {
                 {new Date(order.createdAt).toLocaleString("tr-TR")}
               </p>
             </div>
-            <Badge>{order.status}</Badge>
+            <Badge>{orderStatusLabel(order.status)}</Badge>
             <p className="font-medium">
               {order.totalAmount} {order.currency}
             </p>

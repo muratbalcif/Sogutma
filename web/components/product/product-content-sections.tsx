@@ -54,111 +54,109 @@ type ProductContentSectionsProps = {
 export function ProductContentSections({
   attributes,
   compatibility,
-  technicalHtml,
-  compatibilityHtml,
   technicalRich,
   compatibilityRich,
 }: ProductContentSectionsProps) {
-  const hasTechnical =
-    attributes.length > 0 || Boolean(technicalHtml?.trim());
-  const hasCompatibility =
-    compatibility.length > 0 || Boolean(compatibilityHtml?.trim());
-
-  const [open, setOpen] = useState<string | null>(() => {
-    if (hasTechnical) return "technical";
-    if (hasCompatibility) return "compatibility";
-    return null;
-  });
-
-  if (!hasTechnical && !hasCompatibility) return null;
+  const [open, setOpen] = useState<string | null>("technical");
 
   const toggle = (id: string) =>
     setOpen((current) => (current === id ? null : id));
 
+  const hasTechnicalRows = attributes.length > 0;
+  const hasTechnicalHtml = Boolean(technicalRich);
+  const hasCompatibilityRows = compatibility.length > 0;
+  const hasCompatibilityHtml = Boolean(compatibilityRich);
+
   return (
     <div className="mt-8 space-y-3">
-      {hasTechnical ? (
-        <AccordionItem
-          id="technical"
-          title="Teknik Özellikler"
-          open={open === "technical"}
-          onToggle={() => toggle("technical")}
-        >
-          {attributes.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
-              <table className="min-w-full text-sm">
-                <tbody>
-                  {attributes.map((attr, i) => (
-                    <tr
-                      key={attr.id}
-                      className={
-                        i % 2 === 0
-                          ? "bg-[var(--color-surface)]"
-                          : "bg-[var(--color-background)]"
-                      }
+      <AccordionItem
+        id="technical"
+        title="Teknik Özellikler"
+        open={open === "technical"}
+        onToggle={() => toggle("technical")}
+      >
+        {hasTechnicalRows ? (
+          <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
+            <table className="min-w-full text-sm">
+              <tbody>
+                {attributes.map((attr, i) => (
+                  <tr
+                    key={attr.id}
+                    className={
+                      i % 2 === 0
+                        ? "bg-[var(--color-surface)]"
+                        : "bg-[var(--color-background)]"
+                    }
+                  >
+                    <th
+                      scope="row"
+                      className="w-[40%] px-3 py-2.5 text-left font-medium text-[var(--color-secondary)]"
                     >
-                      <th
-                        scope="row"
-                        className="w-[40%] px-3 py-2.5 text-left font-medium text-[var(--color-secondary)]"
-                      >
-                        {attr.name}
-                      </th>
-                      <td className="px-3 py-2.5 text-[var(--color-text)]">
-                        {attr.value}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-          {technicalRich ? (
-            <div className={attributes.length > 0 ? "mt-4" : undefined}>
-              {technicalRich}
-            </div>
-          ) : null}
-        </AccordionItem>
-      ) : null}
+                      {attr.name}
+                    </th>
+                    <td className="px-3 py-2.5 text-[var(--color-text)]">
+                      {attr.value}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
 
-      {hasCompatibility ? (
-        <AccordionItem
-          id="compatibility"
-          title="Uyumluluk"
-          open={open === "compatibility"}
-          onToggle={() => toggle("compatibility")}
-        >
-          {compatibility.length > 0 ? (
-            <ul className="space-y-2">
-              {compatibility.map((item) => (
-                <li
-                  key={item.id}
-                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm"
-                >
-                  <p className="font-medium text-[var(--color-text)]">
-                    {item.manufacturer} {item.model}
-                    {item.modelYear ? (
-                      <span className="font-normal text-[var(--color-secondary)]">
-                        {" "}
-                        ({item.modelYear})
-                      </span>
-                    ) : null}
-                  </p>
-                  {item.notes ? (
-                    <p className="mt-1 text-[var(--color-secondary)]">
-                      {item.notes}
-                    </p>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {compatibilityRich ? (
-            <div className={compatibility.length > 0 ? "mt-4" : undefined}>
-              {compatibilityRich}
-            </div>
-          ) : null}
-        </AccordionItem>
-      ) : null}
+        {hasTechnicalHtml ? (
+          <div className={hasTechnicalRows ? "mt-4" : undefined}>
+            {technicalRich}
+          </div>
+        ) : null}
+
+        {!hasTechnicalRows && !hasTechnicalHtml ? (
+          <p className="text-sm text-[var(--color-secondary)]">
+            Bu ürün için teknik özellik bulunmuyor.
+          </p>
+        ) : null}
+      </AccordionItem>
+
+      <AccordionItem
+        id="compatibility"
+        title="Uyumluluk"
+        open={open === "compatibility"}
+        onToggle={() => toggle("compatibility")}
+      >
+        {hasCompatibilityRows ? (
+          <ul className="space-y-2">
+            {compatibility.map((item) => (
+              <li
+                key={item.id}
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm"
+              >
+                <p className="font-medium text-[var(--color-text)]">
+                  {item.manufacturer}
+                </p>
+                <p className="text-[var(--color-text)]">{item.model}</p>
+                {item.modelYear ? (
+                  <p className="text-[var(--color-secondary)]">{item.modelYear}</p>
+                ) : null}
+                {item.notes ? (
+                  <p className="mt-1 text-[var(--color-secondary)]">{item.notes}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {hasCompatibilityHtml ? (
+          <div className={hasCompatibilityRows ? "mt-4" : undefined}>
+            {compatibilityRich}
+          </div>
+        ) : null}
+
+        {!hasCompatibilityRows && !hasCompatibilityHtml ? (
+          <p className="text-sm text-[var(--color-secondary)]">
+            Bu ürün için uyumluluk bilgisi bulunmuyor.
+          </p>
+        ) : null}
+      </AccordionItem>
     </div>
   );
 }

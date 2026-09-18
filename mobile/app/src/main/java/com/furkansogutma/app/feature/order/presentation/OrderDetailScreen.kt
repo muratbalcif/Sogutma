@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.furkansogutma.app.core.common.labels.EnumLabels
 import com.furkansogutma.app.core.common.result.Result
 import com.furkansogutma.app.core.designsystem.components.FurkanButton
 import com.furkansogutma.app.core.designsystem.components.FurkanError
@@ -106,9 +107,16 @@ fun OrderDetailContent(
             .padding(FurkanSpacing.md),
     ) {
         Text(order.orderNumber, style = MaterialTheme.typography.headlineLarge)
-        Text("Durum: ${order.status}", style = MaterialTheme.typography.titleMedium)
-        order.paymentStatus?.let { Text("Ödeme durumu: $it") }
-        order.paymentMethod?.let { Text("Ödeme yöntemi: $it") }
+        Text(
+            "Durum: ${EnumLabels.orderStatus(order.status)}",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        order.paymentStatus?.let {
+            Text("Ödeme durumu: ${EnumLabels.paymentStatus(it)}")
+        }
+        order.paymentMethod?.let {
+            Text("Ödeme yöntemi: ${EnumLabels.paymentMethod(it)}")
+        }
         order.paymentApprovedTotal?.let { Text("Ödenen: $it ${order.currency}") }
         order.paymentRemainingAmount?.let {
             if (order.paymentStatus == "PENDING" || order.paymentStatus == "PARTIALLY_PAID") {
@@ -150,7 +158,7 @@ fun OrderDetailContent(
             Spacer(Modifier.height(FurkanSpacing.md))
             Text("Kargo", style = MaterialTheme.typography.titleLarge)
             shipping.provider?.let { Text("Kargo firması: $it") }
-            shipping.status?.let { Text("Kargo durumu: $it") }
+            shipping.status?.let { Text("Kargo durumu: ${EnumLabels.shippingStatus(it)}") }
             shipping.trackingNumber?.let { Text("Takip no: $it") }
             val trackingUrl = shipping.trackingUrl
             if (!trackingUrl.isNullOrBlank()) {
@@ -175,7 +183,7 @@ fun OrderDetailContent(
             Text("Henüz durum kaydı yok.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             order.statusHistory.forEach { entry ->
-                Text("${entry.createdAt}: ${entry.status}")
+                Text("${entry.createdAt}: ${EnumLabels.orderStatus(entry.status)}")
                 entry.note?.takeIf { it.isNotBlank() }?.let {
                     Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

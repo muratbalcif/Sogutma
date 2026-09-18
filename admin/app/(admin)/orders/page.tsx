@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
+import {
+  ORDER_STATUS_LABEL,
+  PAYMENT_STATUS_LABEL,
+  orderStatusLabel,
+  shippingStatusLabel,
+} from "@/lib/enum-labels";
 import { ordersService } from "@/services/admin-api.service";
 
 const ORDER_STATUSES = [
@@ -28,25 +34,6 @@ const PAYMENT_STATUSES = [
   "CANCELLED",
 ] as const;
 
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  PENDING: "Bekliyor",
-  CONFIRMED: "Onaylandı",
-  PREPARING: "Hazırlanıyor",
-  SHIPPED: "Kargoda",
-  DELIVERED: "Teslim edildi",
-  CANCELLED: "İptal",
-  RETURNED: "İade",
-};
-
-const PAYMENT_STATUS_LABEL: Record<string, string> = {
-  PENDING: "Bekliyor",
-  AUTHORIZED: "Yetkilendirildi",
-  PAID: "Ödendi",
-  FAILED: "Başarısız",
-  REFUNDED: "İade",
-  CANCELLED: "İptal",
-};
-
 function customerName(order: {
   customer?: { firstName: string; lastName: string; email: string };
 }) {
@@ -68,7 +55,7 @@ function shippingLabel(order: {
   if (order.shipping.trackingNumber) {
     return order.shipping.trackingNumber;
   }
-  return order.shipping.status;
+  return shippingStatusLabel(order.shipping.status);
 }
 
 export default function OrdersPage() {
@@ -216,7 +203,7 @@ export default function OrdersPage() {
                         : "—"}
                     </td>
                     <td className="px-4 py-3">
-                      {ORDER_STATUS_LABEL[row.status] ?? row.status}
+                      {orderStatusLabel(row.status)}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">
                       {shippingLabel(row)}

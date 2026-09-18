@@ -120,7 +120,7 @@ fun AlertsRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewMode
             alerts!!.isEmpty() -> FurkanEmptyState("Bildirim yok", "Stok bildirimleriniz burada.")
             else -> LazyColumn(Modifier.padding(FurkanSpacing.md)) {
                 items(alerts!!, key = { it.id }) { alert ->
-                    Text("${alert.productName ?: alert.productId} — ${alert.status.orEmpty()}")
+                    Text("${alert.productName ?: alert.productId} — ${com.furkansogutma.app.core.common.labels.EnumLabels.alertStatus(alert.status)}")
                     FurkanOutlinedButton("İptal") {
                         scope.launch {
                             vm.accountRepository.deleteAlert(alert.productId)

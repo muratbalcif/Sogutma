@@ -382,7 +382,7 @@ fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: Ban
                     it.referenceNumber?.let { ref -> Text("Referans: $ref") }
                     it.paymentStatus?.let { status ->
                         Text(
-                            "Ödeme: $status" +
+                            "Ödeme: ${com.furkansogutma.app.core.common.labels.EnumLabels.paymentStatus(status)}" +
                                 (it.approvedTotal?.let { t -> " · Ödenen ${formatTryDisplay(t)}" } ?: "") +
                                 (it.remainingAmount?.let { r -> " · Kalan ${formatTryDisplay(r)}" } ?: ""),
                             style = MaterialTheme.typography.bodySmall,

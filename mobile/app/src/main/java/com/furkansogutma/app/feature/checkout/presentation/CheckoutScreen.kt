@@ -525,12 +525,9 @@ fun OrderSuccessRoute(
     val selectedBank = banks.firstOrNull()
     val remaining = order?.paymentRemainingAmount ?: order?.total
     val reference = order?.paymentReference
-    val paymentStatusLabel = when (order?.paymentStatus) {
-        "PENDING" -> "Ödeme bekleniyor"
-        "PARTIALLY_PAID" -> "Kısmi ödeme alındı"
-        "PAID" -> "Ödeme alındı"
-        else -> order?.paymentStatus ?: "Ödeme bekleniyor"
-    }
+    val paymentStatusLabel = com.furkansogutma.app.core.common.labels.EnumLabels.paymentStatus(
+        order?.paymentStatus,
+    )
 
     Column(
         Modifier

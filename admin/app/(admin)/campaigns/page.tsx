@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
+import { CAMPAIGN_TYPE_LABEL } from "@/lib/enum-labels";
 import { usePermissions } from "@/hooks/use-permissions";
 import { campaignsService } from "@/services/admin-api.service";
 
@@ -96,9 +97,9 @@ export default function CampaignsPage() {
               value={form.type}
               onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
             >
-              <option value="PERCENTAGE">PERCENTAGE</option>
-              <option value="FIXED_AMOUNT">FIXED_AMOUNT</option>
-              <option value="SPECIAL_PRICE">SPECIAL_PRICE</option>
+              <option value="PERCENTAGE">Yüzde indirim</option>
+              <option value="FIXED_AMOUNT">Sabit tutar</option>
+              <option value="SPECIAL_PRICE">Özel fiyat</option>
             </select>
             <input
               className="rounded border px-3 py-2 text-sm"
@@ -150,7 +151,7 @@ export default function CampaignsPage() {
                 <th className="px-4 py-3">Kampanya</th>
                 <th className="px-4 py-3">Başlangıç</th>
                 <th className="px-4 py-3">Bitiş</th>
-                <th className="px-4 py-3">Priority</th>
+                <th className="px-4 py-3">Öncelik</th>
                 <th className="px-4 py-3">Durum</th>
                 <th className="px-4 py-3">İşlem</th>
               </tr>
@@ -160,7 +161,9 @@ export default function CampaignsPage() {
                 <tr key={row.id} className="border-t">
                   <td className="px-4 py-3">
                     <div className="font-medium">{row.name}</div>
-                    <div className="text-xs text-slate-500">{row.slug}</div>
+                    <div className="text-xs text-slate-500">
+                      {CAMPAIGN_TYPE_LABEL[row.type] ?? row.type} · {row.slug}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {new Date(row.startsAt).toLocaleString("tr-TR")}

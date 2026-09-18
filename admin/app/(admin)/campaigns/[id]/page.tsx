@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { campaignTypeLabel } from "@/lib/enum-labels";
 import { ModulePage } from "@/components/auth/module-page";
 import { campaignsService, catalogService } from "@/services/admin-api.service";
 
@@ -82,7 +83,7 @@ export default function CampaignDetailPage() {
               {c.name}
             </h2>
             <p className="text-sm text-slate-500">
-              {c.type} · priority {c.priority} · {c.slug}
+              {campaignTypeLabel(c.type)} · öncelik {c.priority} · {c.slug}
             </p>
           </div>
           <button

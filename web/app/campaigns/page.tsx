@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
+import { campaignTypeLabel } from "@/lib/order-labels";
 import { catalogService } from "@/services/catalog.service";
 
 export const metadata: Metadata = {
@@ -56,7 +57,7 @@ export default async function CampaignsIndexPage() {
               className="rounded-xl border bg-white p-5 transition hover:border-accent/50"
             >
               <p className="text-xs uppercase tracking-wide text-slate-500">
-                {campaign.type}
+                {campaignTypeLabel(campaign.type)}
               </p>
               <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-navy">
                 {campaign.name}

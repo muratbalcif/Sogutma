@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { bannerLinkTypeLabel } from "@/lib/enum-labels";
 import { ModulePage } from "@/components/auth/module-page";
 import { usePermissions } from "@/hooks/use-permissions";
 import { bannersService, catalogService } from "@/services/admin-api.service";
@@ -288,15 +289,15 @@ export default function BannersPage() {
                 setForm((f) => ({ ...f, linkType: e.target.value }))
               }
             >
-              <option value="NONE">NONE</option>
-              <option value="PRODUCT">PRODUCT</option>
-              <option value="CATEGORY">CATEGORY</option>
-              <option value="CAMPAIGN">CAMPAIGN</option>
-              <option value="URL">URL</option>
+              <option value="NONE">Yok</option>
+              <option value="PRODUCT">Ürün</option>
+              <option value="CATEGORY">Kategori</option>
+              <option value="CAMPAIGN">Kampanya</option>
+              <option value="URL">Bağlantı (URL)</option>
             </select>
             <input
               className="rounded border px-3 py-2 text-sm"
-              placeholder="linkValue (slug / URL)"
+              placeholder="Hedef (slug / URL)"
               value={form.linkValue}
               disabled={form.linkType === "NONE"}
               onChange={(e) =>
@@ -398,7 +399,7 @@ export default function BannersPage() {
                         <div>
                           <div className="font-medium">{row.title}</div>
                           <div className="text-xs text-slate-500">
-                            {row.linkType}
+                            {bannerLinkTypeLabel(row.linkType)}
                             {row.linkValue ? ` · ${row.linkValue}` : ""}
                           </div>
                         </div>

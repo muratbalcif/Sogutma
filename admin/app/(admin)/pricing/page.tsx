@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ModulePage } from "@/components/auth/module-page";
 import { usePermissions } from "@/hooks/use-permissions";
 import { ApiError } from "@/lib/api-client";
+import { PRICE_TYPE_LABEL, priceTypeLabel } from "@/lib/enum-labels";
 import {
   catalogService,
   customerPricingService,
@@ -240,7 +241,7 @@ export default function PricingPage() {
                     <tbody>
                       {(productPricesQuery.data ?? []).map((row) => (
                         <tr key={row.id} className="border-t">
-                          <td className="py-2">{row.type}</td>
+                          <td className="py-2">{priceTypeLabel(row.type)}</td>
                           <td>
                             {row.price} {row.currency}
                           </td>
@@ -296,9 +297,9 @@ export default function PricingPage() {
                       setProductForm((f) => ({ ...f, type: e.target.value }))
                     }
                   >
-                    {PRICE_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
+                    {PRICE_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {PRICE_TYPE_LABEL[type] ?? type}
                       </option>
                     ))}
                   </select>

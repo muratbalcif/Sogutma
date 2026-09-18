@@ -43,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -215,13 +216,20 @@ fun ProductListScreen(
 
     if (state.showFiltersSheet) {
         ModalBottomSheet(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(color = Color.Transparent),
+
             onDismissRequest = { onEvent(ProductListEvent.CloseFilters) },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
             val draft = state.draftFilters
             Column(
+
+
                 Modifier
                     .fillMaxWidth()
+                    .background(color = Color.White)
                     .padding(horizontal = FurkanSpacing.md)
                     .verticalScroll(rememberScrollState()),
             ) {
@@ -341,11 +349,14 @@ fun ProductListScreen(
 
     if (state.showSortSheet) {
         ModalBottomSheet(
+
             onDismissRequest = { onEvent(ProductListEvent.CloseSort) },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
             Column(
-                Modifier.padding(horizontal = FurkanSpacing.md, vertical = FurkanSpacing.sm),
+                Modifier
+                    .background(color = Color.White)
+                    .padding(horizontal = FurkanSpacing.md, vertical = FurkanSpacing.sm),
             ) {
                 Text(
                     "Sıralama",

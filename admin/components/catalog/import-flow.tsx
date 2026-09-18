@@ -1,5 +1,6 @@
 "use client";
 
+import { importJobStatusLabel } from "@/lib/enum-labels";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { authStorage } from "@/lib/auth-storage";
@@ -24,7 +25,7 @@ const SAMPLE_BY_KIND: Record<
     href: "/samples/ornek-fiyat-guncelleme.xlsx",
     label: "Örnek fiyat Excel indir",
     columns:
-      "sku, priceType (RETAIL|CAMPAIGN|WHOLESALE|CORPORATE), price, validFrom, validTo",
+      "sku, priceType (RETAIL=Perakende | CAMPAIGN=Kampanya | WHOLESALE=Toptan | CORPORATE=Kurumsal), price, validFrom, validTo",
   },
   stock: {
     href: "/samples/ornek-stok-guncelleme.xlsx",
@@ -130,7 +131,7 @@ export function ImportFlow({
             <Stat label="Güncelleme" value={job.updateRows} />
           </div>
           <p className="text-sm text-slate-600">
-            Durum: <strong>{job.status}</strong> — {job.filename}
+            Durum: <strong>{importJobStatusLabel(job.status)}</strong> — {job.filename}
           </p>
           {previewRows.length > 0 && (
             <div className="overflow-x-auto rounded-lg border bg-white">

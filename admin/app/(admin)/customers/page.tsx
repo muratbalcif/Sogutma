@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { userStatusLabel, userTypeLabel } from "@/lib/enum-labels";
 import { ModulePage } from "@/components/auth/module-page";
 import { usePermissions } from "@/hooks/use-permissions";
 import { ApiError, apiDownloadText } from "@/lib/api-client";
@@ -427,12 +428,12 @@ export default function CustomersPage() {
                     </td>
                     <td className="px-3 py-2">{c.email}</td>
                     <td className="px-3 py-2">{c.phone ?? "—"}</td>
-                    <td className="px-3 py-2">{c.userType}</td>
+                    <td className="px-3 py-2">{userTypeLabel(c.userType)}</td>
                     <td className="px-3 py-2">{c.companyName ?? "—"}</td>
                     <td className="px-3 py-2 font-medium">{c.balance}</td>
                     <td className="px-3 py-2">{c.orderCount}</td>
                     <td className="px-3 py-2">{c.totalSpent}</td>
-                    <td className="px-3 py-2">{c.status}</td>
+                    <td className="px-3 py-2">{userStatusLabel(c.status)}</td>
                     <td className="px-3 py-2 text-slate-500">
                       {new Date(c.createdAt).toLocaleDateString("tr-TR")}
                     </td>
