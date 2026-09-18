@@ -26,17 +26,16 @@ Production-oriented Android client for the FurkanSoğutma NestJS API (`/api/v1`)
 
 ```text
 mobile/
-├── app/                 # Application, NavHost, screens/ViewModels, FCM, flavors
-│   └── …/feature/       # splash, home, auth, category, product, search,
-│                        # cart, checkout, account (packages, not Gradle modules)
-├── core/
-│   ├── common/          # Result, AppError, money display helpers (JVM)
-│   ├── network/         # Retrofit APIs, AuthInterceptor, TokenAuthenticator
-│   ├── database/        # EncryptedTokenStorage, DataStore
-│   ├── designsystem/    # Theme + shared Compose components
-│   └── navigation/      # AppRoute + deep link helpers
-├── domain/              # Entities, repository interfaces, use cases (JVM)
-└── data/                # DTO mappers + repository implementations
+└── app/                 # Single Gradle module
+    └── src/main/java/com/furkansogutma/app/
+        ├── core/          # common, designsystem, network, navigation, datastore, notification
+        ├── feature/       # vertical slices: presentation / domain / data
+        │   ├── auth/, home/, product/, category/, search/, cart/
+        │   ├── checkout/, order/, account/, favorite/, notification/
+        │   ├── campaign/, banktransfer/, splash/
+        ├── di/            # AppModule, NetworkModule, DataModule, DatabaseModule
+        ├── FurkanSogutmaApp.kt
+        └── MainActivity.kt
 ```
 
 ## Environment / API URL

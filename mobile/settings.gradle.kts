@@ -17,10 +17,3 @@ dependencyResolutionManagement {
 rootProject.name = "FurkanSogutma"
 
 include(":app")
-include(":core:common")
-include(":core:network")
-include(":core:database")
-include(":core:designsystem")
-include(":core:navigation")
-include(":domain")
-include(":data")

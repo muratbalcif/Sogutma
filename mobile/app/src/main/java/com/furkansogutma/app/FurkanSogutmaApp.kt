@@ -2,7 +2,7 @@ package com.furkansogutma.app
 
 import android.app.Application
 import android.util.Log
-import com.furkansogutma.core.database.settings.AppSettingsDataStore
+import com.furkansogutma.app.core.datastore.AppSettingsDataStore
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject

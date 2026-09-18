@@ -7,8 +7,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.furkansogutma.app.navigation.FurkanNavHost
-import com.furkansogutma.core.designsystem.theme.FurkanSogutmaTheme
+import com.furkansogutma.app.core.navigation.FurkanNavHost
+import com.furkansogutma.app.core.designsystem.theme.FurkanSogutmaTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint

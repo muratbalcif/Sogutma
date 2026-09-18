@@ -1,7 +1,7 @@
 package com.furkansogutma.app.di
 
 import com.furkansogutma.app.BuildConfig
-import com.furkansogutma.core.network.ApiConfig
+import com.furkansogutma.app.core.network.ApiConfig
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

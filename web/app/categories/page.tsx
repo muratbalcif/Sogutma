@@ -57,12 +57,15 @@ function CategoryCard({ category }: { category: CategoryNode }) {
           </div>
         )}
       </div>
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <h2 className="line-clamp-2 text-[17px] font-semibold leading-snug text-foreground md:text-lg">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
+        <h2
+          title={label}
+          className="line-clamp-2 break-words text-[17px] font-semibold leading-snug text-foreground md:text-lg"
+        >
           {label}
         </h2>
         <span className="mt-auto text-sm font-semibold text-primary transition group-hover:text-primary-dark">
-          Klimayı keşfet →
+          Ürünleri Gör →
         </span>
       </div>
     </Link>
