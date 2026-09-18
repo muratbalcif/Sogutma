@@ -16,11 +16,15 @@ COPY package.json package-lock.json ./
 COPY api ./api
 WORKDIR /app/api
 RUN npx prisma generate
-RUN echo "=== PRISMA OUTPUT ===" \
-    && find /app/api/node_modules -maxdepth 4 -type d -name ".prisma" -print \
-    && find /app/api/node_modules -maxdepth 4 -type d -name "@prisma" -print \
-    && ls -lah /app/api/node_modules/.prisma 2>/dev/null || true \
-    && ls -lah /app/api/node_modules/@prisma 2>/dev/null || true
+RUN echo "=== PRISMA DEBUG ===" && \
+    echo "--- /app/api/node_modules ---" && \
+    ls -lah /app/api/node_modules 2>/dev/null || true && \
+    echo "--- .prisma locations ---" && \
+    find /app -type d -name ".prisma" -print 2>/dev/null || true && \
+    echo "--- @prisma locations ---" && \
+    find /app -type d -name "@prisma" -print 2>/dev/null || true && \
+    echo "--- generated prisma files ---" && \
+    find /app -path "*/node_modules/.prisma/*" -maxdepth 8 -print 2>/dev/null | head -100 || true
 RUN npm run build
 
 FROM node:22-alpine AS production
