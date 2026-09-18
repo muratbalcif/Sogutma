@@ -2,6 +2,8 @@ import type {
   ProviderAddressInput,
   ProviderCustomerInput,
   ProviderEntitySyncResult,
+  ProviderFormalizeInput,
+  ProviderFormalizeResult,
   ProviderInvoiceCreateResult,
   ProviderInvoiceInput,
   ProviderProductInput,
@@ -21,7 +23,7 @@ export type InvoiceProviderHealth = {
 
 /**
  * Pluggable e-document provider (KolayBi first; Logo/Paraşüt later).
- * Phase 5: createInvoice = provider draft invoice (not GİB formalize).
+ * Phase 5: createInvoice = draft. Phase 6: formalizeInvoice = GİB e-document.
  */
 export interface InvoiceProvider {
   readonly code: string;
@@ -42,10 +44,16 @@ export interface InvoiceProvider {
   ): Promise<ProviderEntitySyncResult>;
   /**
    * Create provider invoice (draft / ready_to_send).
-   * Does NOT formalize e-Fatura/e-Arşiv (Phase 6).
-   * On conflict/timeout, adapters may resolve via description/serial lookup.
+   * Does NOT formalize e-Fatura/e-Arşiv.
    */
   createInvoice(
     input: ProviderInvoiceInput,
   ): Promise<ProviderInvoiceCreateResult>;
+  /**
+   * Formalize draft invoice as e-document (e-Fatura / e-Arşiv).
+   * KolayBi chooses scenario from associate; request only sends document_id.
+   */
+  formalizeInvoice(
+    input: ProviderFormalizeInput,
+  ): Promise<ProviderFormalizeResult>;
 }

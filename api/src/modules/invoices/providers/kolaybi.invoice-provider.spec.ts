@@ -545,3 +545,127 @@ describe('KolayBiInvoiceProvider createInvoice', () => {
     expect(logged).not.toContain('Bearer ');
   });
 });
+
+describe('KolayBiInvoiceProvider formalizeInvoice', () => {
+  const originalFetch = global.fetch;
+  let provider: KolayBiInvoiceProvider;
+
+  beforeEach(() => {
+    const client = new KolayBiClient(
+      mockConfig({
+        KOLAYBI_API_BASE_URL: 'https://ofis-sandbox-api.kolaybi.com',
+        KOLAYBI_API_KEY: 'k',
+        KOLAYBI_CHANNEL: 'c',
+        KOLAYBI_SANDBOX: true,
+      }),
+    );
+    provider = new KolayBiInvoiceProvider(client);
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  const input = {
+    localInvoiceId: 'inv1',
+    externalDocumentId: '18',
+  };
+
+  it('formalizeInvoice posts document_id and maps uuid/no/scenario', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'tok' }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: {} })) // detail no uuid
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          success: true,
+          data: {
+            document_id: 18,
+            uuid: 'f46d5a8d-7726-4b37-bba4-973c7ab50a5b',
+            no: 'HDB2021000008464',
+            status: 'sent_to_receiver',
+            scenario: 'EARSIVFATURA',
+            type: 'SATIS',
+          },
+        }),
+      );
+
+    const result = await provider.formalizeInvoice(input);
+    expect(result.uuid).toBe('f46d5a8d-7726-4b37-bba4-973c7ab50a5b');
+    expect(result.invoiceNumber).toBe('HDB2021000008464');
+    expect(result.providerScenario).toBe('EARSIVFATURA');
+    expect(result.resolvedExisting).toBe(false);
+
+    expect(requestUrl(2)).toContain('/invoices/e-document/create');
+    const body = requestBody(2);
+    expect(body).toContain('document_id=18');
+    expect(body).not.toContain('scenario=');
+  });
+
+  it('resolves existing formalize via GET detail uuid without create', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'tok' }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: { uuid: 'existing-ettn' },
+        }),
+      );
+
+    const result = await provider.formalizeInvoice(input);
+    expect(result.uuid).toBe('existing-ettn');
+    expect(result.resolvedExisting).toBe(true);
+    expect(fetchMock().mock.calls.length).toBe(2);
+  });
+
+  it('on timeout looks up uuid before failing', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'tok' }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: {} }))
+      .mockImplementationOnce(() => {
+        const err = new Error('Aborted');
+        err.name = 'AbortError';
+        return Promise.reject(err);
+      })
+      .mockResolvedValueOnce(
+        jsonResponse(200, { data: { uuid: 'recovered-uuid' } }),
+      );
+
+    const result = await provider.formalizeInvoice(input);
+    expect(result.uuid).toBe('recovered-uuid');
+    expect(result.resolvedExisting).toBe(true);
+  });
+
+  it('propagates 401', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(jsonResponse(401, 'nope'));
+    await expect(provider.formalizeInvoice(input)).rejects.toMatchObject({
+      statusCode: 401,
+    });
+  });
+
+  it('does not log secrets', async () => {
+    const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, { data: 'super-secret-bearer-token' }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { data: {} }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: {
+            document_id: 1,
+            uuid: 'u1',
+            no: 'N1',
+          },
+        }),
+      );
+
+    await provider.formalizeInvoice(input);
+    const logged = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(logged).not.toContain('super-secret-bearer-token');
+    expect(logged).not.toContain('Bearer ');
+  });
+});

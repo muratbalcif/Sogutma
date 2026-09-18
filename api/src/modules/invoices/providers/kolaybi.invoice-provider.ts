@@ -10,6 +10,8 @@ import type {
   ProviderAddressInput,
   ProviderCustomerInput,
   ProviderEntitySyncResult,
+  ProviderFormalizeInput,
+  ProviderFormalizeResult,
   ProviderInvoiceCreateResult,
   ProviderInvoiceInput,
   ProviderProductInput,
@@ -51,6 +53,19 @@ type KolayBiInvoiceListRow = {
   };
 };
 
+type KolayBiEDocumentData = {
+  document_id?: number | string;
+  uuid?: string;
+  no?: string;
+  status?: string;
+  scenario?: string;
+  type?: string;
+};
+
+type KolayBiInvoiceDetailData = {
+  uuid?: string;
+};
+
 /**
  * KolayBi adapter.
  * Associate/Product/Invoice HTTP details stay here — domain uses Customer/Address/Product terminology.
@@ -66,10 +81,12 @@ type KolayBiInvoiceListRow = {
  * - GET /products?code=|&barcode= — list filter (orphan recovery)
  * - POST /invoices (form) — draft invoice create (Phase 5; not GİB formalize)
  * - GET /invoices?description=|&associate_id= — list (orphan recovery)
+ * - POST /invoices/e-document/create (form) — formalize (Phase 6)
+ * - GET /invoices/{document_id} — detail (uuid after formalize; timeout recovery)
  *
  * Product UPDATE (PUT) exists in KolayBi docs but Phase 4 ensure does not auto-push local edits.
  * Associate/address have no public UPDATE as of Phase 3.
- * E-document formalize is Phase 6.
+ * E-document request does NOT accept scenario — KolayBi derives e-Fatura vs e-Arşiv from associate.
  */
 @Injectable()
 export class KolayBiInvoiceProvider implements InvoiceProvider {
@@ -477,6 +494,126 @@ export class KolayBiInvoiceProvider implements InvoiceProvider {
       created: false,
       resolvedExisting: true,
     };
+  }
+
+  /**
+   * POST /invoices/e-document/create — formalize draft as e-document.
+   * Docs: only document_id required; optional prefix. No scenario field.
+   * Timeout recovery: GET /invoices/{document_id} may return uuid if already formalized.
+   */
+  async formalizeInvoice(
+    input: ProviderFormalizeInput,
+  ): Promise<ProviderFormalizeResult> {
+    const started = Date.now();
+    const documentId = String(input.externalDocumentId).trim();
+
+    const already = await this.findFormalizedUuid(documentId);
+    if (already) {
+      this.logOp('formalize_resolve_existing', null, null, {
+        invoiceId: input.localInvoiceId,
+        externalId: documentId,
+        durationMs: Date.now() - started,
+      });
+      return {
+        provider: this.code,
+        externalDocumentId: documentId,
+        uuid: already,
+        invoiceNumber: null,
+        providerStatus: null,
+        providerScenario: null,
+        resolvedExisting: true,
+      };
+    }
+
+    const form: Record<string, string> = {
+      document_id: documentId,
+    };
+    if (input.prefix?.trim()) {
+      form.prefix = input.prefix.trim();
+    }
+
+    try {
+      const response = await this.client.request<
+        KolayBiDataEnvelope<KolayBiEDocumentData> & { success?: boolean }
+      >('/invoices/e-document/create', {
+        method: 'POST',
+        contentType: 'form',
+        body: form,
+      });
+
+      const data = response?.data;
+      const uuid = data?.uuid?.trim();
+      if (!uuid) {
+        throw new KolayBiApiError(
+          'KolayBi e-document create response missing uuid',
+          502,
+          'KOLAYBI_INVALID_RESPONSE',
+          true,
+        );
+      }
+
+      this.logOp('formalize_invoice', null, null, {
+        invoiceId: input.localInvoiceId,
+        externalId: documentId,
+        durationMs: Date.now() - started,
+      });
+
+      return {
+        provider: this.code,
+        externalDocumentId: String(data?.document_id ?? documentId),
+        uuid,
+        invoiceNumber: data?.no?.trim() || null,
+        providerStatus: data?.status?.trim() || null,
+        providerScenario: data?.scenario?.trim() || null,
+        resolvedExisting: false,
+      };
+    } catch (err) {
+      if (
+        err instanceof KolayBiApiError &&
+        (err.statusCode === 409 ||
+          err.statusCode === 400 ||
+          err.retryable ||
+          err.code === 'KOLAYBI_TIMEOUT')
+      ) {
+        const resolvedUuid = await this.findFormalizedUuid(documentId);
+        if (resolvedUuid) {
+          return {
+            provider: this.code,
+            externalDocumentId: documentId,
+            uuid: resolvedUuid,
+            invoiceNumber: null,
+            providerStatus: null,
+            providerScenario: null,
+            resolvedExisting: true,
+          };
+        }
+      }
+      throw err;
+    }
+  }
+
+  /** GET /invoices/{id} — docs return uuid after formalize. */
+  private async findFormalizedUuid(documentId: string): Promise<string | null> {
+    try {
+      const response = await this.client.request<
+        KolayBiDataEnvelope<KolayBiInvoiceDetailData>
+      >(`/invoices/${documentId}`, { method: 'GET' });
+      const uuid = response?.data?.uuid?.trim();
+      return uuid || null;
+    } catch (err) {
+      if (err instanceof KolayBiApiError && err.statusCode === 404) {
+        return null;
+      }
+      if (
+        err instanceof KolayBiApiError &&
+        (err.statusCode === 401 ||
+          err.statusCode === 403 ||
+          err.statusCode === 429)
+      ) {
+        throw err;
+      }
+      return null;
+    }
   }
 
   private async createOrResolveProduct(

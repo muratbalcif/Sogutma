@@ -5,6 +5,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AdminInvoicesController } from './admin-invoices.controller';
 import { KolayBiClient } from './clients/kolaybi.client';
 import { InvoiceFromSaleService } from './invoice-from-sale.service';
+import { InvoiceFormalizeService } from './invoice-formalize.service';
 import { InvoicesService } from './invoices.service';
 import { INVOICE_PROVIDERS } from './providers/invoice-provider.interface';
 import { KolayBiInvoiceProvider } from './providers/kolaybi.invoice-provider';
@@ -22,10 +23,12 @@ import { KolayBiInvoiceProvider } from './providers/kolaybi.invoice-provider';
     },
     InvoicesService,
     InvoiceFromSaleService,
+    InvoiceFormalizeService,
   ],
   exports: [
     InvoicesService,
     InvoiceFromSaleService,
+    InvoiceFormalizeService,
     KolayBiClient,
     KolayBiInvoiceProvider,
   ],

@@ -26,6 +26,11 @@ import {
   CreateInvoiceFromSaleDto,
   InvoiceFromSaleResponseDto,
 } from './dto/create-invoice-from-sale.dto';
+import {
+  FormalizeInvoiceDto,
+  FormalizeInvoiceResponseDto,
+} from './dto/formalize-invoice.dto';
+import { InvoiceFormalizeService } from './invoice-formalize.service';
 import { InvoiceFromSaleService } from './invoice-from-sale.service';
 import { InvoicesService } from './invoices.service';
 import { KOLAYBI_INVOICE_PROVIDER } from './providers/invoice-provider.interface';
@@ -101,6 +106,7 @@ export class AdminInvoicesController {
   constructor(
     private readonly invoicesService: InvoicesService,
     private readonly invoiceFromSaleService: InvoiceFromSaleService,
+    private readonly invoiceFormalizeService: InvoiceFormalizeService,
   ) {}
 
   @Get('provider/health')
@@ -134,6 +140,26 @@ export class AdminInvoicesController {
   ): Promise<InvoiceFromSaleResponseDto> {
     return this.invoiceFromSaleService.createFromSale(
       saleId,
+      request.user.id,
+      dto,
+    );
+  }
+
+  @Post(':invoiceId/formalize')
+  @Permissions('invoice.create')
+  @ApiOperation({
+    summary: 'Formalize KolayBi draft invoice as e-document',
+    description:
+      'Calls KolayBi POST /invoices/e-document/create. Stores GİB uuid (ETTN) and formalized invoice number. Does not change Sale/stock/payment. Scenario (e-Fatura vs e-Arşiv) is chosen by KolayBi from the associate.',
+  })
+  @ApiOkResponse({ type: FormalizeInvoiceResponseDto })
+  formalize(
+    @Req() request: Request & { user: AuthenticatedUser },
+    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
+    @Body() dto: FormalizeInvoiceDto,
+  ): Promise<FormalizeInvoiceResponseDto> {
+    return this.invoiceFormalizeService.formalize(
+      invoiceId,
       request.user.id,
       dto,
     );

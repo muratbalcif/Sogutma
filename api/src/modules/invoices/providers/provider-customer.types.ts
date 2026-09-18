@@ -108,3 +108,30 @@ export type ProviderInvoiceCreateResult = {
   /** true when an existing remote invoice was resolved (timeout/orphan recovery). */
   resolvedExisting: boolean;
 };
+
+/** Formalize (e-document create) — provider draft → GİB e-document. */
+export type ProviderFormalizeInput = {
+  localInvoiceId: string;
+  /** KolayBi document_id from draft create. */
+  externalDocumentId: string;
+  /**
+   * Optional series prefix if company uses custom prefixes.
+   * Omitted → KolayBi company default (per docs).
+   */
+  prefix?: string | null;
+};
+
+export type ProviderFormalizeResult = {
+  provider: string;
+  externalDocumentId: string;
+  /** GİB ETTN from provider response (or detail lookup). */
+  uuid: string;
+  /** Formalized document number (`no`) when returned. */
+  invoiceNumber: string | null;
+  /** Provider e-document status string when returned (e.g. sent_to_receiver). */
+  providerStatus: string | null;
+  /** Provider scenario string when returned (e.g. EARSIVFATURA) — informational. */
+  providerScenario: string | null;
+  /** true when already formalized remotely and linked without a new create. */
+  resolvedExisting: boolean;
+};

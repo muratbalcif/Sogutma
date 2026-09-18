@@ -10,6 +10,7 @@ describe('InvoicesService sync', () => {
   const ensureAddress = jest.fn();
   const ensureProduct = jest.fn();
   const createInvoice = jest.fn();
+  const formalizeInvoice = jest.fn();
   const provider: InvoiceProvider = {
     code: KOLAYBI_INVOICE_PROVIDER,
     enabled: true,
@@ -19,6 +20,7 @@ describe('InvoicesService sync', () => {
     ensureAddress,
     ensureProduct,
     createInvoice,
+    formalizeInvoice,
   };
 
   const prisma = {

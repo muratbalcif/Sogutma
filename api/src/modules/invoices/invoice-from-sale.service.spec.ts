@@ -23,6 +23,7 @@ import type { InvoiceProvider } from './providers/invoice-provider.interface';
 
 describe('InvoiceFromSaleService', () => {
   const createInvoice = jest.fn();
+  const formalizeInvoice = jest.fn();
   const provider: InvoiceProvider = {
     code: 'KOLAYBI',
     enabled: true,
@@ -32,6 +33,7 @@ describe('InvoiceFromSaleService', () => {
     ensureAddress: jest.fn(),
     ensureProduct: jest.fn(),
     createInvoice,
+    formalizeInvoice,
   };
 
   const invoices = {

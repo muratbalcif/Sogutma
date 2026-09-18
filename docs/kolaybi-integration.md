@@ -8,10 +8,11 @@
 | 2 HTTP client + auth + health | Done |
 | 3 Customer / address → Associate sync | Done |
 | 4 Product → KolayBi Product sync | Done |
-| 5 Sale → local Invoice → KolayBi draft | **Done** |
-| 6+ e-Fatura / e-Arşiv formalize | Not started |
+| 5 Sale → local Invoice → KolayBi draft | Done |
+| 6 e-Fatura / e-Arşiv formalize | **Done** |
+| 7+ PDF/UI / cancel e-document | Not started |
 
-GİB formalization (e-Fatura / e-Arşiv send) is **not** implemented yet. Phase 5 only creates a KolayBi **draft** invoice (`document_id`).
+Phase 6 formalizes a KolayBi **draft** into a GİB e-document (`uuid` / ETTN + `no`).
 
 ## Architecture
 
@@ -19,10 +20,11 @@ GİB formalization (e-Fatura / e-Arşiv send) is **not** implemented yet. Phase 
 Admin (JWT)
   → GET  /admin/invoices/provider/health          (invoice.read)
   → POST /admin/invoices/from-sale/:saleId        (invoice.create)
+  → POST /admin/invoices/:invoiceId/formalize     (invoice.create)
   → POST /admin/invoices/provider/:code/customers/:userId/sync   (invoice.update)
   → POST /admin/invoices/provider/:code/addresses/:addressId/sync (invoice.update)
   → POST /admin/invoices/provider/:code/products/:productId/sync  (invoice.update)
-  → InvoiceFromSaleService / InvoicesService
+  → InvoiceFromSaleService / InvoiceFormalizeService / InvoicesService
   → InvoiceProvider          (provider-neutral DTOs)
        └── KolayBiInvoiceProvider
               └── KolayBiClient (fetch + token cache)
@@ -273,6 +275,66 @@ Immutable JSON (Order pattern): title, names, phone, city, district, neighborhoo
 3. `uuid` (ETTN) only after Phase 6 formalize.
 4. Existing DBs need permission seed/redeploy for `invoice.create`.
 
+## Phase 6 — E-document formalization
+
+Docs: [E-Fatura gönderimi](https://developer.kolaybi.com/docs/invoices/e-document/) (`POST /kolaybi/v1/invoices/e-document/create`, form), detail uuid: [Fatura detay](https://developer.kolaybi.com/docs/invoices/detail/).
+
+**Endpoint:** `POST /api/v1/admin/invoices/:invoiceId/formalize` (`invoice.create`)
+
+Body (optional): `{ "prefix": "HDB" }` — KolayBi series prefix; omitted → company default.
+
+### Lifecycle (no new enum / migration)
+
+| Local state | Meaning |
+|-------------|---------|
+| `SUCCESS` + `uuid` null | KolayBi **draft** created (Phase 5) — eligible to formalize |
+| `SUCCESS` + `uuid` set | **Formalized** — GİB ETTN stored |
+| `SUCCESS` + `errorCode=FORMALIZE_UNKNOWN` | Formalize timeout/unknown — draft may already be formalized remotely; retry safe via detail lookup |
+| `PENDING` / `FAILED` | Not eligible for formalize |
+
+Phase 1 `InvoiceStatus` is kept. Formalization is distinguished by **`uuid` presence**, not a new status.
+
+### Request mapping (KolayBi)
+
+| Field | Value |
+|-------|-------|
+| `document_id` | Invoice.`externalDocumentId` (required) |
+| `prefix` | optional |
+
+**Not sent:** `scenario`, `document_type`, e-Fatura/e-Arşiv switch — KolayBi derives scenario from the associate (response may include `scenario`, e.g. `EARSIVFATURA`).
+
+### Response mapping
+
+| KolayBi | Local Invoice |
+|---------|---------------|
+| `uuid` | `uuid` (ETTN) |
+| `no` | `invoiceNumber` (replaces Phase 5 saleNumber placeholder when present) |
+| `document_id` | unchanged `externalDocumentId` |
+| `scenario` | logged / returned informationally — not authoritative vs GİB query |
+
+### Scenario / documentType
+
+- Local `documentType` remains authoritative from Phase 5 (`isEInvoiceTaxpayer` → `E_INVOICE` / else `E_ARCHIVE`).
+- Formalize re-checks customer `isEInvoiceTaxpayer` vs stored `documentType`; mismatch → 400.
+- **No GİB mükellef query endpoint** found in KolayBi public docs — local flag is a limitation (documented).
+- Soft warn if response `scenario` looks like e-Arşiv vs local `E_INVOICE` (or reverse).
+
+### Idempotency / timeout
+
+1. If `uuid` already set → return (no second e-document create).
+2. Before create: `GET /invoices/{document_id}` — if `uuid` present, link and return.
+3. After timeout/409/400: detail lookup again before failing.
+4. Concurrent writers: `updateMany` where `uuid` is null; loser reloads winner’s uuid.
+5. Blind retry of e-document create is avoided when detail already has uuid.
+
+Phase 5 `idempotencyKey = SALE:{saleId}` is unchanged.
+
+### Known limitations / blockers
+
+1. No documented taxpayer (GİB mükellef) query API — relies on local `isEInvoiceTaxpayer`.
+2. Detail GET response docs only show `uuid` — timeout recovery may restore ETTN without `no` (invoice number).
+3. Enum cannot express DRAFT vs FORMALIZED separately without migration — `uuid` is the discriminator.
+
 ## Error handling
 
 `KolayBiApiError` normalizes upstream failures:
@@ -308,11 +370,11 @@ Never log: API key, channel, access token, Authorization, full TCKN/VKN.
 1. Set `KOLAYBI_API_BASE_URL` to the sandbox host from KolayBi docs.
 2. Set `KOLAYBI_API_KEY` and `KOLAYBI_CHANNEL`.
 3. Keep `KOLAYBI_SANDBOX=true`.
-4. Health → customer/address/product sync → completed Sale with customer → `POST /admin/invoices/from-sale/:saleId`.
-5. Call from-sale twice; second call must return the same SUCCESS invoice (no duplicate KolayBi document).
-6. Confirm `external_entity_links` + `invoices` rows; do not use production credentials.
+4. Health → customer/address/product sync → completed Sale with customer → `POST /admin/invoices/from-sale/:saleId` → `POST /admin/invoices/:invoiceId/formalize`.
+5. Call from-sale and formalize twice; second calls must be idempotent (same draft / same uuid).
+6. Confirm `invoices.uuid` + `invoiceNumber` (`no`); do not use production credentials.
 
 ## Related schema (Phase 1)
 
 - `Invoice`, `ExternalEntityLink`, enums — already migrated.
-- Phase 2–5 do **not** add migrations.
+- Phase 2–6 do **not** add migrations.
