@@ -28,13 +28,33 @@ export class CreatePaymentDto {
 }
 
 export class CreateBankTransferDto {
-  @ApiProperty({ example: 'Murat Balci' })
+  @ApiProperty({
+    format: 'uuid',
+    description: 'Selected company bank account to receive the transfer',
+  })
+  @IsUUID()
+  bankAccountId!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional partial amount. Defaults to remaining balance. Must be <= remaining.',
+    example: '9000.00',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d+(\.\d{1,2})?$/, { message: 'amount must be a decimal string' })
+  amount?: string;
+
+  @ApiPropertyOptional({
+    description: 'Legacy field; ignored for claims (server sets display name)',
+  })
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(200)
-  senderName!: string;
+  senderName?: string;
 
-  @ApiPropertyOptional({ example: 'TR330006100519786457841326' })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @Matches(/^TR[0-9]{24}$/i, {
@@ -42,30 +62,12 @@ export class CreateBankTransferDto {
   })
   senderIban?: string;
 
-  @ApiProperty({ example: '2026-09-17' })
-  @IsDateString()
-  transferDate!: string;
-
   @ApiPropertyOptional({
-    description:
-      'Reported transfer amount. Compared to order total; mismatch stays PENDING for admin review.',
-    example: '1000.00',
+    description: 'Legacy; defaults to today for claim records',
   })
   @IsOptional()
-  @IsString()
-  @Matches(/^\d+(\.\d{1,2})?$/, { message: 'amount must be a decimal string' })
-  amount?: string;
-
-  @ApiPropertyOptional({ format: 'uuid' })
-  @IsOptional()
-  @IsUUID()
-  bankAccountId?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  referenceNumber?: string;
+  @IsDateString()
+  transferDate?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -220,11 +222,50 @@ export class PaymentResponseDto {
   @ApiPropertyOptional({ nullable: true })
   pendingBankTransferId!: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Sum of APPROVED bank-transfer notifications',
+  })
+  approvedTotal?: string;
+
+  @ApiPropertyOptional({
+    description: 'order.totalAmount - approvedTotal (floored at 0)',
+  })
+  remainingAmount?: string;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Customer-facing bank transfer description reference',
+  })
+  paymentReference!: string | null;
+
   @ApiProperty()
   createdAt!: Date;
 
   @ApiProperty()
   updatedAt!: Date;
+}
+
+export class BankTransferTimelineItemDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  amount!: string;
+
+  @ApiProperty({ enum: BankTransferStatus })
+  status!: BankTransferStatus;
+
+  @ApiProperty()
+  createdAt!: Date;
+
+  @ApiPropertyOptional({ nullable: true })
+  verifiedAt!: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  rejectionReason!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  referenceNumber!: string | null;
 }
 
 export class BankTransferResponseDto {
@@ -251,6 +292,15 @@ export class BankTransferResponseDto {
 
   @ApiProperty()
   orderTotal!: string;
+
+  @ApiProperty({ description: 'Sum of APPROVED notifications for this order' })
+  approvedTotal!: string;
+
+  @ApiProperty({ description: 'Remaining balance to pay' })
+  remainingAmount!: string;
+
+  @ApiProperty({ enum: PaymentStatus })
+  paymentStatus!: PaymentStatus;
 
   @ApiProperty()
   senderName!: string;
@@ -290,6 +340,13 @@ export class BankTransferResponseDto {
 
   @ApiPropertyOptional()
   bankName?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  bankIban?: string | null;
+
+  /** Sibling notifications for the same order (partial payment timeline). */
+  @ApiPropertyOptional({ type: [BankTransferTimelineItemDto] })
+  timeline?: BankTransferTimelineItemDto[];
 }
 
 export class CurrentAccountResponseDto {
@@ -392,4 +449,12 @@ export class AdminBankTransferListQueryDto {
   @IsOptional()
   @IsDateString()
   to?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Filter claims by company bank account',
+  })
+  @IsOptional()
+  @IsUUID()
+  bankAccountId?: string;
 }

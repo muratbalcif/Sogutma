@@ -18,6 +18,9 @@ data class Order(
     val shippingSummary: String?,
     val shipping: OrderShipping? = null,
     val canCancel: Boolean = false,
+    val paymentApprovedTotal: String? = null,
+    val paymentRemainingAmount: String? = null,
+    val paymentReference: String? = null,
 )
 
 data class OrderShipping(

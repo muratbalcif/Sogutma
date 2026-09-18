@@ -4,14 +4,21 @@ import { PaymentStatus } from '@prisma/client';
 const ALLOWED: Record<PaymentStatus, PaymentStatus[]> = {
   [PaymentStatus.PENDING]: [
     PaymentStatus.AUTHORIZED,
+    PaymentStatus.PARTIALLY_PAID,
     PaymentStatus.PAID,
     PaymentStatus.FAILED,
     PaymentStatus.CANCELLED,
   ],
   [PaymentStatus.AUTHORIZED]: [
+    PaymentStatus.PARTIALLY_PAID,
     PaymentStatus.PAID,
     PaymentStatus.FAILED,
     PaymentStatus.CANCELLED,
+  ],
+  [PaymentStatus.PARTIALLY_PAID]: [
+    PaymentStatus.PAID,
+    PaymentStatus.CANCELLED,
+    PaymentStatus.REFUNDED,
   ],
   [PaymentStatus.FAILED]: [PaymentStatus.PENDING, PaymentStatus.CANCELLED],
   [PaymentStatus.PAID]: [PaymentStatus.REFUNDED],

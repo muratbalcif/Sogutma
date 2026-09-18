@@ -22,6 +22,11 @@ describe('PaymentsService', () => {
       findMany: jest.fn(),
     },
     order: { findUnique: jest.fn() },
+    bankTransferNotification: {
+      aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
     processedWebhookEvent: { findUnique: jest.fn(), create: jest.fn() },
     $transaction: jest.fn(),
   };

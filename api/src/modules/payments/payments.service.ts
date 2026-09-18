@@ -28,6 +28,7 @@ import {
   CreatePaymentDto,
   PaymentResponseDto,
 } from './dto/payment.dto';
+import { buildPaymentReference } from './payment-reference.util';
 import { PaymentStatusService } from './payment-status.service';
 import { PaymentProvider } from './providers/payment-provider.interface';
 import { DevelopmentPaymentProvider } from './providers/development.payment-provider';
@@ -79,7 +80,7 @@ export class PaymentsService {
         if (existing.orderId !== orderId) {
           throw new ConflictException('Idempotency key already used');
         }
-        return this.toResponse(existing);
+        return this.toResponseAsync(existing);
       }
     }
 
@@ -108,13 +109,14 @@ export class PaymentsService {
       throw new ConflictException('Order is already paid');
     }
 
-    const existingPending = order.payments.find(
+    const existingOpen = order.payments.find(
       (p) =>
         p.method === PaymentMethod.BANK_TRANSFER &&
-        p.status === PaymentStatus.PENDING,
+        (p.status === PaymentStatus.PENDING ||
+          p.status === PaymentStatus.PARTIALLY_PAID),
     );
-    if (existingPending) {
-      return this.toResponse(existingPending);
+    if (existingOpen) {
+      return this.toResponseAsync(existingOpen);
     }
 
     try {
@@ -128,9 +130,10 @@ export class PaymentsService {
           provider: null,
           idempotencyKey: idempotencyKey ?? null,
           expiresAt: this.paymentExpiryDate(),
+          paymentReference: buildPaymentReference(order.orderNumber),
         },
       });
-      return this.toResponse(payment);
+      return this.toResponseAsync(payment);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -141,7 +144,7 @@ export class PaymentsService {
           where: { idempotencyKey },
         });
         if (existing) {
-          return this.toResponse(existing);
+          return this.toResponseAsync(existing);
         }
       }
       throw error;
@@ -170,7 +173,7 @@ export class PaymentsService {
     if (!payment) {
       throw new NotFoundException('Payment not found');
     }
-    return this.toResponse(payment);
+    return this.toResponseAsync(payment);
   }
 
   async getById(paymentId: string): Promise<PaymentResponseDto> {
@@ -185,7 +188,7 @@ export class PaymentsService {
       payment.method,
       payment.status,
     );
-    return this.toResponse(payment, pendingBankTransferId);
+    return this.toResponseAsync(payment, pendingBankTransferId);
   }
 
   async listAdmin(
@@ -292,6 +295,86 @@ export class PaymentsService {
     return this.getById(paymentId);
   }
 
+  /**
+   * Apply an approved bank-transfer notification as a partial or full payment.
+   * Caller must already hold row locks and have set the notification to APPROVED.
+   * Ledger credit uses notification.amount with reference PAYMENT:BANK_TRANSFER:{id}.
+   */
+  async applyApprovedBankTransfer(
+    input: {
+      paymentId: string;
+      notificationId: string;
+      notificationAmount: Prisma.Decimal;
+      orderId: string;
+      orderTotal: Prisma.Decimal;
+      userId: string;
+      currency: string;
+      orderNumber: string;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<{ fullyPaid: boolean; approvedTotal: Prisma.Decimal }> {
+    await tx.$queryRaw`
+      SELECT id FROM payments WHERE id = ${input.paymentId}::uuid FOR UPDATE
+    `;
+
+    const payment = await tx.payment.findUnique({
+      where: { id: input.paymentId },
+    });
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+    if (payment.status === PaymentStatus.PAID) {
+      const approved = await this.sumApprovedTransfers(
+        tx,
+        input.orderId,
+      );
+      return { fullyPaid: true, approvedTotal: approved };
+    }
+
+    await this.accountingService.recordIfAbsent({
+      tx,
+      userId: input.userId,
+      orderId: input.orderId,
+      paymentId: input.paymentId,
+      type: AccountTransactionType.PAYMENT,
+      amount: input.notificationAmount,
+      currency: input.currency,
+      description: `Bank transfer ${input.notificationId} for order ${input.orderNumber}`,
+      reference: `PAYMENT:BANK_TRANSFER:${input.notificationId}`,
+      referenceType: 'BANK_TRANSFER',
+      referenceId: input.notificationId,
+    });
+
+    const approvedTotal = await this.sumApprovedTransfers(tx, input.orderId);
+    const fullyPaid = approvedTotal.gte(input.orderTotal);
+
+    if (fullyPaid) {
+      if (payment.status !== PaymentStatus.PAID) {
+        this.paymentStatusService.assertTransition(
+          payment.status,
+          PaymentStatus.PAID,
+        );
+        await tx.payment.update({
+          where: { id: input.paymentId },
+          data: { status: PaymentStatus.PAID, paidAt: new Date() },
+        });
+        await this.syncOrderOnPaid(tx, input.orderId, input.userId);
+      }
+    } else if (payment.status !== PaymentStatus.PARTIALLY_PAID) {
+      this.paymentStatusService.assertTransition(
+        payment.status,
+        PaymentStatus.PARTIALLY_PAID,
+      );
+      await tx.payment.update({
+        where: { id: input.paymentId },
+        data: { status: PaymentStatus.PARTIALLY_PAID, paidAt: null },
+      });
+    }
+
+    return { fullyPaid, approvedTotal };
+  }
+
+  /** @deprecated Use applyApprovedBankTransfer for partial-aware flow */
   async markPaidFromBankTransfer(
     paymentId: string,
     tx: Prisma.TransactionClient,
@@ -303,37 +386,39 @@ export class PaymentsService {
     if (!payment) {
       throw new NotFoundException('Payment not found');
     }
-    if (payment.status === PaymentStatus.PAID) {
-      return;
-    }
-    this.paymentStatusService.assertTransition(
-      payment.status,
-      PaymentStatus.PAID,
-    );
-
-    await tx.payment.update({
-      where: { id: paymentId },
-      data: { status: PaymentStatus.PAID, paidAt: new Date() },
-    });
-
-    await this.syncOrderOnPaid(tx, payment.orderId, payment.order.userId);
-    await this.accountingService.recordIfAbsent({
+    await this.applyApprovedBankTransfer(
+      {
+        paymentId,
+        notificationId: paymentId,
+        notificationAmount: payment.amount,
+        orderId: payment.orderId,
+        orderTotal: payment.order.totalAmount,
+        userId: payment.order.userId,
+        currency: payment.currency,
+        orderNumber: payment.order.orderNumber,
+      },
       tx,
-      userId: payment.order.userId,
-      orderId: payment.orderId,
-      paymentId: payment.id,
-      type: AccountTransactionType.PAYMENT,
-      amount: payment.amount,
-      currency: payment.currency,
-      description: `Payment received for order ${payment.order.orderNumber}`,
-      reference: `PAYMENT:${payment.id}`,
-      referenceType: 'PAYMENT',
-      referenceId: payment.id,
+    );
+  }
+
+  async sumApprovedTransfers(
+    client: Prisma.TransactionClient | PrismaService,
+    orderId: string,
+  ): Promise<Prisma.Decimal> {
+    const agg = await client.bankTransferNotification.aggregate({
+      where: { orderId, status: BankTransferStatus.APPROVED },
+      _sum: { amount: true },
     });
+    return agg._sum.amount ?? new Prisma.Decimal(0);
+  }
+
+  remainingFrom(orderTotal: Prisma.Decimal, approvedTotal: Prisma.Decimal) {
+    const remaining = orderTotal.sub(approvedTotal);
+    return remaining.lt(0) ? new Prisma.Decimal(0) : remaining;
   }
 
   /**
-   * Rejection keeps payment PENDING so customer can submit another transfer.
+   * Rejection keeps payment PENDING/PARTIALLY_PAID so the customer can resubmit.
    * Order stays PENDING (never auto-cancelled).
    */
   async markRejectedKeepPending(
@@ -348,7 +433,10 @@ export class PaymentsService {
     if (payment.status === PaymentStatus.PAID) {
       throw new ConflictException('Paid payment cannot be rejected');
     }
-    if (payment.status === PaymentStatus.PENDING) {
+    if (
+      payment.status === PaymentStatus.PENDING ||
+      payment.status === PaymentStatus.PARTIALLY_PAID
+    ) {
       await tx.payment.update({
         where: { id: paymentId },
         data: {
@@ -404,7 +492,8 @@ export class PaymentsService {
   ): Promise<string | null> {
     if (
       method !== PaymentMethod.BANK_TRANSFER ||
-      status !== PaymentStatus.PENDING
+      (status !== PaymentStatus.PENDING &&
+        status !== PaymentStatus.PARTIALLY_PAID)
     ) {
       return null;
     }
@@ -427,7 +516,8 @@ export class PaymentsService {
       .filter(
         (item) =>
           item.method === PaymentMethod.BANK_TRANSFER &&
-          item.status === PaymentStatus.PENDING,
+          (item.status === PaymentStatus.PENDING ||
+            item.status === PaymentStatus.PARTIALLY_PAID),
       )
       .map((item) => item.id);
     if (pendingPaymentIds.length === 0) {
@@ -451,6 +541,38 @@ export class PaymentsService {
     return map;
   }
 
+  private async toResponseAsync(
+    payment: {
+      id: string;
+      orderId: string;
+      method: PaymentMethod;
+      status: PaymentStatus;
+      amount: Prisma.Decimal;
+      currency: string;
+      provider: string | null;
+      providerPaymentId: string | null;
+      idempotencyKey: string | null;
+      failureCode: string | null;
+      failureMessage: string | null;
+      paidAt: Date | null;
+      expiresAt?: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+    },
+    pendingBankTransferId: string | null = null,
+  ): Promise<PaymentResponseDto> {
+    const approvedTotal = await this.sumApprovedTransfers(
+      this.prisma,
+      payment.orderId,
+    );
+    const remaining = this.remainingFrom(payment.amount, approvedTotal);
+    return {
+      ...this.toResponse(payment, pendingBankTransferId),
+      approvedTotal: toMoneyString(approvedTotal),
+      remainingAmount: toMoneyString(remaining),
+    };
+  }
+
   private toResponse(
     payment: {
       id: string;
@@ -466,6 +588,7 @@ export class PaymentsService {
       failureMessage: string | null;
       paidAt: Date | null;
       expiresAt?: Date | null;
+      paymentReference?: string | null;
       createdAt: Date;
       updatedAt: Date;
     },
@@ -486,6 +609,7 @@ export class PaymentsService {
       paidAt: payment.paidAt,
       expiresAt: payment.expiresAt ?? null,
       pendingBankTransferId,
+      paymentReference: payment.paymentReference ?? null,
       createdAt: payment.createdAt,
       updatedAt: payment.updatedAt,
     };

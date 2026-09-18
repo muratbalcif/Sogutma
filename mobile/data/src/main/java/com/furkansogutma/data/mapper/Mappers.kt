@@ -203,6 +203,9 @@ fun OrderDto.toDomain() = Order(
         )
     },
     canCancel = canCancel,
+    paymentApprovedTotal = payment?.approvedTotal,
+    paymentRemainingAmount = payment?.remainingAmount,
+    paymentReference = payment?.paymentReference,
 )
 
 fun NotificationDto.toDomain() = AppNotification(
@@ -256,7 +259,21 @@ fun AccountCurrentDto.toDomain() = CurrentAccount(
     currency = currency,
 )
 fun AccountTransactionDto.toDomain() = AccountTransaction(id, type, amount, balanceAfter, description, createdAt)
-fun BankTransferDto.toDomain() = BankTransfer(id, orderId, amount, transferDate, description, status, bankName, senderName)
+fun BankTransferDto.toDomain() = BankTransfer(
+    id = id,
+    orderId = orderId,
+    amount = amount,
+    transferDate = transferDate,
+    description = description ?: note,
+    status = status,
+    bankName = bankName,
+    senderName = senderName,
+    remainingAmount = remainingAmount,
+    approvedTotal = approvedTotal,
+    paymentStatus = paymentStatus,
+    orderTotal = orderTotal,
+    referenceNumber = referenceNumber,
+)
 fun SiteConfigDto.toDomain() = SiteConfig(
     siteName = siteName,
     supportEmail = supportEmail,

@@ -33,6 +33,7 @@ describe('Security hardening (e2e)', () => {
   let addressAId: string;
   let paymentAId: string;
   let bankTransferAId: string;
+  let bankAccountId: string;
 
   beforeAll(async () => {
     await flushTestRedis();
@@ -198,12 +199,20 @@ describe('Security hardening (e2e)', () => {
       .expect(200);
     paymentAId = (payment.body as { id: string }).id;
 
+    const bank = await prisma.companyBankAccount.findFirst({
+      where: { active: true },
+      select: { id: true },
+    });
+    if (!bank) {
+      throw new Error('No active company bank account for security e2e');
+    }
+    bankAccountId = bank.id;
+
     const transfer = await request(app.getHttpServer())
       .post(`/api/v1/orders/${orderAId}/bank-transfer`)
       .set('Authorization', `Bearer ${userAToken}`)
       .send({
-        senderName: 'Sec A',
-        transferDate: '2026-09-17',
+        bankAccountId,
       })
       .expect(201);
     bankTransferAId = (transfer.body as { id: string }).id;
@@ -443,8 +452,7 @@ describe('Security hardening (e2e)', () => {
         .post(`/api/v1/orders/${orderAId}/bank-transfer`)
         .set('Authorization', `Bearer ${userAToken}`)
         .send({
-          senderName: 'Sec A',
-          transferDate: '2026-09-17',
+          bankAccountId,
         });
       if (res.status === 429) {
         saw429 = true;
@@ -547,7 +555,7 @@ describe('Security hardening (e2e)', () => {
       .expect(201);
 
     const credits = await prisma.accountTransaction.count({
-      where: { reference: `PAYMENT:${paymentAId}` },
+      where: { reference: `PAYMENT:BANK_TRANSFER:${bankTransferAId}` },
     });
     expect(credits).toBe(1);
   });

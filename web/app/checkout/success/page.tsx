@@ -101,7 +101,7 @@ export default async function CheckoutSuccessPage({
               href={`/account/bank-transfers?orderId=${orderId}`}
               className="inline-flex rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
             >
-              Havale Bildirimi Yap
+              Havale / EFT ile Öde
             </Link>
           ) : null}
         </div>

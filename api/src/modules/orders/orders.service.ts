@@ -28,6 +28,7 @@ import { AddressesService } from '../addresses/addresses.service';
 import { CouponsService } from '../coupons/coupons.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { buildPaymentReference } from '../payments/payment-reference.util';
 import { BankAccountsService } from '../payments/bank-accounts.service';
 import { EmailOutboxService } from '../payments/email-outbox.service';
 import { AccountingService } from '../payments/accounting.service';
@@ -328,6 +329,7 @@ export class OrdersService {
               amount: totalAmount,
               currency,
               expiresAt: new Date(Date.now() + expiryHours * 60 * 60 * 1000),
+              paymentReference: buildPaymentReference(order.orderNumber),
             },
           });
 

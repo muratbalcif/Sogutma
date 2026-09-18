@@ -31,7 +31,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     href: "/bank-transfers",
-    label: "Havale Bildirimleri",
+    label: "Ödeme Doğrulama",
     permission: "bank_transfer.read",
   },
   { href: "/accounting", label: "Cari Hesap", permission: "accounting.read" },

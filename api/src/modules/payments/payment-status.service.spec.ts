@@ -23,9 +23,30 @@ describe('PaymentStatusService', () => {
     ).toThrow(BadRequestException);
   });
 
+  it('allows PENDING to PARTIALLY_PAID and PARTIALLY_PAID to PAID', () => {
+    expect(() =>
+      service.assertTransition(
+        PaymentStatus.PENDING,
+        PaymentStatus.PARTIALLY_PAID,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      service.assertTransition(
+        PaymentStatus.PARTIALLY_PAID,
+        PaymentStatus.PAID,
+      ),
+    ).not.toThrow();
+  });
+
   it('rejects invalid transitions', () => {
     expect(() =>
       service.assertTransition(PaymentStatus.REFUNDED, PaymentStatus.PAID),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.assertTransition(
+        PaymentStatus.PARTIALLY_PAID,
+        PaymentStatus.PENDING,
+      ),
     ).toThrow(BadRequestException);
   });
 });

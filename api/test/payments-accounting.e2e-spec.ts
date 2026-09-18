@@ -216,18 +216,32 @@ describe('Payments & Accounting (e2e)', () => {
     const body = res.body as Array<{
       id: string;
       iban: string;
+      bankName: string;
       active?: boolean;
     }>;
     expect(body.some((a) => a.id === bankAccountId)).toBe(true);
+    expect(body.length).toBeGreaterThanOrEqual(1);
     expect(body[0]).not.toHaveProperty('active');
+    expect(body[0].iban).toMatch(/^TR/i);
   });
 
-  it('creates order with pending BANK_TRANSFER payment', async () => {
+  it('creates order with pending BANK_TRANSFER payment and paymentReference', async () => {
     const order = await createOrder();
     expect(order.status).toBe(OrderStatus.PENDING);
     expect(order.payment?.method).toBe(PaymentMethod.BANK_TRANSFER);
     expect(order.payment?.status).toBe(PaymentStatus.PENDING);
     expect(order.bankAccounts?.length).toBeGreaterThan(0);
+
+    const payment = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${order.id}/payment`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+    const paymentBody = payment.body as PaymentBody & {
+      paymentReference?: string | null;
+    };
+    expect(paymentBody.paymentReference).toMatch(
+      new RegExp(`^${order.orderNumber}-[A-F0-9]{6}$`),
+    );
   });
 
   it('rejects credit card payment method', async () => {
@@ -254,32 +268,30 @@ describe('Payments & Accounting (e2e)', () => {
     expect(paymentBody.amount).toBe('1000.00');
     expect(paymentBody.id).toBe(order.payment!.id);
 
-    const mismatch = await request(app.getHttpServer())
+    const full = await request(app.getHttpServer())
       .post(`/api/v1/orders/${order.id}/bank-transfer`)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
-        senderName: 'Murat Balci',
-        senderIban: 'TR330006100519786457841326',
-        transferDate: '2026-09-17',
-        referenceNumber: 'MISMATCH',
         bankAccountId,
-        amount: '800.00',
+        amount: '1000.00',
       })
       .expect(201);
-    expect((mismatch.body as { amountMismatch: boolean }).amountMismatch).toBe(
-      true,
+    expect((full.body as { amountMismatch: boolean }).amountMismatch).toBe(
+      false,
     );
+    expect(
+      (full.body as { referenceNumber: string | null }).referenceNumber,
+    ).toMatch(new RegExp(`^${order.orderNumber}-[A-F0-9]{6}$`));
 
     await request(app.getHttpServer())
       .post(`/api/v1/orders/${order.id}/bank-transfer`)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
-        senderName: 'Murat Balci',
-        transferDate: '2026-09-17',
+        bankAccountId,
       })
       .expect(409);
 
-    const notificationId = (mismatch.body as { id: string }).id;
+    const notificationId = (full.body as { id: string }).id;
 
     await request(app.getHttpServer())
       .get('/api/v1/admin/bank-transfers')
@@ -320,9 +332,113 @@ describe('Payments & Accounting (e2e)', () => {
     expect((account.body as { balance: string }).balance).toBeDefined();
 
     const txCount = await prisma.accountTransaction.count({
-      where: { reference: `PAYMENT:${paymentBody.id}` },
+      where: { reference: `PAYMENT:BANK_TRANSFER:${notificationId}` },
     });
     expect(txCount).toBe(1);
+  });
+
+  it('supports partial bank transfers 300+200+500 → PAID', async () => {
+    const order = await createOrder();
+
+    const submitAndApprove = async (amount: string) => {
+      const created = await request(app.getHttpServer())
+        .post(`/api/v1/orders/${order.id}/bank-transfer`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({
+          senderName: 'Murat Balci',
+          transferDate: '2026-09-18',
+          bankAccountId,
+          amount,
+        })
+        .expect(201);
+      const id = (created.body as { id: string }).id;
+      await request(app.getHttpServer())
+        .post(`/api/v1/admin/bank-transfers/${id}/approve`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({})
+        .expect(201);
+      return id;
+    };
+
+    await submitAndApprove('300.00');
+    let payment = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${order.id}/payment`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+    expect((payment.body as PaymentBody & { remainingAmount?: string }).status).toBe(
+      PaymentStatus.PARTIALLY_PAID,
+    );
+    expect(
+      (payment.body as { remainingAmount: string }).remainingAmount,
+    ).toBe('700.00');
+
+    await submitAndApprove('200.00');
+    payment = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${order.id}/payment`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+    expect((payment.body as PaymentBody).status).toBe(
+      PaymentStatus.PARTIALLY_PAID,
+    );
+    expect(
+      (payment.body as { remainingAmount: string }).remainingAmount,
+    ).toBe('500.00');
+
+    const lastId = await submitAndApprove('500.00');
+    payment = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${order.id}/payment`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+    expect((payment.body as PaymentBody).status).toBe(PaymentStatus.PAID);
+
+    const orderDetail = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${order.id}`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+    expect((orderDetail.body as OrderBody).status).toBe(OrderStatus.CONFIRMED);
+
+    expect(
+      await prisma.accountTransaction.count({
+        where: { reference: `PAYMENT:BANK_TRANSFER:${lastId}` },
+      }),
+    ).toBe(1);
+  });
+
+  it('rejects overpayment on create and keeps single pending', async () => {
+    const order = await createOrder();
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${order.id}/bank-transfer`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        senderName: 'Murat Balci',
+        transferDate: '2026-09-18',
+        amount: '300.00',
+        bankAccountId,
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${order.id}/bank-transfer`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        senderName: 'Murat Balci',
+        transferDate: '2026-09-18',
+        amount: '100.00',
+        bankAccountId,
+      })
+      .expect(409);
+
+    const order2 = await createOrder();
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${order2.id}/bank-transfer`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        senderName: 'Murat Balci',
+        transferDate: '2026-09-18',
+        amount: '1500.00',
+        bankAccountId,
+      })
+      .expect(400);
   });
 
   it('reject keeps payment pending and blocks double reject after approve', async () => {
@@ -331,9 +447,7 @@ describe('Payments & Accounting (e2e)', () => {
       .post(`/api/v1/orders/${order.id}/bank-transfer`)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
-        senderName: 'Murat Balci',
-        transferDate: '2026-09-17',
-        referenceNumber: 'REJ1',
+        bankAccountId,
       })
       .expect(201);
 
@@ -360,9 +474,7 @@ describe('Payments & Accounting (e2e)', () => {
       .post(`/api/v1/orders/${order.id}/bank-transfer`)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
-        senderName: 'Murat Balci',
-        transferDate: '2026-09-18',
-        referenceNumber: 'REJ2',
+        bankAccountId,
       })
       .expect(201);
 

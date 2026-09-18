@@ -12,7 +12,7 @@ const links = [
   { href: "/account/addresses", label: "Adreslerim" },
   { href: "/account/alerts", label: "Stok Bildirimlerim" },
   { href: "/account/current-account", label: "Cari Hesabım" },
-  { href: "/account/bank-transfers", label: "Havale Bildirimlerim" },
+  { href: "/account/bank-transfers", label: "Havale / EFT" },
   { href: "/account/settings", label: "Ayarlar" },
 ];
 

@@ -59,20 +59,14 @@ class AccountRepositoryImpl @Inject constructor(
 
     override suspend fun createBankTransfer(
         orderId: String,
-        amount: String,
-        description: String?,
-        bankName: String?,
-        transferDate: String?,
+        bankAccountId: String,
+        amount: String?,
     ): Result<BankTransfer> = safeApiCall {
         api.createBankTransfer(
             orderId,
             CreateBankTransferRequestDto(
-                senderName = description?.takeIf { it.length >= 2 } ?: "FurkanSoğutma Müşteri",
-                transferDate = transferDate ?: java.time.LocalDate.now().toString(),
-                referenceNumber = null,
-                note = listOfNotNull(bankName, description).joinToString(" · ").ifBlank { null },
-                amount = amount.ifBlank { null },
-                bankAccountId = null,
+                bankAccountId = bankAccountId,
+                amount = amount?.ifBlank { null },
             ),
         ).toDomain()
     }

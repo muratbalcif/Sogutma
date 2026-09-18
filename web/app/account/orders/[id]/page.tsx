@@ -27,6 +27,8 @@ type Order = {
     status: string;
     method: string;
     amount: string;
+    approvedTotal?: string;
+    remainingAmount?: string;
   } | null;
   shipping: {
     provider: string;
@@ -79,12 +81,16 @@ export default async function OrderDetailPage({ params }: Props) {
           </span>
         </div>
         {order.payment?.method === "BANK_TRANSFER" &&
-        order.payment.status === "PENDING" ? (
+        (order.payment.status === "PENDING" ||
+          order.payment.status === "PARTIALLY_PAID") ? (
           <a
             href={`/account/bank-transfers?orderId=${order.id}`}
             className="mt-3 inline-flex text-sm font-semibold text-accent"
           >
-            Havale Bildirimi Yap
+            Havale / EFT ile Öde
+            {order.payment.remainingAmount
+              ? ` · Kalan ${order.payment.remainingAmount} ${order.currency}`
+              : ""}
           </a>
         ) : null}
         {order.canCancel ? (
@@ -114,6 +120,15 @@ export default async function OrderDetailPage({ params }: Props) {
         <p className="mt-1 text-sm text-slate-600">
           Ödeme: {paymentMethodLabel(order.payment?.method)} ·{" "}
           {paymentStatusLabel(order.payment?.status)}
+          {order.payment?.approvedTotal != null &&
+          order.payment.status !== "PENDING"
+            ? ` · Ödenen ${order.payment.approvedTotal} ${order.currency}`
+            : ""}
+          {order.payment?.remainingAmount != null &&
+          (order.payment.status === "PENDING" ||
+            order.payment.status === "PARTIALLY_PAID")
+            ? ` · Kalan ${order.payment.remainingAmount} ${order.currency}`
+            : ""}
         </p>
       </section>
 

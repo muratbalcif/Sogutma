@@ -27,15 +27,21 @@ import { BankAccountsService } from './bank-accounts.service';
 import {
   AdminBankTransferListQueryDto,
   BankTransferResponseDto,
+  BankTransferTimelineItemDto,
   CreateBankTransferDto,
 } from './dto/payment.dto';
 import { EmailOutboxService } from './email-outbox.service';
+import { buildPaymentReference } from './payment-reference.util';
 import { PaymentsService } from './payments.service';
 
 /**
- * Bank transfer rejection keeps Payment PENDING so the customer can resubmit.
+ * Bank transfer rejection keeps Payment PENDING/PARTIALLY_PAID so the customer can resubmit.
  * Order is never auto-cancelled on reject.
  * Approval is idempotent: repeated approve on APPROVED returns current state.
+ * Partial payments: each APPROVED notification credits notification.amount.
+ *
+ * Claim UX: customer selects a company bank account and confirms transfer
+ * ("Ödemeyi Yaptım"). referenceNumber is locked to Payment.paymentReference.
  */
 @Injectable()
 export class BankTransferService {
@@ -74,7 +80,7 @@ export class BankTransferService {
       throw new ForbiddenException('Order does not belong to user');
     }
 
-    const payment = order.payments[0];
+    let payment = order.payments[0];
     if (!payment || payment.method !== PaymentMethod.BANK_TRANSFER) {
       throw new ConflictException(
         'Create a BANK_TRANSFER payment before submitting a notification',
@@ -99,44 +105,70 @@ export class BankTransferService {
       );
     }
 
-    if (dto.bankAccountId) {
-      await this.bankAccountsService.requireActive(dto.bankAccountId);
+    if (!dto.bankAccountId) {
+      throw new BadRequestException('bankAccountId is required');
+    }
+    await this.bankAccountsService.requireActive(dto.bankAccountId);
+
+    const approvedTotal = await this.paymentsService.sumApprovedTransfers(
+      this.prisma,
+      orderId,
+    );
+    const remaining = this.paymentsService.remainingFrom(
+      order.totalAmount,
+      approvedTotal,
+    );
+    if (remaining.lte(0)) {
+      throw new ConflictException('Order is already paid');
     }
 
     const reportedAmount = dto.amount
       ? new Prisma.Decimal(dto.amount)
-      : order.totalAmount;
+      : remaining;
     if (reportedAmount.lte(0)) {
       throw new BadRequestException('Transfer amount must be positive');
     }
-    const amountMismatch = !reportedAmount.equals(order.totalAmount);
+    if (reportedAmount.gt(remaining)) {
+      throw new BadRequestException(
+        `Transfer amount exceeds remaining balance (${toMoneyString(remaining)})`,
+      );
+    }
+    const amountMismatch = !reportedAmount.equals(remaining);
+
+    let paymentReference = payment.paymentReference;
+    if (!paymentReference) {
+      paymentReference = buildPaymentReference(order.orderNumber);
+      payment = await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { paymentReference },
+      });
+    }
+
+    const senderName =
+      dto.senderName?.trim() ||
+      `${order.user.firstName} ${order.user.lastName}`.trim() ||
+      'Müşteri';
+    const transferDate = dto.transferDate
+      ? new Date(dto.transferDate)
+      : new Date();
 
     const created = await this.prisma.bankTransferNotification.create({
       data: {
         orderId,
         userId,
         paymentId: payment.id,
-        bankAccountId: dto.bankAccountId ?? null,
+        bankAccountId: dto.bankAccountId,
         amount: reportedAmount,
         currency: order.currency,
         amountMismatch,
-        senderName: dto.senderName,
+        senderName,
         senderIban: dto.senderIban?.toUpperCase(),
-        transferDate: new Date(dto.transferDate),
-        referenceNumber: dto.referenceNumber,
+        transferDate,
+        referenceNumber: paymentReference,
         note: dto.note,
         status: BankTransferStatus.PENDING,
       },
-      include: {
-        bankAccount: true,
-        order: {
-          select: {
-            orderNumber: true,
-            totalAmount: true,
-            user: { select: { firstName: true, lastName: true } },
-          },
-        },
-      },
+      include: this.detailInclude,
     });
 
     await this.notificationsService?.enqueuePaymentEvent({
@@ -156,10 +188,13 @@ export class BankTransferService {
         transferId: created.id,
         amount: toMoneyString(reportedAmount),
         amountMismatch,
+        remainingAmount: toMoneyString(remaining),
+        paymentReference,
+        bankAccountId: dto.bankAccountId,
       },
     });
 
-    return this.toResponse(created, order.totalAmount);
+    return this.toResponseFull(created);
   }
 
   async getForOrder(
@@ -168,7 +203,7 @@ export class BankTransferService {
   ): Promise<BankTransferResponseDto> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      select: { userId: true, totalAmount: true },
+      select: { userId: true },
     });
     if (!order) {
       throw new NotFoundException('Order not found');
@@ -185,7 +220,7 @@ export class BankTransferService {
     if (!notification) {
       throw new NotFoundException('Bank transfer notification not found');
     }
-    return this.toResponse(notification, order.totalAmount);
+    return this.toResponseFull(notification);
   }
 
   async getForUserById(
@@ -202,7 +237,7 @@ export class BankTransferService {
     if (notification.userId !== userId) {
       throw new ForbiddenException('Transfer does not belong to user');
     }
-    return this.toResponse(notification, notification.order.totalAmount);
+    return this.toResponseFull(notification);
   }
 
   async listForUser(
@@ -222,12 +257,10 @@ export class BankTransferService {
         include: this.detailInclude,
       }),
     ]);
-    return buildPaginatedResponse(
-      items.map((item) => this.toResponse(item, item.order.totalAmount)),
-      total,
-      page,
-      limit,
+    const mapped = await Promise.all(
+      items.map((item) => this.toResponseFull(item)),
     );
+    return buildPaginatedResponse(mapped, total, page, limit);
   }
 
   async listAdmin(
@@ -238,6 +271,7 @@ export class BankTransferService {
     const search = query.search?.trim();
     const where: Prisma.BankTransferNotificationWhereInput = {
       ...(query.status ? { status: query.status } : {}),
+      ...(query.bankAccountId ? { bankAccountId: query.bankAccountId } : {}),
       ...(query.orderNumber
         ? { order: { orderNumber: query.orderNumber } }
         : {}),
@@ -285,12 +319,10 @@ export class BankTransferService {
       }),
     ]);
 
-    return buildPaginatedResponse(
-      items.map((item) => this.toResponse(item, item.order.totalAmount)),
-      total,
-      page,
-      limit,
+    const mapped = await Promise.all(
+      items.map((item) => this.toResponseFull(item)),
     );
+    return buildPaginatedResponse(mapped, total, page, limit);
   }
 
   async getAdminById(id: string): Promise<BankTransferResponseDto> {
@@ -301,7 +333,7 @@ export class BankTransferService {
     if (!notification) {
       throw new NotFoundException('Bank transfer notification not found');
     }
-    return this.toResponse(notification, notification.order.totalAmount);
+    return this.toResponseFull(notification, true);
   }
 
   async approve(
@@ -309,7 +341,7 @@ export class BankTransferService {
     adminUserId: string,
     adminNote?: string,
   ): Promise<BankTransferResponseDto> {
-    const approved = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`
         SELECT id FROM bank_transfer_notifications WHERE id = ${id}::uuid FOR UPDATE
       `;
@@ -318,21 +350,43 @@ export class BankTransferService {
         include: {
           order: {
             select: {
+              id: true,
               orderNumber: true,
               userId: true,
+              totalAmount: true,
+              currency: true,
               user: { select: { email: true } },
             },
           },
+          payment: { select: { id: true, status: true } },
         },
       });
       if (!notification) {
         throw new NotFoundException('Bank transfer notification not found');
       }
       if (notification.status === BankTransferStatus.APPROVED) {
-        return notification;
+        return { notification, fullyPaid: false, alreadyApproved: true };
       }
       if (notification.status === BankTransferStatus.REJECTED) {
         throw new ConflictException('Bank transfer already rejected');
+      }
+
+      await tx.$queryRaw`
+        SELECT id FROM payments WHERE id = ${notification.paymentId}::uuid FOR UPDATE
+      `;
+
+      const approvedBefore = await this.paymentsService.sumApprovedTransfers(
+        tx,
+        notification.orderId,
+      );
+      const remaining = this.paymentsService.remainingFrom(
+        notification.order.totalAmount,
+        approvedBefore,
+      );
+      if (notification.amount.gt(remaining)) {
+        throw new BadRequestException(
+          `Overpayment: notification ${toMoneyString(notification.amount)} exceeds remaining ${toMoneyString(remaining)}`,
+        );
       }
 
       const updated = await tx.bankTransferNotification.update({
@@ -346,64 +400,94 @@ export class BankTransferService {
         include: {
           order: {
             select: {
+              id: true,
               orderNumber: true,
               userId: true,
+              totalAmount: true,
+              currency: true,
               user: { select: { email: true } },
             },
           },
         },
       });
 
-      await this.paymentsService.markPaidFromBankTransfer(
-        notification.paymentId,
+      const applied = await this.paymentsService.applyApprovedBankTransfer(
+        {
+          paymentId: notification.paymentId,
+          notificationId: notification.id,
+          notificationAmount: notification.amount,
+          orderId: notification.orderId,
+          orderTotal: notification.order.totalAmount,
+          userId: notification.order.userId,
+          currency: notification.order.currency,
+          orderNumber: notification.order.orderNumber,
+        },
         tx,
       );
 
-      return updated;
+      return {
+        notification: updated,
+        fullyPaid: applied.fullyPaid,
+        alreadyApproved: false,
+      };
     });
 
-    await this.safeNotifyAfterApprove(approved);
+    if (!result.alreadyApproved) {
+      await this.safeNotifyAfterApprove(result.notification, result.fullyPaid);
+    }
 
     return this.getAdminById(id);
   }
 
   /** Side effects must not roll back an already-committed approval. */
-  private async safeNotifyAfterApprove(approved: {
-    id: string;
-    orderId: string;
-    order: { orderNumber: string; userId: string; user: { email: string } };
-  }): Promise<void> {
+  private async safeNotifyAfterApprove(
+    approved: {
+      id: string;
+      orderId: string;
+      amount: Prisma.Decimal;
+      order: { orderNumber: string; userId: string; user: { email: string } };
+    },
+    fullyPaid: boolean,
+  ): Promise<void> {
     try {
       await this.notificationsService?.enqueuePaymentEvent({
         userId: approved.order.userId,
         type: 'BANK_TRANSFER_APPROVED',
-        title: 'Ödemeniz onaylandı',
-        body: `${approved.order.orderNumber} ödemesi onaylandı.`,
+        title: fullyPaid ? 'Ödemeniz tamamlandı' : 'Kısmi ödemeniz onaylandı',
+        body: fullyPaid
+          ? `${approved.order.orderNumber} ödemesi onaylandı.`
+          : `${approved.order.orderNumber} için ${toMoneyString(approved.amount)} TL onaylandı.`,
         data: { orderId: approved.orderId, transferId: approved.id },
       });
-      await this.notificationsService?.enqueueOrderStatus(
-        approved.orderId,
-        approved.order.userId,
-        OrderStatus.CONFIRMED,
-        approved.order.orderNumber,
-      );
+      if (fullyPaid) {
+        await this.notificationsService?.enqueueOrderStatus(
+          approved.orderId,
+          approved.order.userId,
+          OrderStatus.CONFIRMED,
+          approved.order.orderNumber,
+        );
+        await this.emailOutbox.enqueue({
+          event: 'OrderConfirmed',
+          toEmail: approved.order.user.email,
+          subject: `Siparişiniz onaylandı — ${approved.order.orderNumber}`,
+          payload: {
+            orderId: approved.orderId,
+            orderNumber: approved.order.orderNumber,
+          },
+        });
+      }
       await this.emailOutbox.enqueue({
         event: 'TransferApproved',
         toEmail: approved.order.user.email,
-        subject: `Ödeme onaylandı — ${approved.order.orderNumber}`,
+        subject: fullyPaid
+          ? `Ödeme onaylandı — ${approved.order.orderNumber}`
+          : `Kısmi ödeme onaylandı — ${approved.order.orderNumber}`,
         payload: {
           orderId: approved.orderId,
           orderNumber: approved.order.orderNumber,
           transferId: approved.id,
-        },
-      });
-      await this.emailOutbox.enqueue({
-        event: 'OrderConfirmed',
-        toEmail: approved.order.user.email,
-        subject: `Siparişiniz onaylandı — ${approved.order.orderNumber}`,
-        payload: {
-          orderId: approved.orderId,
-          orderNumber: approved.order.orderNumber,
+          amount: toMoneyString(approved.amount),
+          fullyPaid,
         },
       });
     } catch (error) {
@@ -466,7 +550,6 @@ export class BankTransferService {
         },
       });
 
-      // Keep payment PENDING so customer can retry with payment instructions.
       await this.paymentsService.markRejectedKeepPending(
         notification.paymentId,
         reason,
@@ -507,16 +590,18 @@ export class BankTransferService {
 
   private readonly detailInclude = {
     bankAccount: true,
+    payment: { select: { id: true, status: true, paymentReference: true } },
     order: {
       select: {
         orderNumber: true,
         totalAmount: true,
+        currency: true,
         user: { select: { firstName: true, lastName: true, email: true } },
       },
     },
   } as const;
 
-  private toResponse(
+  private async toResponseFull(
     notification: {
       id: string;
       orderId: string;
@@ -535,15 +620,62 @@ export class BankTransferService {
       adminNote: string | null;
       verifiedAt: Date | null;
       createdAt: Date;
-      bankAccount?: { bankName: string } | null;
-      order?: {
+      bankAccount?: { bankName: string; iban?: string } | null;
+      payment?: {
+        id: string;
+        status: PaymentStatus;
+        paymentReference?: string | null;
+      } | null;
+      order: {
         orderNumber: string;
-        totalAmount?: Prisma.Decimal;
+        totalAmount: Prisma.Decimal;
         user?: { firstName: string; lastName: string };
       };
     },
-    orderTotal: Prisma.Decimal,
-  ): BankTransferResponseDto {
+    includeTimeline = false,
+  ): Promise<BankTransferResponseDto> {
+    const approvedTotal = await this.paymentsService.sumApprovedTransfers(
+      this.prisma,
+      notification.orderId,
+    );
+    const remaining = this.paymentsService.remainingFrom(
+      notification.order.totalAmount,
+      approvedTotal,
+    );
+    const paymentStatus =
+      notification.payment?.status ??
+      (remaining.lte(0)
+        ? PaymentStatus.PAID
+        : approvedTotal.gt(0)
+          ? PaymentStatus.PARTIALLY_PAID
+          : PaymentStatus.PENDING);
+
+    let timeline: BankTransferTimelineItemDto[] | undefined;
+    if (includeTimeline) {
+      const siblings = await this.prisma.bankTransferNotification.findMany({
+        where: { orderId: notification.orderId },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          amount: true,
+          status: true,
+          createdAt: true,
+          verifiedAt: true,
+          rejectionReason: true,
+          referenceNumber: true,
+        },
+      });
+      timeline = siblings.map((row) => ({
+        id: row.id,
+        amount: toMoneyString(row.amount),
+        status: row.status,
+        createdAt: row.createdAt,
+        verifiedAt: row.verifiedAt,
+        rejectionReason: row.rejectionReason,
+        referenceNumber: row.referenceNumber,
+      }));
+    }
+
     return {
       id: notification.id,
       orderId: notification.orderId,
@@ -552,22 +684,30 @@ export class BankTransferService {
       amount: toMoneyString(notification.amount),
       currency: notification.currency,
       amountMismatch: notification.amountMismatch,
-      orderTotal: toMoneyString(orderTotal),
+      orderTotal: toMoneyString(notification.order.totalAmount),
+      approvedTotal: toMoneyString(approvedTotal),
+      remainingAmount: toMoneyString(remaining),
+      paymentStatus,
       senderName: notification.senderName,
       senderIban: notification.senderIban,
       transferDate: notification.transferDate,
-      referenceNumber: notification.referenceNumber,
+      referenceNumber:
+        notification.referenceNumber ??
+        notification.payment?.paymentReference ??
+        null,
       note: notification.note,
       status: notification.status,
       rejectionReason: notification.rejectionReason,
       adminNote: notification.adminNote,
       verifiedAt: notification.verifiedAt,
       createdAt: notification.createdAt,
-      orderNumber: notification.order?.orderNumber,
-      customerName: notification.order?.user
+      orderNumber: notification.order.orderNumber,
+      customerName: notification.order.user
         ? `${notification.order.user.firstName} ${notification.order.user.lastName}`
         : undefined,
       bankName: notification.bankAccount?.bankName ?? null,
+      bankIban: notification.bankAccount?.iban ?? null,
+      timeline,
     };
   }
 }

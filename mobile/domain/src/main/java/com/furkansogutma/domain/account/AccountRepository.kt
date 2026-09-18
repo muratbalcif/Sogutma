@@ -15,10 +15,8 @@ interface AccountRepository {
     suspend fun getBankTransfers(page: Int = 1): Result<List<BankTransfer>>
     suspend fun createBankTransfer(
         orderId: String,
-        amount: String,
-        description: String?,
-        bankName: String?,
-        transferDate: String?,
+        bankAccountId: String,
+        amount: String? = null,
     ): Result<BankTransfer>
     suspend fun registerDeviceToken(token: String): Result<Unit>
     suspend fun unregisterDeviceToken(token: String): Result<Unit>

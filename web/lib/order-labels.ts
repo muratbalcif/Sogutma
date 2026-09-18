@@ -25,6 +25,8 @@ export function paymentStatusLabel(status?: string | null): string {
       return "Ödeme bekleniyor";
     case "AUTHORIZED":
       return "Ödeme yetkilendirildi";
+    case "PARTIALLY_PAID":
+      return "Kısmi ödeme alındı";
     case "PAID":
       return "Ödeme alındı";
     case "FAILED":
@@ -104,6 +106,8 @@ export function paymentStatusTone(
   switch (status) {
     case "PAID":
       return "success";
+    case "PARTIALLY_PAID":
+      return "accent";
     case "FAILED":
     case "CANCELLED":
       return "danger";

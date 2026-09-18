@@ -92,6 +92,7 @@ export type AdminOrderStatus =
 export type AdminPaymentStatus =
   | "PENDING"
   | "AUTHORIZED"
+  | "PARTIALLY_PAID"
   | "PAID"
   | "FAILED"
   | "REFUNDED"
@@ -113,6 +114,8 @@ export type AdminOrderPayment = {
   currency: string;
   provider: string | null;
   expiresAt: string | null;
+  approvedTotal?: string;
+  remainingAmount?: string;
 };
 
 export type AdminPayment = {
@@ -712,7 +715,7 @@ export const paymentsService = {
   listBankTransfers(
     page = 1,
     limit = 20,
-    params?: { status?: string; search?: string },
+    params?: { status?: string; search?: string; bankAccountId?: string },
   ) {
     const query = new URLSearchParams({
       page: String(page),
@@ -720,16 +723,21 @@ export const paymentsService = {
     });
     if (params?.status) query.set("status", params.status);
     if (params?.search) query.set("search", params.search);
+    if (params?.bankAccountId) query.set("bankAccountId", params.bankAccountId);
     return apiRequest<PaginatedResponse<{
       id: string;
       status: string;
       amount: string;
       orderTotal?: string;
+      approvedTotal?: string;
+      remainingAmount?: string;
+      paymentStatus?: string;
       amountMismatch?: boolean;
       referenceNumber: string | null;
       orderNumber?: string;
       customerName?: string;
       bankName?: string | null;
+      bankIban?: string | null;
       createdAt: string;
       transferDate: string;
       note: string | null;
@@ -741,16 +749,29 @@ export const paymentsService = {
       status: string;
       amount: string;
       orderTotal?: string;
+      approvedTotal?: string;
+      remainingAmount?: string;
+      paymentStatus?: string;
       amountMismatch?: boolean;
       referenceNumber: string | null;
       orderNumber?: string;
       customerName?: string;
       bankName?: string | null;
+      bankIban?: string | null;
       createdAt: string;
       transferDate: string;
       note: string | null;
       rejectionReason: string | null;
       adminNote: string | null;
+      timeline?: Array<{
+        id: string;
+        amount: string;
+        status: string;
+        createdAt: string;
+        verifiedAt: string | null;
+        rejectionReason: string | null;
+        referenceNumber: string | null;
+      }>;
     }>(`/admin/bank-transfers/${id}`);
   },
   approveBankTransfer(id: string, body: { adminNote?: string }) {

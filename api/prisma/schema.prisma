@@ -475,6 +475,7 @@ enum OrderStatus {
 enum PaymentStatus {
   PENDING
   AUTHORIZED
+  PARTIALLY_PAID
   PAID
   FAILED
   REFUNDED
@@ -663,6 +664,8 @@ model Payment {
   paidAt            DateTime?
   /// Bank-transfer reservation window; expired PENDING payments cancel order + release stock.
   expiresAt         DateTime?
+  /// Customer-facing transfer reference shown in bank description, e.g. FS-20260918-000042-A3K9.
+  paymentReference  String?       @unique
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -676,6 +679,7 @@ model Payment {
   @@index([providerPaymentId])
   @@index([expiresAt])
   @@index([createdAt])
+  @@index([paymentReference])
   @@map("payments")
 }
 

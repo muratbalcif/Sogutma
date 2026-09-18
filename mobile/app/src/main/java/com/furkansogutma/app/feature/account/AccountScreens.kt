@@ -1,5 +1,6 @@
 package com.furkansogutma.app.feature.account
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Favorite
@@ -31,8 +35,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -583,48 +589,120 @@ fun CurrentAccountRoute(onBack: () -> Unit = {}, vm: AccountDataViewModel = hilt
 @Composable
 fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: AccountDataViewModel = hiltViewModel()) {
     var items by remember { mutableStateOf<List<BankTransfer>?>(null) }
+    var banks by remember { mutableStateOf<List<com.furkansogutma.domain.account.CompanyBankAccount>>(emptyList()) }
+    var order by remember { mutableStateOf<Order?>(null) }
+    var selectedBankId by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var sender by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     fun load() {
         scope.launch {
             items = null
             error = null
+            when (val banksResult = vm.accountRepository.getBankAccounts()) {
+                is Result.Success -> banks = banksResult.data
+                is Result.Error -> error = banksResult.error.message
+            }
             when (val result = vm.accountRepository.getBankTransfers()) {
                 is Result.Success -> items = result.data
-                is Result.Error -> error = result.error.message
+                is Result.Error -> if (error == null) error = result.error.message
+            }
+            if (orderId != null) {
+                when (val orderResult = vm.getOrder(orderId)) {
+                    is Result.Success -> order = orderResult.data
+                    is Result.Error -> if (error == null) error = orderResult.error.message
+                }
             }
         }
     }
 
     LaunchedEffect(Unit) { load() }
 
+    fun copy(label: String, value: String) {
+        val clipboard =
+            context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText(label, value))
+        message = "$label kopyalandı"
+    }
+
     Column(Modifier.fillMaxSize()) {
-        FurkanTopBar("Havale bildirimleri", onBack = onBack)
-        Column(Modifier.padding(FurkanSpacing.md)) {
+        FurkanTopBar("Havale / EFT ile Öde", onBack = onBack)
+        Column(Modifier.padding(FurkanSpacing.md).verticalScroll(rememberScrollState())) {
             if (orderId != null) {
-                Text("Yeni bildirim", style = MaterialTheme.typography.titleLarge)
-                FurkanTextField(sender, { sender = it }, "Gönderen ad")
-                FurkanTextField(date, { date = it }, "Tarih (YYYY-MM-DD)")
-                FurkanTextField(note, { note = it }, "Açıklama")
-                FurkanButton("Bildirim gönder", Modifier.fillMaxWidth()) {
+                Text("Banka hesapları", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Bu bankada hesabınız olmasa da kendi bankanızdan EFT/havale yapabilirsiniz.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(FurkanSpacing.sm))
+                banks.forEach { bank ->
+                    val selected = selectedBankId == bank.id
+                    val selectedColor = Color(0xFF0F766E)
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = FurkanSpacing.sm)
+                            .border(
+                                width = if (selected) 2.dp else 1.dp,
+                                color = if (selected) selectedColor else MaterialTheme.colorScheme.outline,
+                                shape = RoundedCornerShape(12.dp),
+                            )
+                            .clickable { selectedBankId = bank.id }
+                            .padding(FurkanSpacing.sm),
+                    ) {
+                        Text(
+                            bank.bankName,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (selected) selectedColor else MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(bank.accountName)
+                        Text(bank.iban, fontWeight = FontWeight.Medium)
+                        bank.branch?.let { Text("Şube: $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        if (selected) {
+                            Text("Seçildi", color = selectedColor, fontWeight = FontWeight.Bold)
+                        }
+                        FurkanOutlinedButton("IBAN'ı Kopyala", Modifier.fillMaxWidth()) {
+                            copy("IBAN", bank.iban)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(FurkanSpacing.md))
+                Text("Ödeme özeti", style = MaterialTheme.typography.titleMedium)
+                Text("Toplam: ${order?.total.orEmpty()} ${order?.currency.orEmpty()}")
+                Text("Ödenen: ${order?.paymentApprovedTotal ?: "0.00"} ${order?.currency.orEmpty()}")
+                val remaining = order?.paymentRemainingAmount ?: order?.total
+                Text("Kalan: ${remaining.orEmpty()} ${order?.currency.orEmpty()}")
+                val reference = order?.paymentReference
+                Text("Referans: ${reference ?: "—"}")
+                remaining?.let {
+                    FurkanOutlinedButton("Tutarı Kopyala", Modifier.fillMaxWidth()) { copy("Tutar", it) }
+                }
+                reference?.let {
+                    FurkanOutlinedButton("Referansı Kopyala", Modifier.fillMaxWidth()) { copy("Referans", it) }
+                }
+
+                Spacer(Modifier.height(FurkanSpacing.sm))
+                FurkanButton("Ödemeyi Yaptım", Modifier.fillMaxWidth()) {
                     scope.launch {
+                        val bankId = selectedBankId
+                        if (bankId == null) {
+                            message = "Lütfen bir banka hesabı seçin"
+                            return@launch
+                        }
                         when (
                             val result = vm.accountRepository.createBankTransfer(
                                 orderId = orderId,
-                                amount = "",
-                                description = sender.ifBlank { note },
-                                bankName = null,
-                                transferDate = date,
+                                bankAccountId = bankId,
+                                amount = remaining,
                             )
                         ) {
                             is Result.Success -> {
-                                message = "Bildirim gönderildi."
+                                message = "Ödeme bildiriminiz alındı."
                                 items = listOf(result.data) + (items.orEmpty())
+                                load()
                             }
                             is Result.Error -> message = result.error.message
                         }
@@ -633,12 +711,25 @@ fun BankTransfersRoute(orderId: String? = null, onBack: () -> Unit = {}, vm: Acc
                 message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                 Spacer(Modifier.height(FurkanSpacing.lg))
             }
+            Text("Bildirim geçmişi", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(FurkanSpacing.sm))
             when {
                 error != null && items == null -> FurkanError(error!!) { load() }
                 items == null -> FurkanLoading()
                 items!!.isEmpty() -> FurkanEmptyState("Havale yok", "Havale bildirimleriniz burada.")
                 else -> items!!.forEach {
-                    Text("${it.amount} — ${it.status}")
+                    Text("${it.amount} — ${it.status}", fontWeight = FontWeight.Medium)
+                    it.bankName?.let { name -> Text(name) }
+                    it.referenceNumber?.let { ref -> Text("Referans: $ref") }
+                    it.paymentStatus?.let { status ->
+                        Text(
+                            "Ödeme: $status" +
+                                (it.approvedTotal?.let { t -> " · Ödenen $t" } ?: "") +
+                                (it.remainingAmount?.let { r -> " · Kalan $r" } ?: ""),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Text(it.description.orEmpty())
                     Spacer(Modifier.height(FurkanSpacing.sm))
                 }

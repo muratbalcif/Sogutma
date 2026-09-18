@@ -240,6 +240,15 @@ export class PaymentResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   expiresAt!: Date | null;
+
+  @ApiPropertyOptional()
+  approvedTotal?: string;
+
+  @ApiPropertyOptional()
+  remainingAmount?: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  paymentReference!: string | null;
 }
 
 export class OrderCustomerResponseDto {

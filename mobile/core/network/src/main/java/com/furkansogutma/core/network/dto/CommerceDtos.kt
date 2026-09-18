@@ -204,6 +204,9 @@ data class PaymentDto(
     val currency: String,
     val provider: String? = null,
     val method: String? = null,
+    val approvedTotal: String? = null,
+    val remainingAmount: String? = null,
+    val paymentReference: String? = null,
 )
 
 data class FavoriteDto(
@@ -246,18 +249,20 @@ data class BankTransferDto(
     val amount: String,
     val transferDate: String? = null,
     val description: String? = null,
+    val note: String? = null,
     val status: String,
     val bankName: String? = null,
     val senderName: String? = null,
+    val remainingAmount: String? = null,
+    val approvedTotal: String? = null,
+    val paymentStatus: String? = null,
+    val orderTotal: String? = null,
+    val referenceNumber: String? = null,
 )
 
 data class CreateBankTransferRequestDto(
-    val senderName: String,
-    val senderIban: String? = null,
-    val transferDate: String,
+    val bankAccountId: String,
     val amount: String? = null,
-    val bankAccountId: String? = null,
-    val referenceNumber: String? = null,
     val note: String? = null,
 )
 

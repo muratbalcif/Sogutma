@@ -106,6 +106,12 @@ fun OrderDetailContent(
         Text("Durum: ${order.status}", style = MaterialTheme.typography.titleMedium)
         order.paymentStatus?.let { Text("Ödeme durumu: $it") }
         order.paymentMethod?.let { Text("Ödeme yöntemi: $it") }
+        order.paymentApprovedTotal?.let { Text("Ödenen: $it ${order.currency}") }
+        order.paymentRemainingAmount?.let {
+            if (order.paymentStatus == "PENDING" || order.paymentStatus == "PARTIALLY_PAID") {
+                Text("Kalan: $it ${order.currency}")
+            }
+        }
         Text("Toplam: ${order.total} ${order.currency}")
         order.shippingSummary?.let {
             Spacer(Modifier.height(FurkanSpacing.sm))

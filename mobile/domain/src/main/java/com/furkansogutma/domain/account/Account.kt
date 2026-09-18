@@ -65,6 +65,11 @@ data class BankTransfer(
     val status: String,
     val bankName: String?,
     val senderName: String?,
+    val remainingAmount: String? = null,
+    val approvedTotal: String? = null,
+    val paymentStatus: String? = null,
+    val orderTotal: String? = null,
+    val referenceNumber: String? = null,
 )
 
 data class SiteConfig(

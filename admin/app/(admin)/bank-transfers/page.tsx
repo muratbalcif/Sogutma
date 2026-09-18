@@ -14,17 +14,24 @@ export default function BankTransfersPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number]>("PENDING");
   const [search, setSearch] = useState("");
+  const [bankAccountId, setBankAccountId] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const banksQuery = useQuery({
+    queryKey: ["admin-bank-accounts"],
+    queryFn: () => paymentsService.listBankAccounts(),
+  });
+
   const listQuery = useQuery({
-    queryKey: ["admin-bank-transfers", status, search],
+    queryKey: ["admin-bank-transfers", status, search, bankAccountId],
     queryFn: () =>
       paymentsService.listBankTransfers(1, 50, {
         status: status === "ALL" ? undefined : status,
         search: search || undefined,
+        bankAccountId: bankAccountId || undefined,
       }),
   });
 
@@ -98,10 +105,11 @@ export default function BankTransfersPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-slate-900">
-              Havale Bildirimleri
+              Ödeme Doğrulama
             </h1>
             <p className="text-sm text-slate-600">
-              Finans → bekleyen havaleleri inceleyin, onaylayın veya reddedin.
+              Havale / EFT bildirimlerini inceleyin, onaylayın veya reddedin.
+              Onaylanmadan ödeme PAID olamaz.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -111,6 +119,18 @@ export default function BankTransfersPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            <select
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              value={bankAccountId}
+              onChange={(e) => setBankAccountId(e.target.value)}
+            >
+              <option value="">Tüm bankalar</option>
+              {(banksQuery.data ?? []).map((bank) => (
+                <option key={bank.id} value={bank.id}>
+                  {bank.bankName} — {bank.iban}
+                </option>
+              ))}
+            </select>
             <select
               className="rounded-md border border-slate-300 px-3 py-2 text-sm"
               value={status}
@@ -132,11 +152,12 @@ export default function BankTransfersPage() {
             <table className="min-w-full text-left text-sm">
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Sipariş No</th>
+                  <th className="px-4 py-3 font-medium">Sipariş</th>
                   <th className="px-4 py-3 font-medium">Müşteri</th>
-                  <th className="px-4 py-3 font-medium">Tutar</th>
-                  <th className="px-4 py-3 font-medium">Sipariş Tutarı</th>
                   <th className="px-4 py-3 font-medium">Banka</th>
+                  <th className="px-4 py-3 font-medium">Claim</th>
+                  <th className="px-4 py-3 font-medium">Ödenen / Kalan</th>
+                  <th className="px-4 py-3 font-medium">Referans</th>
                   <th className="px-4 py-3 font-medium">Tarih</th>
                   <th className="px-4 py-3 font-medium">Durum</th>
                 </tr>
@@ -158,13 +179,21 @@ export default function BankTransfersPage() {
                     </td>
                     <td className="px-4 py-3">{row.customerName ?? "—"}</td>
                     <td className="px-4 py-3">
-                      {row.amount}
-                      {row.amountMismatch ? (
-                        <span className="ml-1 text-xs text-amber-700">≠</span>
+                      <div>{row.bankName ?? "—"}</div>
+                      {row.bankIban ? (
+                        <div className="font-mono text-xs text-slate-500">
+                          {row.bankIban}
+                        </div>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3">{row.orderTotal ?? "—"}</td>
-                    <td className="px-4 py-3">{row.bankName ?? "—"}</td>
+                    <td className="px-4 py-3">{row.amount}</td>
+                    <td className="px-4 py-3 text-xs">
+                      <div>Ödenen: {row.approvedTotal ?? "—"}</div>
+                      <div>Kalan: {row.remainingAmount ?? "—"}</div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      {row.referenceNumber ?? "—"}
+                    </td>
                     <td className="px-4 py-3">
                       {new Date(row.createdAt).toLocaleDateString("tr-TR")}
                     </td>
@@ -188,7 +217,7 @@ export default function BankTransfersPage() {
               <p className="text-sm text-slate-500">Yükleniyor…</p>
             ) : detail ? (
               <div className="space-y-3 text-sm">
-                <h2 className="text-lg font-semibold">Havale detayı</h2>
+                <h2 className="text-lg font-semibold">Ödeme doğrulama</h2>
                 <p>
                   <strong>Sipariş:</strong> {detail.orderNumber}
                 </p>
@@ -196,28 +225,55 @@ export default function BankTransfersPage() {
                   <strong>Müşteri:</strong> {detail.customerName}
                 </p>
                 <p>
-                  <strong>Sipariş tutarı:</strong> {detail.orderTotal}
-                </p>
-                <p>
-                  <strong>Bildirilen tutar:</strong> {detail.amount}
-                  {detail.amountMismatch ? " (uyuşmazlık)" : ""}
-                </p>
-                <p>
                   <strong>Banka:</strong> {detail.bankName ?? "—"}
                 </p>
                 <p>
-                  <strong>Havale tarihi:</strong>{" "}
-                  {new Date(detail.transferDate).toLocaleDateString("tr-TR")}
+                  <strong>IBAN:</strong>{" "}
+                  <span className="font-mono text-xs">
+                    {detail.bankIban ?? "—"}
+                  </span>
                 </p>
                 <p>
-                  <strong>Açıklama:</strong> {detail.note ?? "—"}
+                  <strong>Claim tutarı:</strong> {detail.amount}
+                </p>
+                <p>
+                  <strong>Sipariş tutarı:</strong> {detail.orderTotal}
+                </p>
+                <p>
+                  <strong>Ödenen:</strong> {detail.approvedTotal ?? "—"}
+                </p>
+                <p>
+                  <strong>Kalan:</strong> {detail.remainingAmount ?? "—"}
+                </p>
+                <p>
+                  <strong>Ödeme durumu:</strong> {detail.paymentStatus ?? "—"}
                 </p>
                 <p>
                   <strong>Referans:</strong> {detail.referenceNumber ?? "—"}
                 </p>
                 <p>
+                  <strong>Tarih:</strong>{" "}
+                  {new Date(detail.createdAt).toLocaleString("tr-TR")}
+                </p>
+                <p>
                   <strong>Durum:</strong> {detail.status}
                 </p>
+                {detail.timeline && detail.timeline.length > 0 ? (
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <p className="mb-2 font-medium">Ödeme parçaları</p>
+                    <ul className="space-y-1 text-xs">
+                      {detail.timeline.map((row) => (
+                        <li key={row.id} className="flex justify-between gap-2">
+                          <span>
+                            {new Date(row.createdAt).toLocaleString("tr-TR")} ·{" "}
+                            {row.status}
+                          </span>
+                          <span className="font-mono">{row.amount}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <textarea
                   className="w-full rounded-md border border-slate-300 p-2"
                   rows={3}
@@ -234,7 +290,7 @@ export default function BankTransfersPage() {
                         onClick={() => approve.mutate()}
                         disabled={approve.isPending}
                       >
-                        ONAYLA
+                        Approve
                       </button>
                     ) : null}
                     {canReject ? (
@@ -251,18 +307,18 @@ export default function BankTransfersPage() {
                           onClick={() => reject.mutate()}
                           disabled={reject.isPending || rejectReason.trim().length < 2}
                         >
-                          REDDET
+                          Reject
                         </button>
                       </>
                     ) : null}
                   </div>
                 ) : null}
                 {actionError ? (
-                  <p className="text-red-600">{actionError}</p>
+                  <p className="text-sm text-red-600">{actionError}</p>
                 ) : null}
               </div>
             ) : (
-              <p className="text-sm text-red-600">Detay bulunamadı.</p>
+              <p className="text-sm text-slate-500">Kayıt bulunamadı.</p>
             )}
           </div>
         </div>
