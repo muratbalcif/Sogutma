@@ -253,8 +253,9 @@ if [[ "${RESEND_SMOKE:-}" == "1" ]]; then
           : "false",
       );
     '
-    # RESEND_TO via argv (keeps container env intact; avoids `env` quirks).
-    # node - reads program from stdin; argv[2] is the recipient.
+    # RESEND_TO via argv (keeps container env intact).
+    # Provider rule matches EmailOutboxService: RESEND_API_KEY +
+    # (RESEND_FROM_EMAIL || EMAIL_FROM). EMAIL_FROM is optional fallback only.
     "${COMPOSE[@]}" exec -T "${API_SERVICE}" \
       node - "${RESEND_TO}" <<'NODE'
 require('reflect-metadata');
@@ -270,59 +271,79 @@ if (String(process.env.EMAIL_DEV_MOCK || '').toLowerCase() === 'true') {
   process.exit(1);
 }
 
-const flag = (n) =>
-  process.env[n] && String(process.env[n]).trim() ? 'SET' : 'MISSING';
-if (flag('RESEND_API_KEY') === 'MISSING') {
-  console.error('RESEND_API_KEY: MISSING');
-  process.exit(1);
-}
-if (flag('RESEND_FROM_EMAIL') === 'MISSING' && flag('EMAIL_FROM') === 'MISSING') {
-  console.error('RESEND_FROM_EMAIL: MISSING');
+const envStr = (key) => {
+  const v = process.env[key];
+  if (v === undefined || v === null) return undefined;
+  const s = String(v).trim();
+  return s === '' ? undefined : s;
+};
+
+const apiKeyEnv = envStr('RESEND_API_KEY');
+const fromEnv = envStr('RESEND_FROM_EMAIL') || envStr('EMAIL_FROM');
+if (!apiKeyEnv || !fromEnv) {
+  console.error(
+    'Resend config incomplete: RESEND_API_KEY=' +
+      (apiKeyEnv ? 'SET' : 'MISSING') +
+      ' RESEND_FROM_EMAIL=' +
+      (envStr('RESEND_FROM_EMAIL') ? 'SET' : 'MISSING') +
+      ' EMAIL_FROM=' +
+      (envStr('EMAIL_FROM') ? 'SET' : 'MISSING') +
+      ' (need API key + RESEND_FROM_EMAIL or EMAIL_FROM)',
+  );
   process.exit(1);
 }
 
 let EmailOutboxService;
-let ConfigService;
 try {
   ({ EmailOutboxService } = require('./dist/modules/payments/email-outbox.service'));
-  ({ ConfigService } = require('@nestjs/config'));
 } catch {
-  console.error('EmailOutboxService/ConfigService require failed');
+  console.error('EmailOutboxService require failed');
   process.exit(1);
 }
 
-// Use Nest ConfigService (what EmailOutboxService expects) backed by container env.
-// Never log secret values — only pass them into the service.
-const config = new ConfigService({
-  RESEND_API_KEY: process.env.RESEND_API_KEY,
-  RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
-  EMAIL_FROM: process.env.EMAIL_FROM,
-  RESEND_FROM_NAME: process.env.RESEND_FROM_NAME,
-  RESEND_REPLY_TO: process.env.RESEND_REPLY_TO,
-  EMAIL_DEV_MOCK:
-    String(process.env.EMAIL_DEV_MOCK || '').toLowerCase() === 'true',
-  EMAIL_OUTBOX_MAX_ATTEMPTS: Number(process.env.EMAIL_OUTBOX_MAX_ATTEMPTS || 5),
-  NODE_ENV: process.env.NODE_ENV || 'production',
-});
+/**
+ * Env-backed config adapter for EmailOutboxService.
+ * Must honor get(key, { infer: true }) the same as Nest ConfigService lookups
+ * used inside isProviderConfigured / sendEmail / resolveFromAddress.
+ * EMAIL_FROM is only a fallback when RESEND_FROM_EMAIL is unset.
+ */
+const config = {
+  get(key, _defaultOrOptions) {
+    if (key === 'EMAIL_DEV_MOCK') {
+      return String(process.env.EMAIL_DEV_MOCK || '').toLowerCase() === 'true';
+    }
+    if (key === 'EMAIL_OUTBOX_MAX_ATTEMPTS') {
+      const n = Number(process.env.EMAIL_OUTBOX_MAX_ATTEMPTS || 5);
+      return Number.isFinite(n) ? n : 5;
+    }
+    if (key === 'NODE_ENV') {
+      return process.env.NODE_ENV || 'production';
+    }
+    return envStr(key);
+  },
+};
 
 const prisma = {}; // sendEmail does not touch the database
 const email = new EmailOutboxService(prisma, config);
 
-if (!email.isProviderConfigured()) {
-  // Same-process bridge diagnostics (presence only)
-  const bridge = (key) => {
-    const v = config.get(key);
-    return v !== undefined && v !== null && String(v).trim() !== ''
-      ? 'SET'
-      : 'MISSING';
-  };
+// Mirror EmailOutboxService.isProviderConfigured / resolveFromAddress exactly.
+const bridgeKey = config.get('RESEND_API_KEY', { infer: true });
+const bridgeFrom =
+  config.get('RESEND_FROM_EMAIL', { infer: true }) ||
+  config.get('EMAIL_FROM', { infer: true });
+if (!(bridgeKey && String(bridgeKey).trim() && bridgeFrom && String(bridgeFrom).trim())) {
   console.error(
-    'isProviderConfigured=false bridge RESEND_API_KEY=' +
-      bridge('RESEND_API_KEY') +
-      ' RESEND_FROM_EMAIL=' +
-      bridge('RESEND_FROM_EMAIL') +
-      ' EMAIL_FROM=' +
-      bridge('EMAIL_FROM'),
+    'provider bridge failed: RESEND_API_KEY=' +
+      (bridgeKey && String(bridgeKey).trim() ? 'SET' : 'MISSING') +
+      ' from-address=' +
+      (bridgeFrom && String(bridgeFrom).trim() ? 'SET' : 'MISSING'),
+  );
+  process.exit(1);
+}
+
+if (!email.isProviderConfigured()) {
+  console.error(
+    'isProviderConfigured=false despite bridge SET (RESEND_API_KEY + from-address)',
   );
   process.exit(1);
 }
