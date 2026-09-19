@@ -4,10 +4,11 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 concurrency:
   group: production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -18,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      - name: Deploy started
+        run: echo "Deploy started"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -34,8 +38,21 @@ jobs:
           test -n "${PRODUCTION_HOST}"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
+          # Verify host key (do not disable StrictHostKeyChecking).
           ssh-keyscan -H "$PRODUCTION_HOST" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
+
+      - name: Connected to production VPS
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${PRODUCTION_HOST}"
+          test -n "${PRODUCTION_USER}"
+          ssh -o IdentitiesOnly=yes -o BatchMode=yes \
+            "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
+            'echo "Connected to production VPS ($(hostname))"'
 
       - name: Deploy to VPS
         env:
@@ -45,28 +62,29 @@ jobs:
           set -Eeuo pipefail
           test -n "${PRODUCTION_HOST}"
           test -n "${PRODUCTION_USER}"
-          # Pull first so scripts/deploy-production.sh from this commit exists, then deploy.
-          # Secrets are never echoed. .env.production stays only on the VPS.
-          ssh -o IdentitiesOnly=yes \
+          # .env.production stays on the VPS only. Never echo secrets / keys.
+          # Pull first so this commit's scripts/deploy-production.sh runs, then --post-pull.
+          ssh -o IdentitiesOnly=yes -o BatchMode=yes \
             "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
             'set -Eeuo pipefail
              cd /opt/furkansogutma
+             echo "Repository updated (fetch/reset)"
              PREV="$(git rev-parse HEAD)"
              git fetch origin
              git checkout main
              git reset --hard origin/main
              NEW="$(git rev-parse HEAD)"
-             echo "Current SHA: $PREV"
-             echo "Deploy SHA: $NEW"
+             echo "Current SHA: ${PREV}"
+             echo "Deploy SHA: ${NEW}"
              bash scripts/deploy-production.sh --post-pull'
 
-      - name: Health verification
+      - name: Health verification (public)
         run: |
           set -Eeuo pipefail
           echo "Checking API…"
-          curl -fsS --max-time 15 https://api.furkansogutma.net/api/v1/health >/dev/null
+          curl -fsS --max-time 20 https://api.furkansogutma.net/api/v1/health >/dev/null
           echo "Checking Web…"
-          curl -fsSI --max-time 15 https://www.furkansogutma.net >/dev/null
+          curl -fsSI --max-time 20 https://www.furkansogutma.net >/dev/null
           echo "Checking Admin…"
-          curl -fsSI --max-time 15 https://admin.furkansogutma.net >/dev/null
-          echo "🚀 Production deployment successful"
+          curl -fsSI --max-time 20 https://admin.furkansogutma.net >/dev/null
+          echo "Deploy completed successfully"
