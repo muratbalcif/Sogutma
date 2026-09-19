@@ -466,11 +466,13 @@ export class AdminCustomersService {
     }
 
     await this.emailOutbox.enqueue({
-      event: 'CUSTOMER_INVITE',
+      event: 'ACCOUNT_INVITATION',
       toEmail: user.email,
       subject: 'FurkanSoğutma hesabınız oluşturuldu.',
+      eventKey: `ACCOUNT_INVITATION:user:${user.id}:${user.email.toLowerCase()}`,
       payload: {
         firstName: user.firstName,
+        customerName: user.firstName,
         message:
           'Hesabınız oluşturuldu. Şifrenizi belirlemek için şifre sıfırlama akışını kullanın.',
         invite: true,

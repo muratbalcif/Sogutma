@@ -997,23 +997,31 @@ enum OutboxStatus {
 
 /// Async email delivery queue (not part of DB transactions).
 model EmailOutbox {
-  id            String       @id @default(uuid()) @db.Uuid
-  event         String
-  toEmail       String
-  subject       String
-  payload       Json
-  status        OutboxStatus @default(PENDING)
+  id                 String       @id @default(uuid()) @db.Uuid
+  event              String
+  /// Idempotency: event:entityRef:toEmail (optional for legacy rows).
+  eventKey           String?      @unique
+  toEmail            String
+  subject            String
+  payload            Json
+  status             OutboxStatus @default(PENDING)
   /// Next eligible time (backoff) or claim lease expiry while PROCESSING.
-  availableAt   DateTime     @default(now())
-  processedAt   DateTime?
-  attempts      Int          @default(0)
-  lastError     String?
-  createdAt     DateTime     @default(now())
+  availableAt        DateTime     @default(now())
+  processedAt        DateTime?
+  attempts           Int          @default(0)
+  lastAttemptAt      DateTime?
+  sentAt             DateTime?
+  failedAt           DateTime?
+  lastError          String?
+  /// Resend (or other provider) message id when SENT.
+  providerMessageId  String?
+  createdAt          DateTime     @default(now())
 
   @@index([processedAt])
   @@index([status, availableAt])
   @@index([event])
   @@index([createdAt])
+  @@index([toEmail])
   @@map("email_outbox")
 }
 
@@ -1051,6 +1059,12 @@ model NotificationPreference {
   stockAlerts            Boolean  @default(true)
   campaignNotifications  Boolean  @default(true)
   systemNotifications    Boolean  @default(true)
+  /// Channel toggles (SECURITY/PASSWORD emails ignore emailEnabled=false).
+  emailEnabled           Boolean  @default(true)
+  pushEnabled            Boolean  @default(true)
+  inAppEnabled           Boolean  @default(true)
+  /// Marketing / campaign email opt-in (default off = opt-in required for campaigns).
+  marketingEmailOptIn    Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 

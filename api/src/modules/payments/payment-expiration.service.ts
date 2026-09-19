@@ -152,7 +152,7 @@ export class PaymentExpirationService implements OnModuleInit, OnModuleDestroy {
       result.orderNumber,
     );
     await this.emailOutbox.enqueueOrderEmail({
-      event: 'OrderCancelled',
+      event: 'ORDER_CANCELLED',
       toEmail: result.email,
       customerName: 'Müşterimiz',
       orderId: result.orderId,

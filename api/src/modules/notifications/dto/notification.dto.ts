@@ -76,6 +76,31 @@ export class NotificationListQueryDto {
   @Type(() => Boolean)
   @IsBoolean()
   unreadOnly?: boolean;
+
+  @ApiPropertyOptional({ enum: NotificationType })
+  @IsOptional()
+  @IsEnum(NotificationType)
+  type?: NotificationType;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  eventKey?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  userId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  from?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  to?: string;
 }
 
 export class DeviceTokenResponseDto {
@@ -115,6 +140,18 @@ export class NotificationPreferenceResponseDto {
 
   @ApiProperty()
   systemNotifications!: boolean;
+
+  @ApiProperty()
+  emailEnabled!: boolean;
+
+  @ApiProperty()
+  pushEnabled!: boolean;
+
+  @ApiProperty()
+  inAppEnabled!: boolean;
+
+  @ApiProperty()
+  marketingEmailOptIn!: boolean;
 }
 
 export class UpdateNotificationPreferenceDto {
@@ -142,4 +179,24 @@ export class UpdateNotificationPreferenceDto {
   @IsOptional()
   @IsBoolean()
   systemNotifications?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  emailEnabled?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  pushEnabled?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  inAppEnabled?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  marketingEmailOptIn?: boolean;
 }

@@ -55,6 +55,10 @@ describe('NotificationsService', () => {
       stockAlerts: true,
       campaignNotifications: true,
       systemNotifications: true,
+      emailEnabled: true,
+      pushEnabled: true,
+      inAppEnabled: true,
+      marketingEmailOptIn: false,
     });
     prisma.deviceToken.findMany.mockResolvedValue([]);
   });
@@ -152,5 +156,36 @@ describe('NotificationsService', () => {
     const processed = await service.processPendingOutbox(10);
     expect(processed).toBe(0);
     expect(prisma.notificationOutbox.update).toHaveBeenCalled();
+  });
+
+  it('skips push when pushEnabled is false but still creates in-app', async () => {
+    prisma.notificationPreference.upsert.mockResolvedValue({
+      orderNotifications: true,
+      paymentNotifications: true,
+      stockAlerts: true,
+      campaignNotifications: true,
+      systemNotifications: true,
+      emailEnabled: true,
+      pushEnabled: false,
+      inAppEnabled: true,
+      marketingEmailOptIn: false,
+    });
+    prisma.notification.create.mockResolvedValue({
+      id: 'n2',
+      type: NotificationType.CAMPAIGN,
+      title: 'c',
+      body: 'b',
+      data: null,
+      readAt: null,
+      createdAt: new Date(),
+    });
+    await service.createNotification({
+      userId: 'u1',
+      type: NotificationType.CAMPAIGN,
+      title: 'c',
+      body: 'b',
+    });
+    expect(prisma.notification.create).toHaveBeenCalled();
+    expect(pushProvider.sendToTokens).not.toHaveBeenCalled();
   });
 });

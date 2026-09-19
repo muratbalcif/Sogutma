@@ -362,7 +362,7 @@ export class OrdersService {
         });
         if (user?.email) {
           await this.emailOutbox.enqueueOrderEmail({
-            event: 'OrderCreated',
+            event: 'ORDER_CREATED',
             toEmail: user.email,
             customerName: `${user.firstName} ${user.lastName}`.trim(),
             orderId: created.orderId,
@@ -677,17 +677,17 @@ export class OrdersService {
   private emailEventForStatus(status: OrderStatus): string | null {
     switch (status) {
       case OrderStatus.CONFIRMED:
-        return 'OrderConfirmed';
+        return 'ORDER_CONFIRMED';
       case OrderStatus.PREPARING:
-        return 'OrderPreparing';
+        return 'ORDER_CONFIRMED';
       case OrderStatus.SHIPPED:
-        return 'OrderShipped';
+        return 'ORDER_SHIPPED';
       case OrderStatus.DELIVERED:
-        return 'OrderDelivered';
+        return 'ORDER_DELIVERED';
       case OrderStatus.CANCELLED:
-        return 'OrderCancelled';
+        return 'ORDER_CANCELLED';
       case OrderStatus.RETURNED:
-        return 'OrderReturned';
+        return 'ORDER_CANCELLED';
       default:
         return null;
     }

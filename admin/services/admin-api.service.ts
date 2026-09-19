@@ -1193,13 +1193,96 @@ export const customerPricingService = {
 };
 
 export const notificationsService = {
-  list(page = 1, limit = 20) {
-    return apiRequest<PaginatedResponse<{
-      id: string;
-      type: string;
-      title: string;
-      createdAt: string;
-    }>>(`/admin/notifications?page=${page}&limit=${limit}`);
+  list(
+    page = 1,
+    limit = 20,
+    filters?: { eventKey?: string; type?: string; from?: string; to?: string },
+  ) {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (filters?.eventKey) params.set("eventKey", filters.eventKey);
+    if (filters?.type) params.set("type", filters.type);
+    if (filters?.from) params.set("from", filters.from);
+    if (filters?.to) params.set("to", filters.to);
+    return apiRequest<
+      PaginatedResponse<{
+        id: string;
+        type: string;
+        title: string;
+        createdAt: string;
+        readAt?: string | null;
+      }>
+    >(`/admin/notifications?${params.toString()}`);
+  },
+  summary() {
+    return apiRequest<{
+      pendingOutbox: number;
+      sentToday: number;
+      failedToday: number;
+      retrying: number;
+      inAppTotal: number;
+      pushDevicesActive: number;
+    }>("/admin/notifications/summary");
+  },
+};
+
+export type EmailOutboxItem = {
+  id: string;
+  event: string;
+  eventKey: string | null;
+  toEmail: string;
+  subject: string;
+  status: string;
+  attempts: number;
+  lastError: string | null;
+  providerMessageId: string | null;
+  createdAt: string;
+  sentAt: string | null;
+  failedAt: string | null;
+  lastAttemptAt: string | null;
+  nextAttemptAt: string;
+};
+
+export const emailOutboxService = {
+  list(filters?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    event?: string;
+    toEmail?: string;
+    from?: string;
+    to?: string;
+  }) {
+    const params = new URLSearchParams({
+      page: String(filters?.page ?? 1),
+      limit: String(filters?.limit ?? 20),
+    });
+    if (filters?.status) params.set("status", filters.status);
+    if (filters?.event) params.set("event", filters.event);
+    if (filters?.toEmail) params.set("toEmail", filters.toEmail);
+    if (filters?.from) params.set("from", filters.from);
+    if (filters?.to) params.set("to", filters.to);
+    return apiRequest<PaginatedResponse<EmailOutboxItem>>(
+      `/admin/email-outbox?${params.toString()}`,
+    );
+  },
+  summary() {
+    return apiRequest<{
+      pending: number;
+      processing: number;
+      retrying: number;
+      sentToday: number;
+      failedToday: number;
+      emailTotal: number;
+    }>("/admin/email-outbox/summary");
+  },
+  retry(id: string) {
+    return apiRequest<{ id: string; status: string; attempts: number }>(
+      `/admin/email-outbox/${id}/retry`,
+      { method: "POST" },
+    );
   },
 };
 

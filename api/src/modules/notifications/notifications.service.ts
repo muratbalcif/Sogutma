@@ -152,25 +152,46 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      const notification = await this.prisma.notification.create({
-        data: {
-          userId: input.userId,
-          type: input.type,
-          title: input.title,
-          body: input.body,
-          data: (input.data ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-          entityType: input.entityType,
-          entityId: input.entityId,
-          eventKey: input.eventKey,
-        },
-      });
+      const prefs = await this.ensurePreferences(input.userId);
+      const allowInApp =
+        CRITICAL_TYPES.has(input.type) ||
+        (prefs.inAppEnabled && this.isAllowedByPreference(prefs, input.type));
+
+      if (!allowInApp) {
+        this.logger.debug(
+          `notification.skipped channel=in_app type=${input.type} userId=${input.userId}`,
+        );
+        // Still attempt push if enabled — channels are independent.
+      }
+
+      let notification =
+        allowInApp
+          ? await this.prisma.notification.create({
+              data: {
+                userId: input.userId,
+                type: input.type,
+                title: input.title,
+                body: input.body,
+                data: (input.data ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+                entityType: input.entityType,
+                entityId: input.entityId,
+                eventKey: input.eventKey,
+              },
+            })
+          : null;
+
+      if (notification) {
+        this.logger.log(
+          `notification.created channel=in_app type=${input.type} id=${notification.id}`,
+        );
+      }
 
       // Push is best-effort and never part of order transactions.
-      const prefs = await this.ensurePreferences(input.userId);
-      if (
-        CRITICAL_TYPES.has(input.type) ||
-        this.isAllowedByPreference(prefs, input.type)
-      ) {
+      const allowPush =
+        prefs.pushEnabled &&
+        (CRITICAL_TYPES.has(input.type) ||
+          this.isAllowedByPreference(prefs, input.type));
+      if (allowPush) {
         await this.deliverPush(input.userId, {
           title: input.title,
           body: input.body,
@@ -179,8 +200,25 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
             entityType: input.entityType,
             entityId: input.entityId,
             type: input.type,
+            eventKey: input.eventKey,
           }),
         });
+      }
+
+      if (!notification) {
+        // Preference filtered in-app: return a synthetic read-only shape for callers.
+        return {
+          id: input.eventKey ?? 'skipped',
+          type: input.type,
+          title: input.title,
+          body: input.body,
+          message: input.body,
+          data: input.data ?? null,
+          entityType: input.entityType ?? null,
+          entityId: input.entityId ?? null,
+          readAt: new Date(),
+          createdAt: new Date(),
+        };
       }
 
       return this.toNotificationResponse(notification);
@@ -213,6 +251,10 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       stockAlerts?: boolean;
       campaignNotifications?: boolean;
       systemNotifications?: boolean;
+      emailEnabled?: boolean;
+      pushEnabled?: boolean;
+      inAppEnabled?: boolean;
+      marketingEmailOptIn?: boolean;
     },
   ) {
     await this.ensurePreferences(userId);
@@ -224,6 +266,10 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         stockAlerts: dto.stockAlerts,
         campaignNotifications: dto.campaignNotifications,
         systemNotifications: dto.systemNotifications,
+        emailEnabled: dto.emailEnabled,
+        pushEnabled: dto.pushEnabled,
+        inAppEnabled: dto.inAppEnabled,
+        marketingEmailOptIn: dto.marketingEmailOptIn,
       },
     });
   }
@@ -296,9 +342,26 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   async listAdmin(query: NotificationListQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
+    const where: Prisma.NotificationWhereInput = {
+      ...(query.type ? { type: query.type } : {}),
+      ...(query.unreadOnly ? { readAt: null } : {}),
+      ...(query.from || query.to
+        ? {
+            createdAt: {
+              ...(query.from ? { gte: new Date(query.from) } : {}),
+              ...(query.to ? { lte: new Date(query.to) } : {}),
+            },
+          }
+        : {}),
+      ...(query.eventKey
+        ? { eventKey: { contains: query.eventKey, mode: 'insensitive' } }
+        : {}),
+      ...(query.userId ? { userId: query.userId } : {}),
+    };
     const [total, items] = await this.prisma.$transaction([
-      this.prisma.notification.count(),
+      this.prisma.notification.count({ where }),
       this.prisma.notification.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -310,6 +373,62 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       page,
       limit,
     );
+  }
+
+  async adminSummary(): Promise<{
+    pendingOutbox: number;
+    sentToday: number;
+    failedToday: number;
+    retrying: number;
+    inAppTotal: number;
+    pushDevicesActive: number;
+  }> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const [
+      pendingOutbox,
+      sentToday,
+      failedToday,
+      retrying,
+      inAppTotal,
+      pushDevicesActive,
+    ] = await Promise.all([
+      this.prisma.notificationOutbox.count({
+        where: {
+          status: { in: [OutboxStatus.PENDING, OutboxStatus.PROCESSING] },
+          processedAt: null,
+        },
+      }),
+      this.prisma.notificationOutbox.count({
+        where: { status: OutboxStatus.SENT, processedAt: { gte: startOfDay } },
+      }),
+      this.prisma.notificationOutbox.count({
+        where: {
+          status: OutboxStatus.FAILED,
+          attempts: { gte: this.maxAttempts },
+          createdAt: { gte: startOfDay },
+        },
+      }),
+      this.prisma.notificationOutbox.count({
+        where: {
+          status: OutboxStatus.FAILED,
+          processedAt: null,
+          attempts: { lt: this.maxAttempts },
+          availableAt: { gt: now },
+        },
+      }),
+      this.prisma.notification.count(),
+      this.prisma.deviceToken.count({ where: { active: true } }),
+    ]);
+    return {
+      pendingOutbox,
+      sentToday,
+      failedToday,
+      retrying,
+      inAppTotal,
+      pushDevicesActive,
+    };
   }
 
   async getAdminById(id: string): Promise<NotificationResponseDto> {
@@ -513,7 +632,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     const now = new Date();
     const pending = await this.prisma.notificationOutbox.findMany({
       where: {
-        status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED] },
+        status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED, OutboxStatus.PROCESSING] },
         processedAt: null,
         availableAt: { lte: now },
         attempts: { lt: this.maxAttempts },
@@ -524,17 +643,28 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
 
     let processed = 0;
     for (const item of pending) {
+      const leaseUntil = new Date(now.getTime() + 5 * 60 * 1000);
       const claimed = await this.prisma.notificationOutbox.updateMany({
         where: {
           id: item.id,
-          status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED] },
           processedAt: null,
+          OR: [
+            { status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED] } },
+            { status: OutboxStatus.PROCESSING, availableAt: { lte: now } },
+          ],
         },
-        data: { status: OutboxStatus.PROCESSING },
+        data: {
+          status: OutboxStatus.PROCESSING,
+          availableAt: leaseUntil,
+        },
       });
       if (claimed.count === 0) {
         continue;
       }
+
+      this.logger.log(
+        `notification.processing channel=outbox id=${item.id} type=${item.type}`,
+      );
 
       try {
         const payload = item.payload as {
@@ -570,6 +700,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
               trackingNumber: payload.trackingNumber,
               entityType: payload.entityType ?? item.aggregateType,
               entityId: payload.entityId ?? item.aggregateId,
+              deepLink: this.buildDeepLink(payload),
             },
           });
         } else if (item.type === 'CAMPAIGN_ANNOUNCE' && payload.campaignId) {
@@ -587,28 +718,59 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
             lastError: null,
           },
         });
+        this.logger.log(
+          `notification.sent channel=outbox id=${item.id} type=${item.type}`,
+        );
         processed += 1;
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown outbox error';
         const attempts = item.attempts + 1;
         const failed = attempts >= this.maxAttempts;
-        const backoffMs = Math.min(60_000 * attempts, 15 * 60_000);
+        const backoffMs = this.outboxBackoffMs(attempts);
         await this.prisma.notificationOutbox.update({
           where: { id: item.id },
           data: {
-            status: failed ? OutboxStatus.FAILED : OutboxStatus.PENDING,
+            status: failed ? OutboxStatus.FAILED : OutboxStatus.FAILED,
             attempts,
             lastError: message.slice(0, 500),
             availableAt: failed ? now : new Date(Date.now() + backoffMs),
+            processedAt: null,
           },
         });
         this.logger.warn(
-          `Outbox ${item.id} failed (attempt ${attempts}): ${message}`,
+          failed
+            ? `notification.failed channel=outbox id=${item.id} attempts=${attempts}`
+            : `notification.retrying channel=outbox id=${item.id} attempts=${attempts}`,
         );
       }
     }
     return processed;
+  }
+
+  private outboxBackoffMs(attempts: number): number {
+    const minutes = [1, 5, 15, 30, 60] as const;
+    const idx = Math.min(Math.max(attempts - 1, 0), minutes.length - 1);
+    return minutes[idx] * 60_000;
+  }
+
+  private buildDeepLink(payload: {
+    orderId?: string;
+    productId?: string;
+    productSlug?: string;
+    entityType?: NotificationEntityType;
+    entityId?: string;
+  }): string | undefined {
+    if (payload.orderId) {
+      return `/account/orders/${payload.orderId}`;
+    }
+    if (payload.productSlug) {
+      return `/products/${payload.productSlug}`;
+    }
+    if (payload.productId) {
+      return `/products/${payload.productId}`;
+    }
+    return undefined;
   }
 
   private async deliverPush(

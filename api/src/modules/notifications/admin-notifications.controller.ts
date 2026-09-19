@@ -29,6 +29,13 @@ import { NotificationsService } from './notifications.service';
 export class AdminNotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
+  @Get('summary')
+  @Permissions('notification.read')
+  @ApiOperation({ summary: 'In-app / push outbox summary' })
+  summary() {
+    return this.notificationsService.adminSummary();
+  }
+
   @Get()
   @Permissions('notification.read')
   @ApiOperation({ summary: 'Admin list notifications' })

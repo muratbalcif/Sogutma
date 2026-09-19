@@ -7,6 +7,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersModule } from '../orders/orders.module';
 import { AccountingController } from './accounting.controller';
 import { AccountingService } from './accounting.service';
+import { AdminEmailOutboxController } from './admin-email-outbox.controller';
 import { AdminPaymentsController } from './admin-payments.controller';
 import { BankAccountsService } from './bank-accounts.service';
 import { BankTransferService } from './bank-transfer.service';
@@ -30,6 +31,7 @@ import { DevelopmentPaymentProvider } from './providers/development.payment-prov
     PaymentsController,
     AdminPaymentsController,
     AccountingController,
+    AdminEmailOutboxController,
   ],
   providers: [
     DevelopmentPaymentProvider,

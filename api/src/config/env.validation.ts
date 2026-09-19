@@ -52,9 +52,13 @@ export const envValidationSchema = Joi.object({
     .min(1)
     .max(20)
     .default(4),
-  EMAIL_OUTBOX_MAX_ATTEMPTS: Joi.number().integer().min(1).max(30).default(8),
+  EMAIL_OUTBOX_MAX_ATTEMPTS: Joi.number().integer().min(1).max(30).default(5),
   RESEND_API_KEY: Joi.string().allow('').optional(),
   EMAIL_FROM: Joi.string().allow('').optional(),
+  RESEND_FROM_EMAIL: Joi.string().allow('').optional(),
+  RESEND_FROM_NAME: Joi.string().allow('').optional(),
+  RESEND_REPLY_TO: Joi.string().email().allow('').optional(),
+  EMAIL_DEV_MOCK: Joi.boolean().truthy('true').falsy('false').default(false),
   R2_ACCOUNT_ID: Joi.string().allow('').optional(),
   R2_ACCESS_KEY_ID: Joi.string().allow('').optional(),
   R2_SECRET_ACCESS_KEY: Joi.string().allow('').optional(),
@@ -110,6 +114,10 @@ export interface EnvironmentVariables {
   EMAIL_OUTBOX_MAX_ATTEMPTS?: number;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
+  RESEND_FROM_EMAIL?: string;
+  RESEND_FROM_NAME?: string;
+  RESEND_REPLY_TO?: string;
+  EMAIL_DEV_MOCK?: boolean;
   R2_ACCOUNT_ID?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;

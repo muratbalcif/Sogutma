@@ -190,9 +190,10 @@ export class BankTransferService {
       data: { orderId, transferId: created.id },
     });
     await this.emailOutbox.enqueue({
-      event: 'TransferNotificationCreated',
+      event: 'BANK_TRANSFER_PENDING',
       toEmail: order.user.email,
       subject: `Havale bildirimi alındı — ${order.orderNumber}`,
+      eventKey: `BANK_TRANSFER_PENDING:transfer:${created.id}:${order.user.email.toLowerCase()}`,
       payload: {
         orderId,
         orderNumber: order.orderNumber,
@@ -478,9 +479,10 @@ export class BankTransferService {
           approved.order.orderNumber,
         );
         await this.emailOutbox.enqueue({
-          event: 'OrderConfirmed',
+          event: 'ORDER_CONFIRMED',
           toEmail: approved.order.user.email,
           subject: `Siparişiniz onaylandı — ${approved.order.orderNumber}`,
+          eventKey: `ORDER_CONFIRMED:order:${approved.orderId}:${approved.order.user.email.toLowerCase()}`,
           payload: {
             orderId: approved.orderId,
             orderNumber: approved.order.orderNumber,
@@ -488,11 +490,14 @@ export class BankTransferService {
         });
       }
       await this.emailOutbox.enqueue({
-        event: 'TransferApproved',
+        event: fullyPaid
+          ? 'BANK_TRANSFER_APPROVED'
+          : 'PAYMENT_PARTIALLY_RECEIVED',
         toEmail: approved.order.user.email,
         subject: fullyPaid
           ? `Ödeme onaylandı — ${approved.order.orderNumber}`
           : `Kısmi ödeme onaylandı — ${approved.order.orderNumber}`,
+        eventKey: `BANK_TRANSFER_APPROVED:transfer:${approved.id}:${approved.order.user.email.toLowerCase()}`,
         payload: {
           orderId: approved.orderId,
           orderNumber: approved.order.orderNumber,
@@ -579,9 +584,10 @@ export class BankTransferService {
         data: { orderId: rejected.orderId, transferId: rejected.id },
       });
       await this.emailOutbox.enqueue({
-        event: 'TransferRejected',
+        event: 'BANK_TRANSFER_REJECTED',
         toEmail: rejected.order.user.email,
         subject: `Havale bildirimi reddedildi — ${rejected.order.orderNumber}`,
+        eventKey: `BANK_TRANSFER_REJECTED:transfer:${rejected.id}:${rejected.order.user.email.toLowerCase()}`,
         payload: {
           orderId: rejected.orderId,
           orderNumber: rejected.order.orderNumber,

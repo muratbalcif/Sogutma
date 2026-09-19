@@ -107,7 +107,7 @@ describe('PaymentExpirationService', () => {
     expect(orderStatusService.applyTransitionInTransaction).toHaveBeenCalled();
     expect(notificationsService.enqueueOrderStatus).toHaveBeenCalled();
     expect(emailOutbox.enqueueOrderEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ event: 'OrderCancelled' }),
+      expect.objectContaining({ event: 'ORDER_CANCELLED' }),
     );
   });
 });
