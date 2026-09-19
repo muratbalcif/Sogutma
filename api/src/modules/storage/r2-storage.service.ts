@@ -207,7 +207,17 @@ export class R2StorageService {
     this.assertSafeImageFilename(input.filename);
     this.assertUploadSize(input.contentLength);
     if (!this.client || !this.bucket || !this.publicUrl) {
-      throw new ServiceUnavailableException('Object storage is not configured');
+      const missing: string[] = [];
+      if (!this.client) {
+        missing.push(
+          'R2_ACCOUNT_ID/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY (or incomplete)',
+        );
+      }
+      if (!this.bucket) missing.push('R2_BUCKET');
+      if (!this.publicUrl) missing.push('R2_PUBLIC_URL');
+      throw new ServiceUnavailableException(
+        `Object storage is not configured (missing: ${missing.join(', ')})`,
+      );
     }
 
     const objectKey = this.buildObjectKey(

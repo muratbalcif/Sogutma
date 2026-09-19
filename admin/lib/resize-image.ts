@@ -1,18 +1,19 @@
-/** Client-side image downscale before R2 presign (3MB client target). */
+/** Client-side product image optimization before R2 presign (API limit 5 MB). */
 
-export const DEFAULT_MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
-/** Prefer crisp catalog photos; only shrink below this if still over budget. */
-export const DEFAULT_MAX_IMAGE_EDGE = 2048;
-export const DEFAULT_MIN_IMAGE_EDGE = 1280;
+export const API_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const DEFAULT_MAX_IMAGE_EDGE = 1920;
+export const WEBP_QUALITY_STEPS = [0.85, 0.8, 0.75, 0.7, 0.65] as const;
 
-export type ResizeImageOptions = {
-  maxBytes?: number;
-  maxWidth?: number;
-  maxHeight?: number;
-  minEdge?: number;
-  /** Output MIME; JPEG is preferred for photos (smaller). */
-  outputType?: "image/jpeg" | "image/webp";
-  initialQuality?: number;
+/** @deprecated use API_MAX_UPLOAD_BYTES — kept for callers */
+export const DEFAULT_MAX_UPLOAD_BYTES = API_MAX_UPLOAD_BYTES;
+
+export type OptimizeImageResult = {
+  file: File;
+  originalBytes: number;
+  optimizedBytes: number;
+  wasOptimized: boolean;
+  width: number;
+  height: number;
 };
 
 export function computeTargetSize(
@@ -31,60 +32,78 @@ export function computeTargetSize(
   };
 }
 
-/** Scale both axes by the same factor; keep the longer edge >= minEdge when possible. */
-export function scaleDownKeepingAspect(
-  width: number,
-  height: number,
-  factor: number,
-  minEdge: number,
-): { width: number; height: number } {
-  const nextW = Math.max(1, Math.round(width * factor));
-  const nextH = Math.max(1, Math.round(height * factor));
-  const longEdge = Math.max(nextW, nextH);
-  if (longEdge >= minEdge || longEdge === Math.max(width, height)) {
-    return { width: nextW, height: nextH };
-  }
-  // Would drop below minEdge — clamp long edge to minEdge instead.
-  const boost = minEdge / longEdge;
-  return {
-    width: Math.max(1, Math.round(nextW * boost)),
-    height: Math.max(1, Math.round(nextH * boost)),
-  };
-}
-
-function extensionForMime(mime: string): string {
-  if (mime === "image/webp") return "webp";
-  if (mime === "image/png") return "png";
-  return "jpg";
-}
-
-function replaceExtension(filename: string, ext: string): string {
+export function toWebpFilename(filename: string): string {
   const base = filename.replace(/\.[^.]+$/, "") || "image";
-  return `${base}.${ext}`;
+  return `${base}.webp`;
 }
 
-async function loadImage(file: File): Promise<HTMLImageElement> {
-  const url = URL.createObjectURL(file);
+export function formatByteSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function formatSizeReduction(
+  originalBytes: number,
+  optimizedBytes: number,
+): string {
+  return `${formatByteSize(originalBytes)} → ${formatByteSize(optimizedBytes)}`;
+}
+
+/** Pure decision: skip canvas work when already fit for upload. */
+export function shouldSkipOptimization(input: {
+  size: number;
+  type: string;
+  width: number;
+  height: number;
+  maxBytes?: number;
+  maxEdge?: number;
+}): boolean {
+  const maxBytes = input.maxBytes ?? API_MAX_UPLOAD_BYTES;
+  const maxEdge = input.maxEdge ?? DEFAULT_MAX_IMAGE_EDGE;
+  const allowed = ["image/jpeg", "image/png", "image/webp"];
+  if (!allowed.includes(input.type)) return false;
+  if (input.size > maxBytes) return false;
+  if (input.width > maxEdge || input.height > maxEdge) return false;
+  return true;
+}
+
+async function decodeBitmap(
+  file: File,
+): Promise<{ bitmap: ImageBitmap; width: number; height: number }> {
   try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("Görsel okunamadı"));
-      img.src = url;
-    });
-    return image;
-  } finally {
-    URL.revokeObjectURL(url);
+    const bitmap = await createImageBitmap(file, {
+      // Honor EXIF orientation when the browser supports it.
+      imageOrientation: "from-image",
+    } as ImageBitmapOptions);
+    return {
+      bitmap,
+      width: bitmap.width,
+      height: bitmap.height,
+    };
+  } catch {
+    // Fallback without orientation hint (older browsers).
+    const bitmap = await createImageBitmap(file);
+    return { bitmap, width: bitmap.width, height: bitmap.height };
   }
 }
 
-async function canvasToBlob(
-  canvas: HTMLCanvasElement,
-  type: string,
+async function canvasToWebpBlob(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
   quality: number,
 ): Promise<Blob> {
+  if (canvas instanceof OffscreenCanvas) {
+    const blob = await canvas.convertToBlob({
+      type: "image/webp",
+      quality,
+    });
+    if (!blob || blob.type !== "image/webp") {
+      throw new Error("WebP dönüşümü desteklenmiyor");
+    }
+    return blob;
+  }
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob((b) => resolve(b), type, quality),
+    canvas.toBlob((b) => resolve(b), "image/webp", quality),
   );
   if (!blob) {
     throw new Error("Görsel sıkıştırılamadı");
@@ -92,20 +111,46 @@ async function canvasToBlob(
   return blob;
 }
 
+function drawBitmap(
+  bitmap: ImageBitmap,
+  width: number,
+  height: number,
+): HTMLCanvasElement | OffscreenCanvas {
+  if (typeof OffscreenCanvas !== "undefined") {
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas desteklenmiyor");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    return canvas;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas desteklenmiyor");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  return canvas;
+}
+
 /**
- * Downscale + recompress so the file fits under maxBytes.
- * Prefers keeping resolution (≥ minEdge) and lowering JPEG quality first.
+ * Optimize for R2 upload: max 1920², WebP, quality ladder down to 0.65.
+ * Skips work when already WebP, ≤5 MB, and within max edge.
  */
-export async function resizeImageForUpload(
+export async function optimizeImageForUpload(
   file: File,
-  options: ResizeImageOptions = {},
-): Promise<File> {
-  const maxBytes = options.maxBytes ?? DEFAULT_MAX_UPLOAD_BYTES;
+  options: {
+    maxBytes?: number;
+    maxWidth?: number;
+    maxHeight?: number;
+  } = {},
+): Promise<OptimizeImageResult> {
+  const maxBytes = options.maxBytes ?? API_MAX_UPLOAD_BYTES;
   const maxWidth = options.maxWidth ?? DEFAULT_MAX_IMAGE_EDGE;
   const maxHeight = options.maxHeight ?? DEFAULT_MAX_IMAGE_EDGE;
-  const minEdge = options.minEdge ?? DEFAULT_MIN_IMAGE_EDGE;
-  const outputType = options.outputType ?? "image/jpeg";
-  let quality = options.initialQuality ?? 0.9;
 
   const allowed = ["image/jpeg", "image/png", "image/webp"];
   const inputType = file.type || "image/jpeg";
@@ -113,91 +158,73 @@ export async function resizeImageForUpload(
     throw new Error("Only JPEG, PNG, and WEBP images are allowed");
   }
 
-  const image = await loadImage(file);
-  const srcW = image.naturalWidth || image.width;
-  const srcH = image.naturalHeight || image.height;
-  let { width, height } = computeTargetSize(srcW, srcH, maxWidth, maxHeight);
+  const { bitmap, width: srcW, height: srcH } = await decodeBitmap(file);
+  try {
+    const target = computeTargetSize(srcW, srcH, maxWidth, maxHeight);
 
-  const needsResize =
-    file.size > maxBytes || width < srcW || height < srcH;
-
-  if (!needsResize) {
-    return file;
-  }
-
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Canvas desteklenmiyor");
-  }
-
-  const draw = async (): Promise<Blob> => {
-    canvas.width = width;
-    canvas.height = height;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, width, height);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(image, 0, 0, width, height);
-    return canvasToBlob(canvas, outputType, quality);
-  };
-
-  let blob = await draw();
-  // 1) Prefer quality steps while keeping current resolution.
-  while (blob.size > maxBytes && quality > 0.72) {
-    quality = Math.max(0.72, Math.round((quality - 0.06) * 100) / 100);
-    blob = await draw();
-  }
-
-  // 2) Gentle resolution steps; do not go below minEdge until necessary.
-  let guard = 0;
-  while (blob.size > maxBytes && guard < 6) {
-    guard += 1;
-    const longEdge = Math.max(width, height);
-    if (longEdge <= minEdge) break;
-    const next = scaleDownKeepingAspect(width, height, 0.9, minEdge);
-    if (next.width === width && next.height === height) break;
-    width = next.width;
-    height = next.height;
-    quality = Math.min(0.88, quality + 0.04);
-    blob = await draw();
-    while (blob.size > maxBytes && quality > 0.7) {
-      quality = Math.max(0.7, Math.round((quality - 0.05) * 100) / 100);
-      blob = await draw();
+    if (
+      shouldSkipOptimization({
+        size: file.size,
+        type: inputType,
+        width: srcW,
+        height: srcH,
+        maxBytes,
+        maxEdge: Math.max(maxWidth, maxHeight),
+      })
+    ) {
+      return {
+        file,
+        originalBytes: file.size,
+        optimizedBytes: file.size,
+        wasOptimized: false,
+        width: srcW,
+        height: srcH,
+      };
     }
-  }
 
-  // 3) Last resort: allow down to 1024 long edge.
-  const absoluteMin = 1024;
-  guard = 0;
-  while (blob.size > maxBytes && guard < 8) {
-    guard += 1;
-    const longEdge = Math.max(width, height);
-    if (longEdge <= absoluteMin) {
-      if (quality <= 0.62) break;
-      quality = Math.max(0.62, quality - 0.05);
-      blob = await draw();
-      continue;
+    const canvas = drawBitmap(bitmap, target.width, target.height);
+    let blob: Blob | null = null;
+    let usedQuality: number = WEBP_QUALITY_STEPS[0];
+
+    for (const quality of WEBP_QUALITY_STEPS) {
+      usedQuality = quality;
+      blob = await canvasToWebpBlob(canvas, quality);
+      if (blob.size <= maxBytes) break;
     }
-    const next = scaleDownKeepingAspect(width, height, 0.88, absoluteMin);
-    width = next.width;
-    height = next.height;
-    quality = Math.min(0.85, Math.max(quality, 0.75));
-    blob = await draw();
-  }
 
-  if (blob.size > maxBytes) {
-    throw new Error(
-      `Görsel ${Math.round(maxBytes / (1024 * 1024))} MB altına indirilemedi (çözünürlük korunarak). Daha sade bir görsel deneyin.`,
-    );
-  }
+    if (!blob || blob.size > maxBytes) {
+      throw new Error(
+        `Görsel ${formatByteSize(maxBytes)} altına indirilemedi (WebP q≥${usedQuality}). Daha sade bir görsel seçin.`,
+      );
+    }
 
-  return new File(
-    [blob],
-    replaceExtension(file.name, extensionForMime(outputType)),
-    {
-      type: outputType,
+    const out = new File([blob], toWebpFilename(file.name), {
+      type: "image/webp",
       lastModified: Date.now(),
-    },
-  );
+    });
+
+    return {
+      file: out,
+      originalBytes: file.size,
+      optimizedBytes: out.size,
+      wasOptimized: true,
+      width: target.width,
+      height: target.height,
+    };
+  } finally {
+    bitmap.close();
+  }
+}
+
+/** @deprecated prefer optimizeImageForUpload */
+export async function resizeImageForUpload(
+  file: File,
+  options: {
+    maxBytes?: number;
+    maxWidth?: number;
+    maxHeight?: number;
+  } = {},
+): Promise<File> {
+  const result = await optimizeImageForUpload(file, options);
+  return result.file;
 }

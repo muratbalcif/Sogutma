@@ -191,12 +191,28 @@ export default function ProductDetailPage() {
     },
   });
 
+  const [uploadPhase, setUploadPhase] = useState<
+    "idle" | "optimizing" | "uploading"
+  >("idle");
+  const [uploadSizeNote, setUploadSizeNote] = useState<string | null>(null);
+
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
+      setUploadPhase("optimizing");
+      setUploadSizeNote(null);
       const { uploadResizedImage } = await import("@/lib/r2-image-upload");
+      const { formatSizeReduction } = await import("@/lib/resize-image");
       const uploaded = await uploadResizedImage({
         file,
         folder: `products/${id}`,
+        onPhase: (phase, info) => {
+          setUploadPhase(phase);
+          if (info?.wasOptimized) {
+            setUploadSizeNote(
+              formatSizeReduction(info.originalBytes, info.optimizedBytes),
+            );
+          }
+        },
       });
       return catalogService.registerImage(id, {
         url: uploaded.publicUrl,
@@ -206,7 +222,11 @@ export default function ProductDetailPage() {
       });
     },
     onSuccess: () => {
+      setUploadPhase("idle");
       void queryClient.invalidateQueries({ queryKey: ["admin-product", id] });
+    },
+    onError: () => {
+      setUploadPhase("idle");
     },
   });
 
@@ -423,19 +443,30 @@ export default function ProductDetailPage() {
                         }}
                       />
                       <p className="text-xs text-slate-500">
-                        Büyük görseller otomatik sıkıştırılır (hedef ≤3&nbsp;MB,
-                        tercihen ≥1280px kenar).
+                        Büyük görseller otomatik optimize edilir (max 1920px,
+                        WebP, ≤5&nbsp;MB).
                       </p>
                     </div>
                   )}
-                  {uploadMutation.isPending && (
+                  {uploadPhase === "optimizing" && (
                     <p className="text-sm text-slate-600">
-                      Görsel hazırlanıyor / yükleniyor…
+                      Görsel optimize ediliyor…
+                    </p>
+                  )}
+                  {uploadPhase === "uploading" && (
+                    <p className="text-sm text-slate-600">
+                      Yükleniyor…
+                      {uploadSizeNote ? ` (${uploadSizeNote})` : ""}
                     </p>
                   )}
                   {uploadMutation.isError && (
                     <p className="text-sm text-red-700">
                       {(uploadMutation.error as Error).message}
+                    </p>
+                  )}
+                  {uploadSizeNote && uploadMutation.isSuccess && (
+                    <p className="text-xs text-emerald-700">
+                      Optimize edildi: {uploadSizeNote}
                     </p>
                   )}
                   <div className="grid gap-3 sm:grid-cols-3">
