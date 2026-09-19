@@ -1,6 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { AdminRoleCode } from '@prisma/client';
 import { AdminService } from './admin.service';
+import { ADMIN_PERMISSION_CODES } from './constants/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('AdminService', () => {
@@ -22,6 +23,49 @@ describe('AdminService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  describe('getAccessForUser', () => {
+    it('returns full permission catalog for SUPER_ADMIN', async () => {
+      prisma.adminUser.findUnique.mockResolvedValue({
+        roles: [
+          {
+            role: {
+              code: AdminRoleCode.SUPER_ADMIN,
+              permissions: [],
+            },
+          },
+        ],
+      });
+
+      const access = await service.getAccessForUser('user-1');
+
+      expect(access.roles).toEqual([AdminRoleCode.SUPER_ADMIN]);
+      expect(access.permissions).toEqual([...ADMIN_PERMISSION_CODES]);
+      expect(access.permissions).toContain('product.read');
+      expect(access.permissions).toContain('order.read');
+    });
+
+    it('returns only linked permissions for non-super roles', async () => {
+      prisma.adminUser.findUnique.mockResolvedValue({
+        roles: [
+          {
+            role: {
+              code: AdminRoleCode.PRODUCT_MANAGER,
+              permissions: [
+                { permission: { code: 'product.read' } },
+                { permission: { code: 'product.update' } },
+              ],
+            },
+          },
+        ],
+      });
+
+      const access = await service.getAccessForUser('user-2');
+
+      expect(access.roles).toEqual([AdminRoleCode.PRODUCT_MANAGER]);
+      expect(access.permissions).toEqual(['product.read', 'product.update']);
+    });
   });
 
   describe('removeRoleFromUser', () => {

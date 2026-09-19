@@ -40,6 +40,16 @@ export class AdminService {
     }
 
     const roles = adminUser.roles.map((item) => item.role.code);
+
+    // SUPER_ADMIN always receives the full permission catalog so admin UI
+    // menus work even when admin_role_permissions rows were never seeded.
+    if (roles.includes(AdminRoleCode.SUPER_ADMIN)) {
+      return {
+        roles,
+        permissions: [...ADMIN_PERMISSION_CODES],
+      };
+    }
+
     const permissions = [
       ...new Set(
         adminUser.roles.flatMap((item) =>
