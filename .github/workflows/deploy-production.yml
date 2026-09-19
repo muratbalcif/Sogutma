@@ -50,9 +50,19 @@ jobs:
           set -Eeuo pipefail
           test -n "${PRODUCTION_HOST}"
           test -n "${PRODUCTION_USER}"
-          ssh -o IdentitiesOnly=yes -o BatchMode=yes \
+          test -n "${SSH_AUTH_SOCK}"
+          # Agent-only auth (same as Test VPS Connection). Do not write private key to disk.
+          ssh \
+            -o BatchMode=yes \
+            -o PreferredAuthentications=publickey \
+            -o PubkeyAuthentication=yes \
+            -o PasswordAuthentication=no \
+            -o KbdInteractiveAuthentication=no \
+            -o ChallengeResponseAuthentication=no \
+            -o StrictHostKeyChecking=yes \
+            -o IdentityAgent="${SSH_AUTH_SOCK}" \
             "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
-            'echo "Connected to production VPS ($(hostname))"'
+            'echo "Connected to production VPS ($(hostname))" && echo SSH_CONNECTION_OK'
 
       - name: Deploy to VPS
         env:
@@ -62,9 +72,21 @@ jobs:
           set -Eeuo pipefail
           test -n "${PRODUCTION_HOST}"
           test -n "${PRODUCTION_USER}"
+          test -n "${SSH_AUTH_SOCK}"
           # .env.production stays on the VPS only. Never echo secrets / keys.
           # Pull first so this commit's scripts/deploy-production.sh runs, then --post-pull.
-          ssh -o IdentitiesOnly=yes -o BatchMode=yes \
+          # VPS steps (via scripts/deploy-production.sh --post-pull):
+          #   compose config validate → postgres/redis up → prisma migrate deploy
+          #   → docker compose up -d --build → container + loopback health (3100/3101/3102)
+          ssh \
+            -o BatchMode=yes \
+            -o PreferredAuthentications=publickey \
+            -o PubkeyAuthentication=yes \
+            -o PasswordAuthentication=no \
+            -o KbdInteractiveAuthentication=no \
+            -o ChallengeResponseAuthentication=no \
+            -o StrictHostKeyChecking=yes \
+            -o IdentityAgent="${SSH_AUTH_SOCK}" \
             "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
             'set -Eeuo pipefail
              cd /opt/furkansogutma
