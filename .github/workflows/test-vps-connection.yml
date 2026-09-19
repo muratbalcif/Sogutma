@@ -1,0 +1,92 @@
+name: Test VPS Connection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-vps-connection:
+    name: Test VPS Connection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+
+      - name: Add VPS to known_hosts
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${PRODUCTION_HOST}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -H "$PRODUCTION_HOST" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Run VPS connection checks
+        id: checks
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${PRODUCTION_HOST}"
+          test -n "${PRODUCTION_USER}"
+
+          # Capture remote facts only (never cat .env / secrets / keys).
+          REMOTE_OUT="$(ssh -o IdentitiesOnly=yes \
+            "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
+            'set -Eeuo pipefail
+             echo "HOSTNAME=$(hostname)"
+             echo "WHOAMI=$(whoami)"
+             test -d /opt/furkansogutma
+             cd /opt/furkansogutma
+             git rev-parse --is-inside-work-tree >/dev/null
+             echo "BRANCH=$(git branch --show-current)"
+             echo "COMMIT=$(git rev-parse HEAD)"
+             echo "ORIGIN=$(git remote get-url origin)"
+             echo "DOCKER=$(docker version --format "{{.Server.Version}}")"
+             test -f docker-compose.production.yml
+             test -f .env.production
+             docker compose --env-file .env.production -f docker-compose.production.yml config -q
+             echo "COMPOSE_CONFIG=OK"')"
+
+          echo "$REMOTE_OUT"
+
+          BRANCH="$(printf '%s\n' "$REMOTE_OUT" | sed -n 's/^BRANCH=//p')"
+          COMMIT="$(printf '%s\n' "$REMOTE_OUT" | sed -n 's/^COMMIT=//p')"
+          DOCKER="$(printf '%s\n' "$REMOTE_OUT" | sed -n 's/^DOCKER=//p')"
+          COMPOSE="$(printf '%s\n' "$REMOTE_OUT" | sed -n 's/^COMPOSE_CONFIG=//p')"
+
+          test -n "$BRANCH"
+          test -n "$COMMIT"
+          test -n "$DOCKER"
+          test "$COMPOSE" = "OK"
+
+          {
+            echo "branch=$BRANCH"
+            echo "commit=$COMMIT"
+            echo "docker=$DOCKER"
+            echo "compose=$COMPOSE"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "VPS CONNECTION TEST: SUCCESS"
+
+      - name: Summary
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          set -Eeuo pipefail
+          echo "VPS_HOST=${PRODUCTION_HOST}"
+          echo "VPS_USER=${PRODUCTION_USER}"
+          echo "PROJECT_PATH=/opt/furkansogutma"
+          echo "CURRENT_BRANCH=${{ steps.checks.outputs.branch }}"
+          echo "CURRENT_COMMIT=${{ steps.checks.outputs.commit }}"
+          echo "DOCKER_VERSION=${{ steps.checks.outputs.docker }}"
+          echo "COMPOSE_CONFIG: ${{ steps.checks.outputs.compose }}"

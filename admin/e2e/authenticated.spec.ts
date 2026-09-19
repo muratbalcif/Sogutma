@@ -64,12 +64,12 @@ test.describe("Admin authenticated flows", () => {
       page.getByRole("main").getByRole("heading", { name: "Siparişler" }),
     ).toBeVisible();
 
-    await page.getByRole("link", { name: "Havale Bildirimleri" }).click();
+    await page.getByRole("link", { name: "Ödeme Doğrulama" }).click();
     await expect(page).toHaveURL(/bank-transfers/);
     await expect(
       page
         .getByRole("main")
-        .getByRole("heading", { name: "Havale Bildirimleri" }),
+        .getByRole("heading", { name: "Ödeme Doğrulama" }),
     ).toBeVisible();
 
     await page.getByRole("link", { name: "Cari Hesap" }).click();
