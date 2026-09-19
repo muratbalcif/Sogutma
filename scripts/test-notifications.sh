@@ -64,13 +64,20 @@ compose_exec_api() {
   "${COMPOSE[@]}" exec -T "${API_SERVICE}" "$@"
 }
 
+# Run a node program from stdin inside the api container (node - reads script).
+# Captures exit code correctly; does not treat stderr alone as success.
+compose_exec_api_node() {
+  # shellcheck disable=SC2094
+  compose_exec_api node - 
+}
+
 echo "== Notification smoke (root=${ROOT}) =="
 
 # ---------------------------------------------------------------------------
 # 1) API health — inside the production api container (127.0.0.1:3000 there).
-#    Host loopback for this stack is 127.0.0.1:3100; do not probe :3000 on host.
 # ---------------------------------------------------------------------------
 echo "-- API health --"
+set +e
 if api_running \
   && ( compose_exec_api wget -qO- "http://127.0.0.1:3000/api/v1/health/live" >/dev/null 2>&1 \
     || compose_exec_api wget -qO- "http://127.0.0.1:3000/api/v1/health" >/dev/null 2>&1 ); then
@@ -82,11 +89,11 @@ elif curl -fsS --max-time 15 "${PUBLIC_HEALTH_URL}" >/dev/null 2>&1 \
 else
   bad "API health"
 fi
+set -e
 
 # ---------------------------------------------------------------------------
 # 2) Jest unit tests — production image is --omit=dev (no jest).
-#    Run a one-off container from Dockerfile `build` stage (has jest + sources).
-#    NODE_ENV=test; mocked unit tests; no production DB writes.
+#    One-off container from Dockerfile `build` stage. No production DB writes.
 # ---------------------------------------------------------------------------
 echo "-- Jest notification tests --"
 JEST_ARGS=(
@@ -101,94 +108,157 @@ if [[ "${SMOKE_REBUILD:-}" != "1" ]] && docker image inspect "${SMOKE_BUILD_IMAG
   need_build=0
 fi
 
+set +e
 if [[ "${need_build}" -eq 1 ]]; then
   echo "Building smoke image ${SMOKE_BUILD_IMAGE} (Dockerfile target=build)…"
-  if ! docker build -f "${ROOT}/api/Dockerfile" --target build -t "${SMOKE_BUILD_IMAGE}" "${ROOT}" >/tmp/furkansogutma-smoke-build.log 2>&1; then
+  docker build -f "${ROOT}/api/Dockerfile" --target build -t "${SMOKE_BUILD_IMAGE}" "${ROOT}" >/tmp/furkansogutma-smoke-build.log 2>&1
+  build_rc=$?
+  if [[ "${build_rc}" -ne 0 ]]; then
     bad "Jest notification tests (smoke image build failed — see /tmp/furkansogutma-smoke-build.log)"
     need_build=-1
   fi
 fi
 
 if [[ "${need_build}" -ge 0 ]]; then
-  if docker run --rm \
+  docker run --rm \
     -e NODE_ENV=test \
     -e CI=1 \
     -w /app/api \
     "${SMOKE_BUILD_IMAGE}" \
-    npm test -- "${JEST_ARGS[@]}"; then
+    npm test -- "${JEST_ARGS[@]}"
+  jest_rc=$?
+  if [[ "${jest_rc}" -eq 0 ]]; then
     ok "Jest notification tests"
   else
     bad "Jest notification tests"
   fi
 fi
+set -e
 
 # ---------------------------------------------------------------------------
-# 3) Template XSS — compiled templates in api runtime (compose exec, or image)
+# 3) Template XSS — ONLY against the running production api container.
+#    No fallback to a different image (that caused false PASS).
+#    Uses real exports from email-templates (buildTransactionalEmail or
+#    renderOrderEmailHtml). Requires exit code 0 only when checks pass.
 # ---------------------------------------------------------------------------
 echo "-- Template XSS --"
-xss_ok=0
-if api_running; then
-  if compose_exec_api node <<'NODE'
-const { buildTransactionalEmail } = require('./dist/modules/payments/email-templates');
-const built = buildTransactionalEmail('ORDER_CREATED', {
-  customerName: '<script>alert(1)</script>',
-  orderNumber: 'FS-SMOKE-1',
-  siteName: 'FurkanSoğutma',
-  supportEmail: 'info@example.com',
-  siteUrl: 'https://example.com',
-});
-if (built.html.includes('<script>alert(1)</script>')) process.exit(1);
-if (!built.html.includes('&lt;script&gt;')) process.exit(1);
-if (!built.text.includes('FS-SMOKE-1')) process.exit(1);
+set +e
+xss_rc=1
+if ! api_running; then
+  printf 'template XSS: api container is not running\n' >&2
+  xss_rc=1
+else
+  compose_exec_api_node <<'NODE'
+const path = './dist/modules/payments/email-templates';
+let templates;
+try {
+  templates = require(path);
+} catch (err) {
+  console.error('require failed:', err && err.message ? err.message : err);
+  process.exit(1);
+}
+
+const buildTransactionalEmail =
+  typeof templates.buildTransactionalEmail === 'function'
+    ? templates.buildTransactionalEmail
+    : null;
+const renderOrderEmailHtml =
+  typeof templates.renderOrderEmailHtml === 'function'
+    ? templates.renderOrderEmailHtml
+    : null;
+
+const evil = '<script>alert(1)</script>';
+let html = '';
+let text = '';
+
+if (buildTransactionalEmail) {
+  const built = buildTransactionalEmail('ORDER_CREATED', {
+    customerName: evil,
+    orderNumber: 'FS-SMOKE-1',
+    siteName: 'FurkanSoğutma',
+    supportEmail: 'info@example.com',
+    siteUrl: 'https://example.com',
+  });
+  if (!built || typeof built.html !== 'string') {
+    console.error('buildTransactionalEmail returned invalid result');
+    process.exit(1);
+  }
+  html = built.html;
+  text = typeof built.text === 'string' ? built.text : '';
+} else if (renderOrderEmailHtml) {
+  html = renderOrderEmailHtml({
+    customerName: evil,
+    orderNumber: 'FS-SMOKE-1',
+    status: 'PENDING',
+    supportEmail: 'info@example.com',
+    websiteUrl: 'https://example.com',
+  });
+  if (typeof html !== 'string') {
+    console.error('renderOrderEmailHtml returned invalid result');
+    process.exit(1);
+  }
+} else {
+  console.error(
+    'No usable template export (need buildTransactionalEmail or renderOrderEmailHtml). keys=' +
+      Object.keys(templates || {}).join(','),
+  );
+  process.exit(1);
+}
+
+if (html.includes(evil)) {
+  console.error('raw user HTML was rendered (XSS)');
+  process.exit(1);
+}
+if (!html.includes('&lt;script&gt;')) {
+  console.error('expected escaped script entities in HTML');
+  process.exit(1);
+}
+if (text && !text.includes('FS-SMOKE-1') && !html.includes('FS-SMOKE-1')) {
+  console.error('order number missing from output');
+  process.exit(1);
+}
 process.exit(0);
 NODE
-  then
-    xss_ok=1
-  fi
+  xss_rc=$?
 fi
 
-if [[ "${xss_ok}" -eq 0 ]] && docker image inspect furkansogutma-api:latest >/dev/null 2>&1; then
-  if docker run --rm --entrypoint "" -w /app/api furkansogutma-api:latest node <<'NODE'
-const { buildTransactionalEmail } = require('./dist/modules/payments/email-templates');
-const built = buildTransactionalEmail('ORDER_CREATED', {
-  customerName: '<script>alert(1)</script>',
-  orderNumber: 'FS-SMOKE-1',
-  siteName: 'FurkanSoğutma',
-  supportEmail: 'info@example.com',
-  siteUrl: 'https://example.com',
-});
-if (built.html.includes('<script>alert(1)</script>')) process.exit(1);
-if (!built.html.includes('&lt;script&gt;')) process.exit(1);
-if (!built.text.includes('FS-SMOKE-1')) process.exit(1);
-process.exit(0);
-NODE
-  then
-    xss_ok=1
-  fi
-fi
-
-if [[ "${xss_ok}" -eq 1 ]]; then
+if [[ "${xss_rc}" -eq 0 ]]; then
   ok "template XSS"
 else
   bad "template XSS"
 fi
+set -e
 
 # ---------------------------------------------------------------------------
-# 4) Optional real Resend — API container env only (RESEND_API_KEY never on host)
+# 4) Optional real Resend — API container env only (never read host RESEND_API_KEY)
 # ---------------------------------------------------------------------------
 if [[ "${RESEND_SMOKE:-}" == "1" ]]; then
   echo "-- Resend smoke --"
+  set +e
   if [[ -z "${RESEND_TO:-}" ]]; then
     bad "Resend smoke (RESEND_TO is required)"
   elif ! api_running; then
     bad "Resend smoke (api container not running)"
   else
-    # Pass only RESEND_TO into the container; keys already come from compose env_file.
-    if "${COMPOSE[@]}" exec -T \
-      -e "RESEND_TO=${RESEND_TO}" \
-      "${API_SERVICE}" node <<'NODE'
+    # Presence only — never print secret values
+    compose_exec_api node -e '
+      const flag = (n) =>
+        process.env[n] && String(process.env[n]).trim() ? "SET" : "MISSING";
+      console.log("RESEND_API_KEY:", flag("RESEND_API_KEY"));
+      console.log("RESEND_FROM_EMAIL:", flag("RESEND_FROM_EMAIL"));
+      console.log(
+        "EMAIL_DEV_MOCK:",
+        String(process.env.EMAIL_DEV_MOCK || "").toLowerCase() === "true"
+          ? "true"
+          : "false",
+      );
+    '
+    # Inject only RESEND_TO via env(1) so the container's existing Resend
+    # secrets are preserved (avoid relying on docker exec -e quirks).
+    # shellcheck disable=SC2086
+    "${COMPOSE[@]}" exec -T "${API_SERVICE}" \
+      env "RESEND_TO=${RESEND_TO}" node - <<'NODE'
 require('reflect-metadata');
-const { EmailOutboxService } = require('./dist/modules/payments/email-outbox.service');
 
 const to = (process.env.RESEND_TO || '').trim();
 if (!to) {
@@ -197,7 +267,28 @@ if (!to) {
 }
 
 if (String(process.env.EMAIL_DEV_MOCK || '').toLowerCase() === 'true') {
-  console.error('EMAIL_DEV_MOCK is true — refusing real Resend smoke in this environment');
+  console.error('EMAIL_DEV_MOCK is true — refusing real Resend smoke');
+  process.exit(1);
+}
+
+const flag = (n) =>
+  process.env[n] && String(process.env[n]).trim() ? 'SET' : 'MISSING';
+if (flag('RESEND_API_KEY') === 'MISSING') {
+  console.error('RESEND_API_KEY: MISSING');
+  process.exit(1);
+}
+const fromOk =
+  flag('RESEND_FROM_EMAIL') === 'SET' || flag('EMAIL_FROM') === 'SET';
+if (!fromOk) {
+  console.error('RESEND_FROM_EMAIL: MISSING (and EMAIL_FROM unset)');
+  process.exit(1);
+}
+
+let EmailOutboxService;
+try {
+  ({ EmailOutboxService } = require('./dist/modules/payments/email-outbox.service'));
+} catch (err) {
+  console.error('EmailOutboxService require failed');
   process.exit(1);
 }
 
@@ -207,9 +298,11 @@ const config = {
       return String(process.env.EMAIL_DEV_MOCK || '').toLowerCase() === 'true';
     }
     if (key === 'EMAIL_OUTBOX_MAX_ATTEMPTS') {
-      return Number(process.env.EMAIL_OUTBOX_MAX_ATTEMPTS || 5);
+      const n = Number(process.env.EMAIL_OUTBOX_MAX_ATTEMPTS || 5);
+      return Number.isFinite(n) ? n : 5;
     }
-    return process.env[key];
+    const v = process.env[key];
+    return v === undefined ? undefined : v;
   },
 };
 
@@ -230,9 +323,13 @@ email
   })
   .then((result) => {
     if (!result || !result.ok) {
-      // Do not print provider error bodies (may echo request metadata).
       console.error('sendEmail failed');
       process.exit(1);
+    }
+    if (result.providerMessageId) {
+      console.log('providerMessageId: SET');
+    } else {
+      console.log('providerMessageId: MISSING');
     }
     process.exit(0);
   })
@@ -241,12 +338,14 @@ email
     process.exit(1);
   });
 NODE
-    then
+    resend_rc=$?
+    if [[ "${resend_rc}" -eq 0 ]]; then
       ok "Resend smoke"
     else
       bad "Resend smoke"
     fi
   fi
+  set -e
 else
   ok "Resend smoke skipped (set RESEND_SMOKE=1 RESEND_TO=… to run)"
 fi
