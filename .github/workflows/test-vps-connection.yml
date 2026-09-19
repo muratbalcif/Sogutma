@@ -1,5 +1,7 @@
 name: Test VPS Connection
 
+# Temporary SSH diagnosis: verify PRODUCTION_SSH_PRIVATE_KEY fingerprint + publickey auth.
+# Never logs private key material.
 on:
   workflow_dispatch:
 
@@ -17,6 +19,28 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
 
+      - name: Diagnose agent fingerprint
+        id: fingerprint
+        run: |
+          set -Eeuo pipefail
+          EXPECTED='SHA256:QCtekeNIoUtrbjUHnjwnbhDzB/LbvIcHD+2W8pxJHs4'
+
+          echo "Agent keys (ssh-add -l — fingerprints only, never private key material):"
+          ssh-add -l
+
+          AGENT_FPS="$(ssh-add -l -E sha256 2>/dev/null || ssh-add -l)"
+          echo "EXPECTED_FINGERPRINT=${EXPECTED}"
+
+          if printf '%s\n' "$AGENT_FPS" | grep -Fq "$EXPECTED"; then
+            echo "FINGERPRINT_MATCH=YES"
+            echo "match=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "FINGERPRINT_MATCH=NO"
+            echo "match=no" >> "$GITHUB_OUTPUT"
+            echo "::error::PRODUCTION_SSH_PRIVATE_KEY fingerprint does not match expected ${EXPECTED}."
+            exit 1
+          fi
+
       - name: Add VPS to known_hosts
         env:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
@@ -25,11 +49,11 @@ jobs:
           test -n "${PRODUCTION_HOST}"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
+          # Keep host key verification enabled.
           ssh-keyscan -H "$PRODUCTION_HOST" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Run VPS connection checks
-        id: checks
+      - name: SSH publickey connection test
         env:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
@@ -37,47 +61,30 @@ jobs:
           set -Eeuo pipefail
           test -n "${PRODUCTION_HOST}"
           test -n "${PRODUCTION_USER}"
+          test -n "${SSH_AUTH_SOCK}"
 
-          # Capture remote facts only (never cat .env / secrets / keys).
-          REMOTE_OUT="$(ssh -o IdentitiesOnly=yes \
+          # Do NOT use IdentitiesOnly=yes with agent-only auth: OpenSSH then ignores
+          # ssh-agent identities unless IdentityFile is also set (which would require
+          # writing the private key to disk). IdentityAgent + publickey-only options
+          # force pubkey via the agent with no password fallback.
+          echo "Connecting as ${PRODUCTION_USER}@${PRODUCTION_HOST} (publickey via ssh-agent)…"
+          ssh \
+            -o BatchMode=yes \
+            -o PreferredAuthentications=publickey \
+            -o PubkeyAuthentication=yes \
+            -o PasswordAuthentication=no \
+            -o KbdInteractiveAuthentication=no \
+            -o ChallengeResponseAuthentication=no \
+            -o StrictHostKeyChecking=yes \
+            -o IdentityAgent="${SSH_AUTH_SOCK}" \
+            -o NumberOfPasswordPrompts=0 \
             "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
-            'set -Eeuo pipefail
-             echo "HOSTNAME=$(hostname)"
-             echo "WHOAMI=$(whoami)"
-             test -d /opt/furkansogutma
-             cd /opt/furkansogutma
-             git rev-parse --is-inside-work-tree >/dev/null
-             echo "BRANCH=$(git branch --show-current)"
-             echo "COMMIT=$(git rev-parse HEAD)"
-             echo "ORIGIN=$(git remote get-url origin)"
-             echo "DOCKER=$(docker version --format "{{.Server.Version}}")"
-             test -f docker-compose.production.yml
-             test -f .env.production
-             docker compose --env-file .env.production -f docker-compose.production.yml config -q
-             echo "COMPOSE_CONFIG=OK"')"
+            'echo SSH_CONNECTION_OK'
 
-          echo "$REMOTE_OUT"
-
-          BRANCH="$(printf '%s\n' "$REMOTE_OUT" | sed -n 's/^BRANCH=//p')"
-          COMMIT="$(printf '%s\n' "$REMOTE_OUT" | sed -n 's/^COMMIT=//p')"
-          DOCKER="$(printf '%s\n' "$REMOTE_OUT" | sed -n 's/^DOCKER=//p')"
-          COMPOSE="$(printf '%s\n' "$REMOTE_OUT" | sed -n 's/^COMPOSE_CONFIG=//p')"
-
-          test -n "$BRANCH"
-          test -n "$COMMIT"
-          test -n "$DOCKER"
-          test "$COMPOSE" = "OK"
-
-          {
-            echo "branch=$BRANCH"
-            echo "commit=$COMMIT"
-            echo "docker=$DOCKER"
-            echo "compose=$COMPOSE"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "VPS CONNECTION TEST: SUCCESS"
+          echo "SSH publickey connection succeeded."
 
       - name: Summary
+        if: always()
         env:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
@@ -85,8 +92,7 @@ jobs:
           set -Eeuo pipefail
           echo "VPS_HOST=${PRODUCTION_HOST}"
           echo "VPS_USER=${PRODUCTION_USER}"
-          echo "PROJECT_PATH=/opt/furkansogutma"
-          echo "CURRENT_BRANCH=${{ steps.checks.outputs.branch }}"
-          echo "CURRENT_COMMIT=${{ steps.checks.outputs.commit }}"
-          echo "DOCKER_VERSION=${{ steps.checks.outputs.docker }}"
-          echo "COMPOSE_CONFIG: ${{ steps.checks.outputs.compose }}"
+          echo "EXPECTED_FINGERPRINT=SHA256:QCtekeNIoUtrbjUHnjwnbhDzB/LbvIcHD+2W8pxJHs4"
+          echo "FINGERPRINT_MATCH=${{ steps.fingerprint.outputs.match }}"
+          echo "Auth: PreferredAuthentications=publickey, PasswordAuthentication=no (via ssh-agent)"
+          echo "If fingerprint matched but SSH failed: check VPS authorized_keys / sshd AllowUsers / Match blocks."
