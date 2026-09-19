@@ -27,6 +27,9 @@ const EXT_BY_TYPE: Record<string, string> = {
   'image/webp': '.webp',
 };
 
+/** Object keys we issue: folder/uuid.ext — reject client-supplied traversal. */
+const SAFE_OBJECT_KEY = /^[a-zA-Z0-9/_-]+\.(jpe?g|png|webp)$/i;
+
 @Injectable()
 export class R2StorageService {
   private readonly logger = new Logger(R2StorageService.name);
@@ -75,6 +78,14 @@ export class R2StorageService {
     return this.client !== null && Boolean(this.publicUrl);
   }
 
+  getPublicBaseUrl(): string {
+    return this.publicUrl;
+  }
+
+  getPresignTtlSeconds(): number {
+    return this.presignTtlSeconds;
+  }
+
   assertImageContentType(contentType: string): void {
     if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
       throw new BadRequestException(
@@ -112,15 +123,57 @@ export class R2StorageService {
     }
   }
 
+  assertSafeFolder(folder: string): void {
+    if (!folder || folder.includes('..') || folder.includes('\\')) {
+      throw new BadRequestException('Invalid upload folder');
+    }
+    if (folder.startsWith('/') || folder.includes('//')) {
+      throw new BadRequestException('Invalid upload folder');
+    }
+  }
+
+  /**
+   * Reject arbitrary / traversal keys from clients (register/delete).
+   */
+  assertSafeObjectKey(objectKey: string): void {
+    if (!objectKey || objectKey.includes('..') || objectKey.startsWith('/')) {
+      throw new BadRequestException('Invalid object key');
+    }
+    if (!SAFE_OBJECT_KEY.test(objectKey)) {
+      throw new BadRequestException('Invalid object key');
+    }
+  }
+
+  /**
+   * Ensure DB image URL matches configured CDN + the object key we issued.
+   */
+  assertRegisteredImageUrl(url: string, objectKey: string): void {
+    this.assertSafeObjectKey(objectKey);
+    if (!this.publicUrl) {
+      throw new ServiceUnavailableException('R2_PUBLIC_URL is not configured');
+    }
+    const expected = this.publicUrlForKey(objectKey);
+    if (url !== expected) {
+      throw new BadRequestException(
+        'Image URL does not match storage public URL',
+      );
+    }
+  }
+
   buildObjectKey(
     folder: string,
     filename: string,
     contentType: string,
   ): string {
+    this.assertSafeFolder(folder);
     const safeFolder = folder
       .replace(/[^a-zA-Z0-9/_-]/g, '')
       .replace(/^\/+|\/+$/g, '')
+      .replace(/\/+/g, '/')
       .slice(0, 120);
+    if (!safeFolder) {
+      throw new BadRequestException('Invalid upload folder');
+    }
     const ext =
       EXT_BY_TYPE[contentType] ??
       (extname(filename)
@@ -128,7 +181,7 @@ export class R2StorageService {
         .match(/^\.(jpe?g|png|webp)$/)
         ? extname(filename).toLowerCase()
         : '.bin');
-    return `${safeFolder || 'uploads'}/${randomUUID()}${ext}`;
+    return `${safeFolder}/${randomUUID()}${ext}`;
   }
 
   publicUrlForKey(objectKey: string): string {
@@ -148,11 +201,12 @@ export class R2StorageService {
     objectKey: string;
     publicUrl: string;
     maxBytes: number;
+    expiresIn: number;
   }> {
     this.assertImageContentType(input.contentType);
     this.assertSafeImageFilename(input.filename);
     this.assertUploadSize(input.contentLength);
-    if (!this.client || !this.bucket) {
+    if (!this.client || !this.bucket || !this.publicUrl) {
       throw new ServiceUnavailableException('Object storage is not configured');
     }
 
@@ -175,11 +229,18 @@ export class R2StorageService {
       objectKey,
       publicUrl: this.publicUrlForKey(objectKey),
       maxBytes: this.maxBytes,
+      expiresIn: this.presignTtlSeconds,
     };
   }
 
   async deleteObject(objectKey: string): Promise<void> {
     if (!objectKey) {
+      return;
+    }
+    try {
+      this.assertSafeObjectKey(objectKey);
+    } catch {
+      this.logger.warn('Skip R2 delete: unsafe object key');
       return;
     }
     if (!this.client || !this.bucket) {
@@ -192,6 +253,7 @@ export class R2StorageService {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'R2 delete fail';
+      // Never log credentials — only the object key and generic message.
       this.logger.error(`R2 delete failed for ${objectKey}: ${message}`);
       // Orphan cleanup can sweep later; DB delete already committed.
     }

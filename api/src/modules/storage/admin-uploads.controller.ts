@@ -59,6 +59,9 @@ class PresignUploadResponseDto {
 
   @ApiProperty()
   maxBytes!: number;
+
+  @ApiProperty({ description: 'Presigned URL TTL in seconds' })
+  expiresIn!: number;
 }
 
 @ApiTags('admin-uploads')
@@ -88,6 +91,7 @@ export class AdminUploadsController {
     return {
       ...result,
       maxBytes: this.storage.getMaxUploadBytes(),
+      expiresIn: this.storage.getPresignTtlSeconds(),
     };
   }
 }

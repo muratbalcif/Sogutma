@@ -656,6 +656,17 @@ export class ProductsService {
       throw new NotFoundException('Product not found');
     }
 
+    if (dto.objectKey) {
+      this.storage.assertSafeObjectKey(dto.objectKey);
+      if (this.storage.isConfigured()) {
+        this.storage.assertRegisteredImageUrl(dto.url, dto.objectKey);
+      }
+    } else if (this.storage.isConfigured()) {
+      throw new BadRequestException(
+        'objectKey is required when storage is configured',
+      );
+    }
+
     const image = await this.prisma.$transaction(async (tx) => {
       if (dto.isPrimary) {
         await tx.productImage.updateMany({

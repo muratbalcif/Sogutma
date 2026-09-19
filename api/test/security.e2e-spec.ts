@@ -638,6 +638,25 @@ describe('Security hardening (e2e)', () => {
   it('rejects invalid upload MIME, extension, and oversized presign', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/admin/uploads/presign')
+      .send({
+        filename: 'product.jpg',
+        contentType: 'image/jpeg',
+        contentLength: 1024,
+      })
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/admin/uploads/presign')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({
+        filename: 'product.jpg',
+        contentType: 'image/jpeg',
+        contentLength: 1024,
+      })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/admin/uploads/presign')
       .set('Authorization', `Bearer ${productManagerToken}`)
       .send({ filename: 'xss.svg', contentType: 'image/svg+xml' })
       .expect(400);
@@ -674,6 +693,15 @@ describe('Security hardening (e2e)', () => {
       });
     // 201 when R2 is configured; 503 when credentials are absent in test env.
     expect([201, 503]).toContain(validJpeg.status);
+    if (validJpeg.status === 201) {
+      expect(validJpeg.body.uploadUrl).toBeTruthy();
+      expect(validJpeg.body.publicUrl).toBeTruthy();
+      expect(validJpeg.body.objectKey).toBeTruthy();
+      expect(validJpeg.body.expiresIn).toBeGreaterThan(0);
+      expect(JSON.stringify(validJpeg.body)).not.toMatch(
+        /R2_SECRET|SECRET_ACCESS/i,
+      );
+    }
   });
 
   it('neutralizes CSV formula injection on customer export', async () => {

@@ -50,6 +50,9 @@ describe('ProductsService', () => {
   };
   const storage = {
     deleteObject: jest.fn().mockResolvedValue(undefined),
+    isConfigured: jest.fn().mockReturnValue(false),
+    assertSafeObjectKey: jest.fn(),
+    assertRegisteredImageUrl: jest.fn(),
   };
   const audit = {
     log: jest.fn().mockResolvedValue(undefined),

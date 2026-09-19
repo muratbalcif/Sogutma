@@ -84,5 +84,7 @@ Postgres and Redis are internal-only (`furkansogutma_internal`). Put a reverse p
 - Web runtime `INTERNAL_API_BASE_URL` (default `http://api:3000/api/v1`) is used for SSR and BFF proxy fetches so they stay on the Docker network. Do not put this in `NEXT_PUBLIC_*`.
 - Web healthcheck hits `/api/health` (not `/`).
 - Deploy never runs `prisma migrate reset` / `db push` / `migrate dev` — only `prisma migrate deploy`.
+- API loads R2 settings from `.env.production` via `env_file` (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL`, `R2_MAX_UPLOAD_BYTES`, `R2_PRESIGN_TTL_SECONDS`). Set `R2_BUCKET=furkansogutma-prod` and `R2_PUBLIC_URL=https://media.furkansogutma.net`. Web build arg `NEXT_PUBLIC_R2_PUBLIC_URL` should match the public CDN for `next/image`.
+- R2 smoke: `API_BASE_URL=… ADMIN_EMAIL=… ADMIN_PASSWORD=… bash scripts/test-r2-storage.sh` (never commits secrets).
 - Do not run this stack at the same time as local `api/docker-compose.yml` (same container names).
 - Do not deploy into Rotawide paths; only `/opt/furkansogutma`.
