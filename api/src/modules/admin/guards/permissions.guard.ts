@@ -5,6 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { AdminRoleCode } from '@prisma/client';
 import { Request } from 'express';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
@@ -30,6 +31,11 @@ export class PermissionsGuard implements CanActivate {
 
     if (!user) {
       throw new ForbiddenException('Forbidden');
+    }
+
+    // SUPER_ADMIN bypasses permission checks (role may lack catalog rows).
+    if (user.roles.includes(AdminRoleCode.SUPER_ADMIN)) {
+      return true;
     }
 
     const hasPermission = requiredPermissions.every((permission) =>

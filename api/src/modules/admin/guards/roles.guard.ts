@@ -33,6 +33,10 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Forbidden');
     }
 
+    if (user.roles.includes(AdminRoleCode.SUPER_ADMIN)) {
+      return true;
+    }
+
     const hasRole = requiredRoles.some((role) => user.roles.includes(role));
     if (!hasRole) {
       throw new ForbiddenException('Forbidden');
