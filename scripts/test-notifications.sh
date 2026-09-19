@@ -253,14 +253,13 @@ if [[ "${RESEND_SMOKE:-}" == "1" ]]; then
           : "false",
       );
     '
-    # Inject only RESEND_TO via env(1) so the container's existing Resend
-    # secrets are preserved (avoid relying on docker exec -e quirks).
-    # shellcheck disable=SC2086
+    # RESEND_TO via argv (keeps container env intact; avoids `env` quirks).
+    # node - reads program from stdin; argv[2] is the recipient.
     "${COMPOSE[@]}" exec -T "${API_SERVICE}" \
-      env "RESEND_TO=${RESEND_TO}" node - <<'NODE'
+      node - "${RESEND_TO}" <<'NODE'
 require('reflect-metadata');
 
-const to = (process.env.RESEND_TO || '').trim();
+const to = String(process.argv[2] || '').trim();
 if (!to) {
   console.error('RESEND_TO missing');
   process.exit(1);
@@ -277,40 +276,54 @@ if (flag('RESEND_API_KEY') === 'MISSING') {
   console.error('RESEND_API_KEY: MISSING');
   process.exit(1);
 }
-const fromOk =
-  flag('RESEND_FROM_EMAIL') === 'SET' || flag('EMAIL_FROM') === 'SET';
-if (!fromOk) {
-  console.error('RESEND_FROM_EMAIL: MISSING (and EMAIL_FROM unset)');
+if (flag('RESEND_FROM_EMAIL') === 'MISSING' && flag('EMAIL_FROM') === 'MISSING') {
+  console.error('RESEND_FROM_EMAIL: MISSING');
   process.exit(1);
 }
 
 let EmailOutboxService;
+let ConfigService;
 try {
   ({ EmailOutboxService } = require('./dist/modules/payments/email-outbox.service'));
-} catch (err) {
-  console.error('EmailOutboxService require failed');
+  ({ ConfigService } = require('@nestjs/config'));
+} catch {
+  console.error('EmailOutboxService/ConfigService require failed');
   process.exit(1);
 }
 
-const config = {
-  get(key) {
-    if (key === 'EMAIL_DEV_MOCK') {
-      return String(process.env.EMAIL_DEV_MOCK || '').toLowerCase() === 'true';
-    }
-    if (key === 'EMAIL_OUTBOX_MAX_ATTEMPTS') {
-      const n = Number(process.env.EMAIL_OUTBOX_MAX_ATTEMPTS || 5);
-      return Number.isFinite(n) ? n : 5;
-    }
-    const v = process.env[key];
-    return v === undefined ? undefined : v;
-  },
-};
+// Use Nest ConfigService (what EmailOutboxService expects) backed by container env.
+// Never log secret values — only pass them into the service.
+const config = new ConfigService({
+  RESEND_API_KEY: process.env.RESEND_API_KEY,
+  RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
+  EMAIL_FROM: process.env.EMAIL_FROM,
+  RESEND_FROM_NAME: process.env.RESEND_FROM_NAME,
+  RESEND_REPLY_TO: process.env.RESEND_REPLY_TO,
+  EMAIL_DEV_MOCK:
+    String(process.env.EMAIL_DEV_MOCK || '').toLowerCase() === 'true',
+  EMAIL_OUTBOX_MAX_ATTEMPTS: Number(process.env.EMAIL_OUTBOX_MAX_ATTEMPTS || 5),
+  NODE_ENV: process.env.NODE_ENV || 'production',
+});
 
 const prisma = {}; // sendEmail does not touch the database
 const email = new EmailOutboxService(prisma, config);
 
 if (!email.isProviderConfigured()) {
-  console.error('Resend is not configured inside the api container');
+  // Same-process bridge diagnostics (presence only)
+  const bridge = (key) => {
+    const v = config.get(key);
+    return v !== undefined && v !== null && String(v).trim() !== ''
+      ? 'SET'
+      : 'MISSING';
+  };
+  console.error(
+    'isProviderConfigured=false bridge RESEND_API_KEY=' +
+      bridge('RESEND_API_KEY') +
+      ' RESEND_FROM_EMAIL=' +
+      bridge('RESEND_FROM_EMAIL') +
+      ' EMAIL_FROM=' +
+      bridge('EMAIL_FROM'),
+  );
   process.exit(1);
 }
 
