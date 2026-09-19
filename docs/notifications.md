@@ -124,11 +124,23 @@ Never log JWT, passwords, email HTML bodies, R2 secrets, Resend API keys, or Aut
 
 ## Smoke test
 
+On the VPS (production Docker):
+
 ```bash
+cd /opt/furkansogutma
 ./scripts/test-notifications.sh
 ```
 
-Does **not** call real Resend. Optional manual Resend check is documented in the script comments.
+- Health: probed **inside** the `api` container (`http://127.0.0.1:3000/api/v1/health/live`). Do not use host `:3000` (API is published on `127.0.0.1:3100`).
+- Jest: one-off image from Dockerfile `build` stage (`furkansogutma-api:test`) — production runtime omits devDeps. Force rebuild with `SMOKE_REBUILD=1`.
+- Template XSS: `node` against compiled templates in the running `api` container.
+- Optional real Resend (container env only — never export `RESEND_API_KEY` on the host):
+
+```bash
+RESEND_SMOKE=1 RESEND_TO=you@example.com ./scripts/test-notifications.sh
+```
+
+Uses `EmailOutboxService.sendEmail` inside the container. Requires `EMAIL_DEV_MOCK=false` and Resend configured in `.env.production`.
 
 ## Migrations
 
