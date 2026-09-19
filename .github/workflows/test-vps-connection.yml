@@ -63,10 +63,7 @@ jobs:
           test -n "${PRODUCTION_USER}"
           test -n "${SSH_AUTH_SOCK}"
 
-          # Do NOT use IdentitiesOnly=yes with agent-only auth: OpenSSH then ignores
-          # ssh-agent identities unless IdentityFile is also set (which would require
-          # writing the private key to disk). IdentityAgent + publickey-only options
-          # force pubkey via the agent with no password fallback.
+          # Agent-only auth: do not restrict to IdentityFile; use IdentityAgent + publickey-only.
           echo "Connecting as ${PRODUCTION_USER}@${PRODUCTION_HOST} (publickey via ssh-agent)…"
           ssh \
             -o BatchMode=yes \
@@ -77,11 +74,8 @@ jobs:
             -o ChallengeResponseAuthentication=no \
             -o StrictHostKeyChecking=yes \
             -o IdentityAgent="${SSH_AUTH_SOCK}" \
-            -o NumberOfPasswordPrompts=0 \
             "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
-            'echo SSH_CONNECTION_OK'
-
-          echo "SSH publickey connection succeeded."
+            'echo "Connected to production VPS ($(hostname))" && echo SSH_CONNECTION_OK'
 
       - name: Summary
         if: always()
