@@ -193,31 +193,15 @@ export default function ProductDetailPage() {
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const contentType = file.type || "image/jpeg";
-      if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
-        throw new Error("Only JPEG, PNG, and WEBP images are allowed");
-      }
-      const presign = await catalogService.presignUpload({
-        filename: file.name,
-        contentType,
+      const { uploadResizedImage } = await import("@/lib/r2-image-upload");
+      const uploaded = await uploadResizedImage({
+        file,
         folder: `products/${id}`,
-        contentLength: file.size,
       });
-      if (file.size > presign.maxBytes) {
-        throw new Error(`Dosya boyutu limiti aşıldı (${presign.maxBytes} bayt)`);
-      }
-      const put = await fetch(presign.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": contentType },
-        body: file,
-      });
-      if (!put.ok) {
-        throw new Error(`R2 upload failed (${put.status})`);
-      }
       return catalogService.registerImage(id, {
-        url: presign.publicUrl,
-        objectKey: presign.objectKey,
-        alt: file.name,
+        url: uploaded.publicUrl,
+        objectKey: uploaded.objectKey,
+        alt: uploaded.file.name,
         isPrimary: (product?.images.length ?? 0) === 0,
       });
     },
@@ -428,14 +412,26 @@ export default function ProductDetailPage() {
               {tab === "images" && (
                 <div className="space-y-4">
                   {can("product.update") && (
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadMutation.mutate(file);
-                      }}
-                    />
+                    <div className="space-y-1">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) uploadMutation.mutate(file);
+                          e.target.value = "";
+                        }}
+                      />
+                      <p className="text-xs text-slate-500">
+                        Büyük görseller otomatik sıkıştırılır (hedef ≤3&nbsp;MB,
+                        tercihen ≥1280px kenar).
+                      </p>
+                    </div>
+                  )}
+                  {uploadMutation.isPending && (
+                    <p className="text-sm text-slate-600">
+                      Görsel hazırlanıyor / yükleniyor…
+                    </p>
                   )}
                   {uploadMutation.isError && (
                     <p className="text-sm text-red-700">

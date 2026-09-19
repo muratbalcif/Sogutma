@@ -31,6 +31,9 @@ COPY --from=build /app/api/dist ./api/dist
 COPY --from=build /app/api/prisma ./api/prisma
 # npm workspaces hoist @prisma/client to /app/node_modules; generate writes .prisma there
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+# Prisma CLI for production `prisma migrate deploy` (devDependency — not in omit=dev install)
+COPY --from=build /app/node_modules/prisma ./node_modules/prisma
+COPY --from=build /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
 WORKDIR /app/api
 USER app
 EXPOSE 3000

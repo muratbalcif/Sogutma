@@ -74,6 +74,16 @@ npm run admin:dev
 Full API documentation: [api/README.md](api/README.md)  
 Admin documentation: [admin/README.md](admin/README.md)
 
+## Production deploy
+
+Pushing to `main` deploys automatically to the VPS (`/opt/furkansogutma`):
+
+```bash
+git push origin main
+```
+
+See [docs/production-docker.md](docs/production-docker.md) for GitHub Secrets and one-time VPS setup.
+
 ## Current milestone
 
 **Milestone 10 — Public Web Storefront** (current)

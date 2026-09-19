@@ -1,0 +1,72 @@
+name: Production Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  production-deploy:
+    name: Production Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+
+      - name: Add VPS to known_hosts
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${PRODUCTION_HOST}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -H "$PRODUCTION_HOST" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy to VPS
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${PRODUCTION_HOST}"
+          test -n "${PRODUCTION_USER}"
+          # Pull first so scripts/deploy-production.sh from this commit exists, then deploy.
+          # Secrets are never echoed. .env.production stays only on the VPS.
+          ssh -o IdentitiesOnly=yes \
+            "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
+            'set -Eeuo pipefail
+             cd /opt/furkansogutma
+             PREV="$(git rev-parse HEAD)"
+             git fetch origin
+             git checkout main
+             git reset --hard origin/main
+             NEW="$(git rev-parse HEAD)"
+             echo "Current SHA: $PREV"
+             echo "Deploy SHA: $NEW"
+             bash scripts/deploy-production.sh --post-pull'
+
+      - name: Health verification
+        run: |
+          set -Eeuo pipefail
+          echo "Checking API…"
+          curl -fsS --max-time 15 https://api.furkansogutma.net/api/v1/health >/dev/null
+          echo "Checking Web…"
+          curl -fsSI --max-time 15 https://www.furkansogutma.net >/dev/null
+          echo "Checking Admin…"
+          curl -fsSI --max-time 15 https://admin.furkansogutma.net >/dev/null
+          echo "🚀 Production deployment successful"

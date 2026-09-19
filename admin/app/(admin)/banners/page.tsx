@@ -5,7 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { bannerLinkTypeLabel } from "@/lib/enum-labels";
 import { ModulePage } from "@/components/auth/module-page";
 import { usePermissions } from "@/hooks/use-permissions";
-import { bannersService, catalogService } from "@/services/admin-api.service";
+import { bannersService } from "@/services/admin-api.service";
+import { uploadResizedImage } from "@/lib/r2-image-upload";
 
 type BannerRow = {
   id: string;
@@ -35,28 +36,8 @@ const EMPTY_FORM = {
 };
 
 async function uploadBannerImage(file: File, folder: string): Promise<string> {
-  const contentType = file.type || "image/jpeg";
-  if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
-    throw new Error("Only JPEG, PNG, and WEBP images are allowed");
-  }
-  const presign = await catalogService.presignUpload({
-    filename: file.name,
-    contentType,
-    folder,
-    contentLength: file.size,
-  });
-  if (file.size > presign.maxBytes) {
-    throw new Error(`Dosya boyutu limiti aşıldı (${presign.maxBytes} bayt)`);
-  }
-  const put = await fetch(presign.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: file,
-  });
-  if (!put.ok) {
-    throw new Error(`R2 upload failed (${put.status})`);
-  }
-  return presign.publicUrl;
+  const uploaded = await uploadResizedImage({ file, folder });
+  return uploaded.publicUrl;
 }
 
 function toLocalInput(value: string | null | undefined): string {
