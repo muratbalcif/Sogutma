@@ -1,6 +1,10 @@
-# Copy to local.properties (already gitignored by Android) or set via CI secrets.
-# Do not commit real production secrets.
+# Copy to api-urls.properties (gitignored) to override BuildConfig defaults.
 #
-# API_BASE_URL_DEV=http://10.0.2.2:3000/api/v1
-# API_BASE_URL_STAGING=https://staging-api.furkansogutma.net/api/v1
+# Dev flavor default is emulator → host (10.0.2.2). For a physical device hitting
+# production API, uncomment:
+API_BASE_URL_DEV=https://api.furkansogutma.net/api/v1
+# API_BASE_URL_STAGING=https://api.furkansogutma.net/api/v1
 # API_BASE_URL_PRODUCTION=https://api.furkansogutma.net/api/v1
+#
+# Wrong (Next.js storefront — returns HTML 404 for /api/v1/*):
+# API_BASE_URL_DEV=https://furkansogutma.net/api/v1

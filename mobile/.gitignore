@@ -11,5 +11,8 @@
 *.apk
 *.ap_
 *.aab
+*.jks
+*.keystore
+keystore.properties
 google-services.json
 api-urls.properties

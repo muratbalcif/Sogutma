@@ -17,6 +17,10 @@ val apiUrls = Properties().apply {
     val file = rootProject.file("api-urls.properties")
     if (file.exists()) load(file.inputStream())
 }
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) load(file.inputStream())
+}
 
 fun apiUrl(key: String, fallback: String): String {
     return apiUrls.getProperty(key)
@@ -33,7 +37,7 @@ android {
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
 
@@ -64,6 +68,7 @@ android {
             buildConfigField(
                 "String",
                 "API_BASE_URL",
+                // Emulator → host machine. Physical device + prod API: set API_BASE_URL_DEV in api-urls.properties.
                 "\"${apiUrl("API_BASE_URL_DEV", "http://10.0.2.2:3000/api/v1")}\"",
             )
             buildConfigField("String", "ENVIRONMENT", "\"dev\"")
@@ -75,7 +80,7 @@ android {
             buildConfigField(
                 "String",
                 "API_BASE_URL",
-                "\"${apiUrl("API_BASE_URL_STAGING", "https://staging-api.furkansogutma.net/api/v1")}\"",
+                "\"${apiUrl("API_BASE_URL_STAGING", "https://api.furkansogutma.net/api/v1")}\"",
             )
             buildConfigField("String", "ENVIRONMENT", "\"staging\"")
         }
@@ -90,6 +95,22 @@ android {
         }
     }
 
+    signingConfigs {
+        if (keystoreProperties.isNotEmpty()) {
+            create("release") {
+                val storePath = keystoreProperties.getProperty("storeFile")
+                    ?: error("keystore.properties missing storeFile")
+                storeFile = rootProject.file(storePath)
+                storePassword = keystoreProperties.getProperty("storePassword")
+                    ?: error("keystore.properties missing storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                    ?: error("keystore.properties missing keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                    ?: error("keystore.properties missing keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
@@ -98,11 +119,14 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            isDebuggable = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
             buildConfigField("boolean", "ENABLE_NETWORK_LOGS", "false")
+            // Play upload requires release signing via keystore.properties (gitignored).
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 

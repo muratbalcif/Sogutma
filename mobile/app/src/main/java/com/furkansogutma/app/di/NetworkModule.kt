@@ -56,7 +56,14 @@ object NetworkModule {
             .addInterceptor(authInterceptor)
             .authenticator(authenticator)
         if (config.enableLogging) {
-            val logging = HttpLoggingInterceptor().apply {
+            val logging = HttpLoggingInterceptor { message ->
+                // Never log credentials / tokens in BODY dumps.
+                val scrubbed = message
+                    .replace(Regex("\"password\"\\s*:\\s*\"[^\"]*\""), "\"password\":\"***\"")
+                    .replace(Regex("\"refreshToken\"\\s*:\\s*\"[^\"]*\""), "\"refreshToken\":\"***\"")
+                    .replace(Regex("\"accessToken\"\\s*:\\s*\"[^\"]*\""), "\"accessToken\":\"***\"")
+                android.util.Log.d("OkHttp", scrubbed)
+            }.apply {
                 level = HttpLoggingInterceptor.Level.BODY
                 redactHeader("Authorization")
             }

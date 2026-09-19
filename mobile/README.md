@@ -74,7 +74,21 @@ Physical device: use your machine LAN IP instead of `10.0.2.2`.
 ## Build types
 
 - **debug** — network BODY logs (Authorization redacted)
-- **release** — minify + shrinkResources + R8, logging OFF
+- **release** — minify + shrinkResources + R8, logging OFF, not debuggable
+
+## Play Store release
+
+See [docs/android-play-release.md](../docs/android-play-release.md).
+
+Quick path (after `keystore.properties` + upload keystore):
+
+```bash
+bash scripts/android-release-aab.sh
+# → mobile/app/build/outputs/bundle/productionRelease/app-production-release.aab
+```
+
+Production API default: `https://api.furkansogutma.net/api/v1`  
+Package: `com.furkansogutma.app` · version `1.0.0` (`versionCode` 1)
 
 ## Tests
 
