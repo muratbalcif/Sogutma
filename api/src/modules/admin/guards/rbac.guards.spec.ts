@@ -182,5 +182,69 @@ describe('RBAC guards', () => {
         ),
       ).toThrow(ForbiddenException);
     });
+
+    it('allows POS_CASHIER with pos.refund for return', () => {
+      const reflector = {
+        getAllAndOverride: jest.fn().mockReturnValue(['pos.refund']),
+      };
+      const guard = new PermissionsGuard(reflector as unknown as Reflector);
+
+      expect(
+        guard.canActivate(
+          createContext({
+            roles: [AdminRoleCode.POS_CASHIER],
+            permissions: ['pos.read', 'pos.sell', 'pos.refund'],
+          }),
+        ),
+      ).toBe(true);
+    });
+
+    it('forbids POS_CASHIER without pos.refund', () => {
+      const reflector = {
+        getAllAndOverride: jest.fn().mockReturnValue(['pos.refund']),
+      };
+      const guard = new PermissionsGuard(reflector as unknown as Reflector);
+
+      expect(() =>
+        guard.canActivate(
+          createContext({
+            roles: [AdminRoleCode.POS_CASHIER],
+            permissions: ['pos.read', 'pos.sell'],
+          }),
+        ),
+      ).toThrow(ForbiddenException);
+    });
+
+    it('allows SUPER_ADMIN return without explicit pos.refund row', () => {
+      const reflector = {
+        getAllAndOverride: jest.fn().mockReturnValue(['pos.refund']),
+      };
+      const guard = new PermissionsGuard(reflector as unknown as Reflector);
+
+      expect(
+        guard.canActivate(
+          createContext({
+            roles: [AdminRoleCode.SUPER_ADMIN],
+            permissions: [],
+          }),
+        ),
+      ).toBe(true);
+    });
+
+    it('forbids report access without pos.read', () => {
+      const reflector = {
+        getAllAndOverride: jest.fn().mockReturnValue(['pos.read']),
+      };
+      const guard = new PermissionsGuard(reflector as unknown as Reflector);
+
+      expect(() =>
+        guard.canActivate(
+          createContext({
+            roles: [],
+            permissions: ['product.read'],
+          }),
+        ),
+      ).toThrow(ForbiddenException);
+    });
   });
 });

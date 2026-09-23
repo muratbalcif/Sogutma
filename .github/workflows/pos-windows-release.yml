@@ -1,0 +1,172 @@
+name: POS Windows Release
+
+# Builds unsigned Windows NSIS (+ MSI) installers on windows-latest.
+# Trigger: git tag pos-v1.0.0  OR  Actions → Run workflow
+# Does not touch web/admin/api deploy workflows.
+
+on:
+  push:
+    tags:
+      - 'pos-v*'
+  workflow_dispatch:
+
+concurrency:
+  group: pos-windows-release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  VITE_API_BASE_URL: https://api.furkansogutma.net/api/v1
+  POS_DIR: pos
+
+jobs:
+  windows-release:
+    name: Windows NSIS / MSI
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: pos
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Sync version check
+        run: |
+          set -Eeuo pipefail
+          PKG="$(node -p "require('./package.json').version")"
+          TAURI="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          CARGO="$(sed -n 's/^version = \"\\(.*\\)\"/\\1/p' src-tauri/Cargo.toml | head -1)"
+          echo "package.json=$PKG tauri.conf.json=$TAURI Cargo.toml=$CARGO"
+          test "$PKG" = "$TAURI"
+          test "$PKG" = "$CARGO"
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Frontend production build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ env.VITE_API_BASE_URL }}
+
+      - name: Assert production API URL (no localhost)
+        run: |
+          set -Eeuo pipefail
+          if grep -R "localhost:3000" dist; then
+            echo "ERROR: localhost:3000 found in production frontend bundle"
+            exit 1
+          fi
+          if ! grep -R "api.furkansogutma.net" dist >/dev/null; then
+            echo "ERROR: production API host missing from frontend bundle"
+            exit 1
+          fi
+          echo "Production API URL check OK"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pos/src-tauri -> target
+          shared-key: pos-windows
+
+      - name: Tauri Windows build (NSIS + MSI)
+        run: npm run tauri build
+        env:
+          VITE_API_BASE_URL: ${{ env.VITE_API_BASE_URL }}
+
+      - name: Verify installer artifacts
+        id: artifacts
+        run: |
+          set -Eeuo pipefail
+          NSIS_DIR="src-tauri/target/release/bundle/nsis"
+          MSI_DIR="src-tauri/target/release/bundle/msi"
+          test -d "$NSIS_DIR"
+          shopt -s nullglob
+          NSIS_FILES=("$NSIS_DIR"/*.exe)
+          test "${#NSIS_FILES[@]}" -ge 1
+          echo "NSIS installers:"
+          printf '  %s\n' "${NSIS_FILES[@]}"
+          ls -lh "${NSIS_FILES[@]}"
+          MSI_FILES=()
+          if [[ -d "$MSI_DIR" ]]; then
+            MSI_FILES=("$MSI_DIR"/*.msi)
+          fi
+          echo "nsis_count=${#NSIS_FILES[@]}" >> "$GITHUB_OUTPUT"
+          echo "msi_count=${#MSI_FILES[@]}" >> "$GITHUB_OUTPUT"
+          if [[ "${#MSI_FILES[@]}" -gt 0 ]]; then
+            echo "MSI installers:"
+            printf '  %s\n' "${MSI_FILES[@]}"
+            ls -lh "${MSI_FILES[@]}"
+          fi
+          mkdir -p ../out/windows
+          cp -f "${NSIS_FILES[@]}" ../out/windows/
+          if [[ "${#MSI_FILES[@]}" -gt 0 ]]; then
+            cp -f "${MSI_FILES[@]}" ../out/windows/
+          fi
+          {
+            echo "product=FurkanSoğutma POS"
+            echo "version=$(node -p "require('./package.json').version")"
+            echo "target=x86_64-pc-windows-msvc"
+            echo "installer=nsis"
+            echo "signed=false"
+            echo "api=$VITE_API_BASE_URL"
+            echo "git_sha=$GITHUB_SHA"
+            echo "ref=$GITHUB_REF"
+          } > ../out/windows/bundle-metadata.txt
+          ls -lah ../out/windows
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: furkansogutma-pos-windows
+          path: out/windows/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/pos-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: FurkanSoğutma POS ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## FurkanSoğutma POS ${{ github.ref_name }}
+
+            Windows desktop installer (Tauri 2, **unsigned**).
+
+            - **Target:** `x86_64-pc-windows-msvc`
+            - **Installer:** NSIS (`.exe`); MSI included when produced
+            - **API:** `https://api.furkansogutma.net/api/v1`
+            - **Signing:** none (OV/EV code signing planned later)
+            - **Auto-update:** not enabled in this phase
+
+            Browser POS: https://admin.furkansogutma.net/pos
+          files: |
+            out/windows/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

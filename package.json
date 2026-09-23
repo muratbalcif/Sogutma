@@ -6,11 +6,12 @@
   "workspaces": [
     "api",
     "admin",
-    "web"
+    "web",
+    "pos"
   ],
   "scripts": {
-    "lint": "npm run lint -w furkansogutma-api && npm run lint -w furkansogutma-admin && npm run lint -w furkansogutma-web",
-    "test": "npm run test -w furkansogutma-api && npm run test -w furkansogutma-web",
+    "lint": "npm run lint -w furkansogutma-api && npm run lint -w furkansogutma-admin && npm run lint -w furkansogutma-web && npm run lint -w furkansogutma-pos",
+    "test": "npm run test -w furkansogutma-api && npm run test -w furkansogutma-web && npm run test -w furkansogutma-pos",
     "test:e2e": "npm run test:e2e -w furkansogutma-api",
     "build": "npm run build -w furkansogutma-api && npm run build -w furkansogutma-admin && npm run build -w furkansogutma-web",
     "web:test": "npm run test -w furkansogutma-web",
@@ -34,7 +35,13 @@
     "web:build": "npm run build -w furkansogutma-web",
     "web:lint": "npm run lint -w furkansogutma-web",
     "web:start": "npm run start -w furkansogutma-web",
-    "web:test:e2e": "npm run test:e2e -w furkansogutma-web"
+    "web:test:e2e": "npm run test:e2e -w furkansogutma-web",
+    "pos:dev": "npm run dev -w furkansogutma-pos",
+    "pos:build": "npm run build -w furkansogutma-pos",
+    "pos:test": "npm run test -w furkansogutma-pos",
+    "pos:lint": "npm run lint -w furkansogutma-pos",
+    "pos:tauri:dev": "npm run tauri:dev -w furkansogutma-pos",
+    "pos:tauri:build": "npm run tauri:build -w furkansogutma-pos"
   },
   "engines": {
     "node": ">=22"

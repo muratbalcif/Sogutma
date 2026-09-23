@@ -32,6 +32,7 @@ import { ProductAlertsModule } from './modules/product-alerts/product-alerts.mod
 import { ProductsModule } from './modules/products/products.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { RedisThrottlerStorage } from './modules/redis/redis-throttler.storage';
+import { PosModule } from './modules/pos/pos.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { SiteModule } from './modules/site/site.module';
 import { StorageModule } from './modules/storage/storage.module';
@@ -95,6 +96,7 @@ import { EnvironmentVariables } from './config/env.validation';
     AddressesModule,
     OrdersModule,
     SalesModule,
+    PosModule,
     InvoicesModule,
     PaymentsModule,
     BannersModule,

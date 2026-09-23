@@ -21,6 +21,7 @@ type RequestOptions = {
   body?: unknown;
   auth?: boolean;
   signal?: AbortSignal;
+  headers?: Record<string, string>;
 };
 
 let refreshPromise: Promise<boolean> | null = null;
@@ -61,9 +62,11 @@ export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { method = "GET", body, auth = true, signal } = options;
+  const { method = "GET", body, auth = true, signal, headers: extraHeaders } =
+    options;
   const headers: Record<string, string> = {
     Accept: "application/json",
+    ...extraHeaders,
   };
 
   const isFormData =

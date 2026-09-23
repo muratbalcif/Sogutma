@@ -65,6 +65,19 @@ export const SALE_PAYMENT_METHOD_LABEL: Record<string, string> = {
   BANK_TRANSFER: "Havale / EFT",
 };
 
+export const POS_SALE_STATUS_LABEL: Record<string, string> = {
+  COMPLETED: "Tamamlandı",
+  CANCELLED: "İptal",
+  REFUNDED: "İade",
+};
+
+export const POS_PAYMENT_METHOD_LABEL: Record<string, string> = {
+  CASH: "Nakit",
+  CARD: "Kart",
+  BANK_TRANSFER: "Havale / EFT",
+  ON_ACCOUNT: "Açık hesap",
+};
+
 export const INVOICE_STATUS_LABEL: Record<string, string> = {
   PENDING: "Bekliyor",
   SUCCESS: "Başarılı",
@@ -208,6 +221,12 @@ export function saleStatusLabel(v?: string | null) {
 }
 export function salePaymentMethodLabel(v?: string | null) {
   return labelOrFallback(SALE_PAYMENT_METHOD_LABEL, v);
+}
+export function posSaleStatusLabel(v?: string | null) {
+  return labelOrFallback(POS_SALE_STATUS_LABEL, v);
+}
+export function posPaymentMethodLabel(v?: string | null) {
+  return labelOrFallback(POS_PAYMENT_METHOD_LABEL, v);
 }
 export function invoiceStatusLabel(v?: string | null) {
   return labelOrFallback(INVOICE_STATUS_LABEL, v);

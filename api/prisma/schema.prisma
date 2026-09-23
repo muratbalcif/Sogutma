@@ -25,6 +25,8 @@ enum AdminRoleCode {
   STOCK_MANAGER
   CUSTOMER_MANAGER
   ACCOUNTING
+  /// Windows POS desktop cashiers (pos.* permissions).
+  POS_CASHIER
 }
 
 /// Application user. Passwords are stored as hashes only — never plaintext.
@@ -65,6 +67,10 @@ model User {
   salesCancelled      Sale[] @relation("SaleCancelledBy")
   invoicesAsCustomer  Invoice[] @relation("InvoiceCustomer")
   invoicesCreated     Invoice[] @relation("InvoiceCreatedBy")
+  posSalesAsCustomer  PosSale[] @relation("PosSaleCustomer")
+  posSalesAsCashier   PosSale[] @relation("PosSaleCashier")
+  posSalesCancelled   PosSale[] @relation("PosSaleCancelledBy")
+  posReturnsCreated   PosReturn[] @relation("PosReturnCreatedBy")
 
   @@index([status])
   @@index([userType])
@@ -241,6 +247,8 @@ model Product {
   productAlerts   ProductAlert[]
   orderItems      OrderItem[]
   saleItems       SaleItem[]
+  posSaleItems    PosSaleItem[]
+  posReturnItems  PosReturnItem[]
   campaignProducts CampaignProduct[]
 
   @@index([sku])
@@ -1389,5 +1397,207 @@ model ExternalEntityLink {
   @@index([entityId])
   @@index([externalId])
   @@map("external_entity_links")
+}
+
+// ---------------------------------------------------------------------------
+// Windows POS (Tauri) — separate from admin counter Sale / online Order.
+// Phase 1: registers + transactional sale create. Accounting/cari → Phase 2.
+// ---------------------------------------------------------------------------
+
+enum PosSaleStatus {
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PosPaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  ON_ACCOUNT
+}
+
+enum PosPaymentStatus {
+  COMPLETED
+  PENDING
+  FAILED
+  REFUNDED
+}
+
+model PosRegister {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  code      String    @unique
+  isActive  Boolean   @default(true)
+  /// Soft open/close for day session (V1 reporting). Null = closed / never opened.
+  openedAt  DateTime?
+  closedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  sales PosSale[]
+
+  @@index([isActive])
+  @@index([code])
+  @@map("pos_registers")
+}
+
+model PosSale {
+  id              String        @id @default(uuid()) @db.Uuid
+  saleNumber      String        @unique
+  registerId      String        @db.Uuid
+  /// Cashier (admin/POS user).
+  userId          String        @db.Uuid
+  /// Null = walk-in / misafir.
+  customerId      String?       @db.Uuid
+  status          PosSaleStatus @default(COMPLETED)
+  currency        String        @default("TRY") @db.Char(3)
+  /// Sum of line totals before cart-level discount (tax-inclusive).
+  subtotal        Decimal       @db.Decimal(12, 2)
+  /// Cart-level discount (tax-inclusive). Line discounts are inside line totals.
+  discountTotal   Decimal       @default(0) @db.Decimal(12, 2)
+  taxTotal        Decimal       @db.Decimal(12, 2)
+  grandTotal      Decimal       @db.Decimal(12, 2)
+  note            String?
+  /// Client Idempotency-Key (unique when present).
+  idempotencyKey  String?       @unique
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  cancelledById   String?       @db.Uuid
+  cancelReason    String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  register    PosRegister  @relation(fields: [registerId], references: [id], onDelete: Restrict)
+  user        User         @relation("PosSaleCashier", fields: [userId], references: [id], onDelete: Restrict)
+  customer    User?        @relation("PosSaleCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  cancelledBy User?        @relation("PosSaleCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  items       PosSaleItem[]
+  payments    PosPayment[]
+  returns     PosReturn[]
+
+  @@index([registerId])
+  @@index([userId])
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([saleNumber])
+  @@index([completedAt])
+  @@map("pos_sales")
+}
+
+model PosSaleItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  saleId         String   @db.Uuid
+  productId      String?  @db.Uuid
+  productName    String
+  sku            String
+  barcode        String?
+  quantity       Int
+  /// Snapshot from price resolution at sale time (tax-inclusive).
+  unitPrice      Decimal  @db.Decimal(12, 2)
+  discountAmount Decimal  @default(0) @db.Decimal(12, 2)
+  taxRate        Decimal  @db.Decimal(5, 2)
+  taxAmount      Decimal  @db.Decimal(12, 2)
+  lineSubtotal   Decimal  @db.Decimal(12, 2)
+  lineTotal      Decimal  @db.Decimal(12, 2)
+  createdAt      DateTime @default(now())
+
+  sale         PosSale         @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product      Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  returnItems  PosReturnItem[]
+
+  @@index([saleId])
+  @@index([productId])
+  @@index([sku])
+  @@index([barcode])
+  @@map("pos_sale_items")
+}
+
+model PosPayment {
+  id              String           @id @default(uuid()) @db.Uuid
+  saleId          String           @db.Uuid
+  method          PosPaymentMethod
+  amount          Decimal          @db.Decimal(12, 2)
+  status          PosPaymentStatus @default(COMPLETED)
+  referenceNumber String?
+  createdAt       DateTime         @default(now())
+
+  sale PosSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([method])
+  @@index([status])
+  @@index([createdAt])
+  @@map("pos_payments")
+}
+
+model PosSaleNumberSequence {
+  dateKey   String @id @db.Char(8)
+  lastValue Int    @default(0)
+
+  @@map("pos_sale_number_sequences")
+}
+
+/// POS product return (partial or full). Inventory RETURN refs PosReturnItem.id.
+model PosReturn {
+  id             String   @id @default(uuid()) @db.Uuid
+  saleId         String   @db.Uuid
+  /// Admin/cashier who processed the return.
+  userId         String   @db.Uuid
+  currency       String   @default("TRY") @db.Char(3)
+  /// Sum of return line refunds (tax-inclusive).
+  totalAmount    Decimal  @db.Decimal(12, 2)
+  reason         String?
+  note           String?
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
+
+  sale     PosSale            @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  user     User               @relation("PosReturnCreatedBy", fields: [userId], references: [id], onDelete: Restrict)
+  items    PosReturnItem[]
+  payments PosReturnPayment[]
+
+  @@index([saleId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("pos_returns")
+}
+
+model PosReturnItem {
+  id           String   @id @default(uuid()) @db.Uuid
+  returnId     String   @db.Uuid
+  saleItemId   String   @db.Uuid
+  productId    String?  @db.Uuid
+  productName  String
+  sku          String
+  quantity     Int
+  /// Refund for this line (tax-inclusive).
+  lineRefund   Decimal  @db.Decimal(12, 2)
+  createdAt    DateTime @default(now())
+
+  return   PosReturn   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  saleItem PosSaleItem @relation(fields: [saleItemId], references: [id], onDelete: Restrict)
+  product  Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([returnId])
+  @@index([saleItemId])
+  @@index([productId])
+  @@map("pos_return_items")
+}
+
+/// How money was handed back for a POS return (drawer / cari).
+model PosReturnPayment {
+  id        String           @id @default(uuid()) @db.Uuid
+  returnId  String           @db.Uuid
+  method    PosPaymentMethod
+  amount    Decimal          @db.Decimal(12, 2)
+  createdAt DateTime         @default(now())
+
+  return PosReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+
+  @@index([returnId])
+  @@index([method])
+  @@map("pos_return_payments")
 }
 

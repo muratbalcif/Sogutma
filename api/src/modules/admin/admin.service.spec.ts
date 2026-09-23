@@ -44,6 +44,34 @@ describe('AdminService', () => {
       expect(access.permissions).toEqual([...ADMIN_PERMISSION_CODES]);
       expect(access.permissions).toContain('product.read');
       expect(access.permissions).toContain('order.read');
+      expect(access.permissions).toContain('pos.refund');
+      expect(access.permissions).toContain('pos.read');
+    });
+
+    it('returns POS_CASHIER linked permissions including pos.refund', async () => {
+      prisma.adminUser.findUnique.mockResolvedValue({
+        roles: [
+          {
+            role: {
+              code: AdminRoleCode.POS_CASHIER,
+              permissions: [
+                { permission: { code: 'pos.read' } },
+                { permission: { code: 'pos.sell' } },
+                { permission: { code: 'pos.discount' } },
+                { permission: { code: 'pos.refund' } },
+                { permission: { code: 'product.read' } },
+              ],
+            },
+          },
+        ],
+      });
+
+      const access = await service.getAccessForUser('cashier-1');
+
+      expect(access.roles).toEqual([AdminRoleCode.POS_CASHIER]);
+      expect(access.permissions).toContain('pos.refund');
+      expect(access.permissions).toContain('pos.read');
+      expect(access.permissions).not.toContain('pos.register');
     });
 
     it('returns only linked permissions for non-super roles', async () => {

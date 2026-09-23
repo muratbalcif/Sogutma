@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../pos/src/**/*.{js,ts,jsx,tsx}";
 
 :root {
   --background: #f4f7fb;
@@ -6,6 +7,20 @@
   --panel: #ffffff;
   --accent: #0891b2;
   --navy: #0f2744;
+
+  /* Shared with furkansogutma-pos UI (admin /pos sell screen) */
+  --primary: #0f766e;
+  --primary-dark: #115e59;
+  --primary-light: #ccfbf1;
+  --pos-bg: #f8fafc;
+  --pos-text: #0f172a;
+  --error: #dc2626;
+  --success: #16a34a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --surface: #ffffff;
+  --bg: #f8fafc;
+  --text: #0f172a;
 }
 
 @theme inline {
@@ -19,4 +34,9 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-body), system-ui, sans-serif;
+}
+
+.pos-shell button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

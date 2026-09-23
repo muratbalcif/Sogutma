@@ -26,7 +26,11 @@ export type AccountReferenceType =
   | 'MANUAL'
   | 'REFUND'
   | 'ADJUSTMENT'
-  | 'REVERSAL';
+  | 'REVERSAL'
+  /** Windows POS sale debit (SALE:POS:{posSaleId}). */
+  | 'POS_SALE'
+  /** Windows POS payment credit (PAYMENT:POS:{posPaymentId}). */
+  | 'POS_PAYMENT';
 
 export type ManualDirection = 'DEBIT' | 'CREDIT';
 
@@ -209,12 +213,15 @@ export class AccountingService {
   /**
    * Credit-limit gate for cari (allowCredit) sales only.
    * Bank-transfer prepaid (allowCredit=false) skips this check.
+   * Pass `tx` when called inside an open interactive transaction (e.g. POS checkout).
    */
   async assertCreditLimitAllows(
     userId: string,
     newOrderAmount: Prisma.Decimal | string,
+    tx?: Prisma.TransactionClient,
   ): Promise<void> {
-    const corporate = await this.prisma.corporateCustomer.findUnique({
+    const client = tx ?? this.prisma;
+    const corporate = await client.corporateCustomer.findUnique({
       where: { userId },
     });
     if (!corporate?.allowCredit) {
@@ -223,13 +230,11 @@ export class AccountingService {
     if (corporate.creditLimit == null) {
       return;
     }
-    const account = await this.getCurrentAccount(userId);
-    const projected = new Prisma.Decimal(account.balance).add(
-      new Prisma.Decimal(newOrderAmount),
-    );
+    const balance = await this.computeBalanceWithClient(client, userId);
+    const projected = balance.add(new Prisma.Decimal(newOrderAmount));
     if (projected.greaterThan(corporate.creditLimit)) {
       throw new BadRequestException(
-        `Credit limit exceeded: balance ${account.balance} + order ${toMoneyString(newOrderAmount)} > limit ${toMoneyString(corporate.creditLimit)}`,
+        `Credit limit exceeded: balance ${toMoneyString(balance)} + order ${toMoneyString(newOrderAmount)} > limit ${toMoneyString(corporate.creditLimit)}`,
       );
     }
   }

@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname, ".."),
+  transpilePackages: ["furkansogutma-pos"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

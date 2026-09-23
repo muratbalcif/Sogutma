@@ -5,6 +5,7 @@ dist/
 .env.production
 .env.production.*
 !.env.production.example
+!pos/.env.production.example
 .DS_Store
 *.log
 .next/

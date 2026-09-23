@@ -52,6 +52,12 @@ export const ADMIN_PERMISSION_CODES = [
   'import.create',
   'site.read',
   'site.update',
+  // Windows POS desktop
+  'pos.read',
+  'pos.sell',
+  'pos.discount',
+  'pos.refund',
+  'pos.register',
 ] as const;
 
 export type AdminPermissionCode = (typeof ADMIN_PERMISSION_CODES)[number];
@@ -134,4 +140,16 @@ export const ACCOUNTING_PERMISSION_CODES = [
   'invoice.read',
   'invoice.create',
   'invoice.update',
+] as const;
+
+/** Windows POS cashier — sell / read / refund; discount optional via role. */
+export const POS_CASHIER_PERMISSION_CODES = [
+  'pos.read',
+  'pos.sell',
+  'pos.discount',
+  'pos.refund',
+  'product.read',
+  'stock.read',
+  'customer.read',
+  'pricing.read',
 ] as const;

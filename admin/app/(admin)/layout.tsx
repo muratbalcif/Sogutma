@@ -13,9 +13,10 @@ export default function AdminShellLayout({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const current = NAV_ITEMS.find(
-    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
-  );
+  const current = NAV_ITEMS.find((item) => {
+    if (item.href === "/pos") return pathname === "/pos";
+    return pathname === item.href || pathname.startsWith(`${item.href}/`);
+  });
 
   return (
     <RequireAuth>

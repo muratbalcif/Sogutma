@@ -114,7 +114,7 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
             ...(input.correlationId
               ? { correlationId: input.correlationId }
               : {}),
-          } as Prisma.InputJsonValue,
+          },
           status: OutboxStatus.PENDING,
           availableAt: new Date(),
         },
@@ -187,7 +187,8 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
     return this.enqueue({
       event: templateEvent,
       toEmail: input.toEmail,
-      subject: built.subject || `${siteName} — ${input.orderNumber}: ${input.status}`,
+      subject:
+        built.subject || `${siteName} — ${input.orderNumber}: ${input.status}`,
       eventKey: `${templateEvent}:order:${input.orderId}:${input.toEmail.toLowerCase()}`,
       payload: {
         orderId: input.orderId,
@@ -207,7 +208,11 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
   async processPending(limit = 30): Promise<number> {
     const now = new Date();
     // Prefer transactional over marketing so campaigns never starve order emails.
-    const transactional = await this.findEligible(now, Math.ceil(limit * 0.8), true);
+    const transactional = await this.findEligible(
+      now,
+      Math.ceil(limit * 0.8),
+      true,
+    );
     const remaining = Math.max(0, limit - transactional.length);
     const marketing =
       remaining > 0 ? await this.findEligible(now, remaining, false) : [];
@@ -307,8 +312,7 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
     }
     if (
       row.status === OutboxStatus.PENDING ||
-      (row.status === OutboxStatus.PROCESSING &&
-        row.availableAt > new Date())
+      (row.status === OutboxStatus.PROCESSING && row.availableAt > new Date())
     ) {
       return { id: row.id, status: row.status, attempts: row.attempts };
     }
@@ -523,12 +527,15 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
   }): Promise<SendResult> {
     const apiKey = this.config.get('RESEND_API_KEY', { infer: true })?.trim();
     const from = this.resolveFromAddress();
-    const fromName = this.config.get('RESEND_FROM_NAME', { infer: true })?.trim();
+    const fromName = this.config
+      .get('RESEND_FROM_NAME', { infer: true })
+      ?.trim();
     const replyTo = this.config.get('RESEND_REPLY_TO', { infer: true })?.trim();
     const nodeEnv = this.config.get('NODE_ENV', { infer: true });
 
     if (!apiKey || !from) {
-      const devMock = this.config.get('EMAIL_DEV_MOCK', { infer: true }) === true;
+      const devMock =
+        this.config.get('EMAIL_DEV_MOCK', { infer: true }) === true;
       if (devMock && nodeEnv !== 'production') {
         this.logger.debug(
           `notification.dev_mock channel=email to=${this.maskEmail(input.to)} subject=${input.subject.slice(0, 80)}`,
@@ -652,10 +659,7 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
   }
 
   private backoffMs(attempts: number): number {
-    const idx = Math.min(
-      Math.max(attempts - 1, 0),
-      BACKOFF_MINUTES.length - 1,
-    );
+    const idx = Math.min(Math.max(attempts - 1, 0), BACKOFF_MINUTES.length - 1);
     return BACKOFF_MINUTES[idx] * 60_000;
   }
 
@@ -707,7 +711,9 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
     payload: Prisma.JsonValue;
   }): { html: string; text?: string } {
     const payload =
-      item.payload && typeof item.payload === 'object' && !Array.isArray(item.payload)
+      item.payload &&
+      typeof item.payload === 'object' &&
+      !Array.isArray(item.payload)
         ? (item.payload as Record<string, unknown>)
         : {};
     const html =
@@ -753,7 +759,9 @@ export class EmailOutboxService implements OnModuleInit, OnModuleDestroy {
     const [user, domain] = email.split('@');
     if (!domain) return '***';
     const safeUser =
-      user.length <= 2 ? '*'.repeat(user.length) : `${user[0]}***${user.slice(-1)}`;
+      user.length <= 2
+        ? '*'.repeat(user.length)
+        : `${user[0]}***${user.slice(-1)}`;
     return `${safeUser}@${domain}`;
   }
 }

@@ -164,21 +164,20 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         // Still attempt push if enabled — channels are independent.
       }
 
-      let notification =
-        allowInApp
-          ? await this.prisma.notification.create({
-              data: {
-                userId: input.userId,
-                type: input.type,
-                title: input.title,
-                body: input.body,
-                data: (input.data ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-                entityType: input.entityType,
-                entityId: input.entityId,
-                eventKey: input.eventKey,
-              },
-            })
-          : null;
+      const notification = allowInApp
+        ? await this.prisma.notification.create({
+            data: {
+              userId: input.userId,
+              type: input.type,
+              title: input.title,
+              body: input.body,
+              data: (input.data ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+              entityType: input.entityType,
+              entityId: input.entityId,
+              eventKey: input.eventKey,
+            },
+          })
+        : null;
 
       if (notification) {
         this.logger.log(
@@ -632,7 +631,13 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     const now = new Date();
     const pending = await this.prisma.notificationOutbox.findMany({
       where: {
-        status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED, OutboxStatus.PROCESSING] },
+        status: {
+          in: [
+            OutboxStatus.PENDING,
+            OutboxStatus.FAILED,
+            OutboxStatus.PROCESSING,
+          ],
+        },
         processedAt: null,
         availableAt: { lte: now },
         attempts: { lt: this.maxAttempts },

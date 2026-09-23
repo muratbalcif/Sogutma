@@ -48,6 +48,7 @@ Do **not** put `.env.production`, JWT, DB, Redis, Resend, or R2 secrets in GitHu
 5. First bring-up if needed:
    `docker compose --env-file .env.production -f docker-compose.production.yml up -d --build`
 6. Nginx/SSL for `api` / `admin` / `www` / apex → `127.0.0.1:3100–3102`.
+   Browser POS lives under Admin: `https://admin.furkansogutma.net/pos`.
 
 Emergency manual deploy on the VPS:
 

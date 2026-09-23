@@ -11,6 +11,7 @@ import {
   ADMIN_PERMISSION_CODES,
   CUSTOMER_MANAGER_PERMISSION_CODES,
   ORDER_MANAGER_PERMISSION_CODES,
+  POS_CASHIER_PERMISSION_CODES,
   PRODUCT_MANAGER_PERMISSION_CODES,
   STOCK_MANAGER_PERMISSION_CODES,
 } from '../src/modules/admin/constants/permissions';
@@ -100,6 +101,11 @@ async function ensureRbacCatalog(): Promise<void> {
   await assignRolePermissions(
     AdminRoleCode.STOCK_MANAGER,
     STOCK_MANAGER_PERMISSION_CODES,
+    permissionByCode,
+  );
+  await assignRolePermissions(
+    AdminRoleCode.POS_CASHIER,
+    POS_CASHIER_PERMISSION_CODES,
     permissionByCode,
   );
 }

@@ -1630,3 +1630,284 @@ export const rbacService = {
     );
   },
 };
+
+export type PosPaymentMethod =
+  | "CASH"
+  | "CARD"
+  | "BANK_TRANSFER"
+  | "ON_ACCOUNT";
+export type PosSaleStatus = "COMPLETED" | "CANCELLED" | "REFUNDED";
+
+export type AdminPosRegister = {
+  id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
+  openedAt: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminPosCashier = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  name: string;
+};
+
+export type AdminPosSaleListItem = {
+  id: string;
+  saleNumber: string;
+  createdAt: string;
+  completedAt: string | null;
+  registerId: string;
+  registerCode: string;
+  registerName: string;
+  userId: string;
+  cashierName: string;
+  customerId: string | null;
+  customerName: string | null;
+  grandTotal: string;
+  status: PosSaleStatus;
+  paymentMethods: string[];
+};
+
+export type AdminPosSaleListParams = {
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  registerId?: string;
+  userId?: string;
+  customerId?: string;
+  paymentMethod?: PosPaymentMethod;
+  status?: PosSaleStatus;
+};
+
+export type AdminPosSaleDetail = {
+  id: string;
+  saleNumber: string;
+  registerId: string;
+  userId: string;
+  customerId: string | null;
+  status: PosSaleStatus;
+  currency: string;
+  subtotal: string;
+  discountTotal: string;
+  taxTotal: string;
+  grandTotal: string;
+  note: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  items: Array<{
+    id: string;
+    productId: string | null;
+    productName: string;
+    sku: string;
+    barcode: string | null;
+    quantity: number;
+    returnedQuantity: number;
+    returnableQuantity: number;
+    unitPrice: string;
+    discountAmount: string;
+    taxRate: string;
+    taxAmount: string;
+    lineSubtotal: string;
+    lineTotal: string;
+  }>;
+  payments: Array<{
+    id: string;
+    method: PosPaymentMethod;
+    amount: string;
+    status: string;
+    referenceNumber: string | null;
+    createdAt: string;
+  }>;
+  customer: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
+  cashier: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
+  register: {
+    id: string;
+    name: string;
+    code: string;
+    isActive: boolean;
+  } | null;
+  account: {
+    balance: string;
+    currency: string;
+    creditLimit: string | null;
+    allowCredit: boolean;
+  } | null;
+  ledger: Array<{
+    id: string;
+    type: string;
+    amount: string;
+    debit: string | null;
+    credit: string | null;
+    description: string;
+    reference: string;
+    referenceType: string | null;
+    referenceId: string | null;
+    createdAt: string;
+  }>;
+};
+
+export type AdminPosReportSummary = {
+  from: string;
+  to: string;
+  timezone: string;
+  totalSales: number;
+  grossSales: string;
+  returns: string;
+  netSales: string;
+  totalItems: number;
+  averageBasket: string;
+  returnCount: number;
+  paymentBreakdown: Array<{
+    method: PosPaymentMethod;
+    count: number;
+    amount: string;
+  }>;
+  registerBreakdown: Array<{
+    registerId: string;
+    registerCode: string;
+    registerName: string;
+    saleCount: number;
+    revenue: string;
+  }>;
+  cashierBreakdown: Array<{
+    cashierId: string;
+    cashierName: string;
+    saleCount: number;
+    revenue: string;
+  }>;
+  generatedAt?: string;
+};
+
+export type AdminPosReturn = {
+  id: string;
+  saleId: string;
+  saleNumber: string;
+  totalAmount: string;
+  saleStatus: PosSaleStatus;
+  createdAt: string;
+  items: Array<{
+    id: string;
+    saleItemId: string;
+    productName: string;
+    quantity: number;
+    lineRefund: string;
+  }>;
+  payments: Array<{ method: PosPaymentMethod; amount: string }>;
+};
+
+export type AdminPosReportParams = {
+  from: string;
+  to: string;
+  registerId?: string;
+  cashierId?: string;
+};
+
+export function buildAdminPosReportPath(
+  kind: "summary" | "x" | "export.csv",
+  params?: Partial<AdminPosReportParams>,
+): string {
+  const query = new URLSearchParams();
+  if (params?.from) query.set("from", params.from);
+  if (params?.to) query.set("to", params.to);
+  if (params?.registerId) query.set("registerId", params.registerId);
+  if (params?.cashierId) query.set("cashierId", params.cashierId);
+  const qs = query.toString();
+  return `/admin/pos/reports/${kind}${qs ? `?${qs}` : ""}`;
+}
+
+/** Query path helper (also used by unit tests). */
+export function buildAdminPosSalesPath(
+  page = 1,
+  limit = 50,
+  params?: AdminPosSaleListParams,
+): string {
+  const query = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  if (params?.search) query.set("search", params.search);
+  if (params?.dateFrom) query.set("dateFrom", params.dateFrom);
+  if (params?.dateTo) query.set("dateTo", params.dateTo);
+  if (params?.registerId) query.set("registerId", params.registerId);
+  if (params?.userId) query.set("userId", params.userId);
+  if (params?.customerId) query.set("customerId", params.customerId);
+  if (params?.paymentMethod) query.set("paymentMethod", params.paymentMethod);
+  if (params?.status) query.set("status", params.status);
+  return `/admin/pos/sales?${query.toString()}`;
+}
+
+export const posAdminService = {
+  listRegisters() {
+    return apiRequest<AdminPosRegister[]>("/admin/pos/registers");
+  },
+  createRegister(body: { name: string; code: string; isActive?: boolean }) {
+    return apiRequest<AdminPosRegister>("/admin/pos/registers", {
+      method: "POST",
+      body,
+    });
+  },
+  updateRegister(
+    id: string,
+    body: { name?: string; code?: string; isActive?: boolean },
+  ) {
+    return apiRequest<AdminPosRegister>(`/admin/pos/registers/${id}`, {
+      method: "PATCH",
+      body,
+    });
+  },
+  listCashiers() {
+    return apiRequest<AdminPosCashier[]>("/admin/pos/cashiers");
+  },
+  listSales(page = 1, limit = 50, params?: AdminPosSaleListParams) {
+    return apiRequest<PaginatedResponse<AdminPosSaleListItem>>(
+      buildAdminPosSalesPath(page, limit, params),
+    );
+  },
+  getSale(id: string) {
+    return apiRequest<AdminPosSaleDetail>(`/admin/pos/sales/${id}`);
+  },
+  reportSummary(params: AdminPosReportParams) {
+    return apiRequest<AdminPosReportSummary>(
+      buildAdminPosReportPath("summary", params),
+    );
+  },
+  reportX(params?: { registerId?: string; cashierId?: string }) {
+    return apiRequest<AdminPosReportSummary>(
+      buildAdminPosReportPath("x", params),
+    );
+  },
+  reportCsvPath(params: AdminPosReportParams) {
+    return buildAdminPosReportPath("export.csv", params);
+  },
+  createReturn(
+    saleId: string,
+    body: {
+      items: Array<{ saleItemId: string; quantity: number }>;
+      reason?: string;
+      note?: string;
+    },
+    idempotencyKey: string,
+  ) {
+    return apiRequest<AdminPosReturn>(`/admin/pos/sales/${saleId}/returns`, {
+      method: "POST",
+      body,
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+  },
+};

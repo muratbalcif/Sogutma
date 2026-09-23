@@ -143,7 +143,9 @@ function orderDetails(v: EmailTemplateVars): string {
   return detailsTable([
     ['Sipariş No', safe(v.orderNumber)],
     ...(v.amount ? [['Tutar', safe(v.amount)] as [string, string]] : []),
-    ...(v.statusLabel ? [['Durum', safe(v.statusLabel)] as [string, string]] : []),
+    ...(v.statusLabel
+      ? [['Durum', safe(v.statusLabel)] as [string, string]]
+      : []),
     ...(v.trackingNumber
       ? [['Takip No', safe(v.trackingNumber)] as [string, string]]
       : []),
@@ -152,7 +154,14 @@ function orderDetails(v: EmailTemplateVars): string {
 
 const TEMPLATES: Record<
   EmailTemplateKey,
-  (v: EmailTemplateVars) => { subject: string; title: string; message: string; ctaLabel?: string; ctaUrl?: string; details?: string }
+  (v: EmailTemplateVars) => {
+    subject: string;
+    title: string;
+    message: string;
+    ctaLabel?: string;
+    ctaUrl?: string;
+    details?: string;
+  }
 > = {
   ORDER_CREATED: (v) => ({
     subject: `Sipariş alındı — ${v.orderNumber ?? ''}`.trim(),
@@ -260,14 +269,16 @@ const TEMPLATES: Record<
   WELCOME: (v) => ({
     subject: `${v.siteName ?? 'FurkanSoğutma'} — Hoş geldiniz`,
     title: 'Hoş geldiniz',
-    message: `Merhaba ${safe(v.customerName, '')}, hesabınız hazır. Alışverişe başlayabilirsiniz.`.trim(),
+    message:
+      `Merhaba ${safe(v.customerName, '')}, hesabınız hazır. Alışverişe başlayabilirsiniz.`.trim(),
     ctaLabel: 'Siteye git',
     ctaUrl: v.ctaUrl || v.siteUrl,
   }),
   ACCOUNT_INVITATION: (v) => ({
     subject: 'Hesap daveti',
     title: 'Hesaba davet edildiniz',
-    message: `Merhaba ${safe(v.customerName, '')}, size bir hesap daveti gönderildi.`.trim(),
+    message:
+      `Merhaba ${safe(v.customerName, '')}, size bir hesap daveti gönderildi.`.trim(),
     ctaLabel: 'Daveti kabul et',
     ctaUrl: v.inviteUrl || v.ctaUrl,
   }),
@@ -311,7 +322,9 @@ const TEMPLATES: Record<
     title: v.title || 'Bildirim',
     message: safe(v.message, ''),
     details: v.detailLines?.length
-      ? detailsTable(v.detailLines.map((line) => ['', safe(line)] as [string, string]))
+      ? detailsTable(
+          v.detailLines.map((line) => ['', safe(line)] as [string, string]),
+        )
       : undefined,
     ctaLabel: v.ctaLabel,
     ctaUrl: v.ctaUrl,

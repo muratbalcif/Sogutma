@@ -6,6 +6,7 @@ import {
   ACCOUNTING_PERMISSION_CODES,
   CUSTOMER_MANAGER_PERMISSION_CODES,
   ORDER_MANAGER_PERMISSION_CODES,
+  POS_CASHIER_PERMISSION_CODES,
   PRODUCT_MANAGER_PERMISSION_CODES,
   STOCK_MANAGER_PERMISSION_CODES,
 } from './constants/permissions';
@@ -218,6 +219,30 @@ export class AdminService {
         update: {},
         create: {
           roleId: stockManager.id,
+          permissionId: permission.id,
+        },
+      });
+    }
+
+    const posCashier = await this.prisma.adminRole.findUniqueOrThrow({
+      where: { code: AdminRoleCode.POS_CASHIER },
+    });
+
+    for (const code of POS_CASHIER_PERMISSION_CODES) {
+      const permission = permissionByCode.get(code);
+      if (!permission) {
+        continue;
+      }
+      await this.prisma.adminRolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: posCashier.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: posCashier.id,
           permissionId: permission.id,
         },
       });

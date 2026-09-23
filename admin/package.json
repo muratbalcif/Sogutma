@@ -14,11 +14,14 @@
     "@hookform/resolvers": "^5.9.1",
     "@tanstack/react-query": "^5.103.1",
     "clsx": "^2.1.1",
+    "decimal.js": "^10.6.0",
+    "furkansogutma-pos": "*",
     "next": "^15.5.25",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.88.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

@@ -220,7 +220,8 @@ describe('EmailOutboxService', () => {
   });
 
   it('enqueue is idempotent on duplicate eventKey', async () => {
-    const { Prisma } = require('@prisma/client') as typeof import('@prisma/client');
+    const { Prisma } =
+      require('@prisma/client') as typeof import('@prisma/client');
     const err = new Prisma.PrismaClientKnownRequestError('Unique', {
       code: 'P2002',
       clientVersion: 'test',
