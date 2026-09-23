@@ -91,16 +91,53 @@ export function PosPage({
     !!pickProducts ||
     !!successSale;
 
+  const closeModals = useCallback(() => {
+    setCustomerOpen(false);
+    setDiscountOpen(false);
+    setPaymentOpen(false);
+    setReturnOpen(false);
+    setPickProducts(null);
+    focusBarcode();
+  }, [focusBarcode]);
+
+  const openProduct = useCallback(() => {
+    focusBarcode();
+  }, [focusBarcode]);
+
+  const openCustomer = useCallback(() => {
+    setCustomerOpen(true);
+  }, []);
+
+  const openDiscount = useCallback(() => {
+    if (!canDiscount(user)) {
+      setToast("İndirim yetkisi yok (pos.discount)");
+      return;
+    }
+    setDiscountOpen(true);
+  }, [user]);
+
+  const openPayment = useCallback(() => {
+    if (cart.length === 0) {
+      setToast("Sepet boş");
+      return;
+    }
+    setPaymentOpen(true);
+  }, [cart.length]);
+
+  const openReturn = useCallback(() => {
+    if (!canRefund(user)) {
+      setToast("İade yetkisi yok (pos.refund)");
+      return;
+    }
+    setReturnOpen(true);
+  }, [user]);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (modalOpen) {
         if (e.key === "Escape") {
           e.preventDefault();
-          setCustomerOpen(false);
-          setDiscountOpen(false);
-          setPaymentOpen(false);
-          setReturnOpen(false);
-          setPickProducts(null);
+          closeModals();
         }
         return;
       }
@@ -114,48 +151,32 @@ export function PosPage({
 
       if (e.key === "F2") {
         e.preventDefault();
-        focusBarcode();
+        openProduct();
         return;
       }
       if (e.key === "F4") {
         e.preventDefault();
-        setCustomerOpen(true);
+        openCustomer();
         return;
       }
       if (e.key === "F6") {
         e.preventDefault();
-        if (!canDiscount(user)) {
-          setToast("İndirim yetkisi yok (pos.discount)");
-          return;
-        }
-        setDiscountOpen(true);
+        openDiscount();
         return;
       }
-      if (e.key === "F8") {
+      if (e.key === "F8" || e.key === "F12") {
         e.preventDefault();
-        if (cart.length === 0) {
-          setToast("Sepet boş");
-          return;
-        }
-        setPaymentOpen(true);
+        openPayment();
         return;
       }
       if (e.key === "F9") {
         e.preventDefault();
-        if (!canRefund(user)) {
-          setToast("İade yetkisi yok (pos.refund)");
-          return;
-        }
-        setReturnOpen(true);
+        openReturn();
         return;
       }
-      if (e.key === "F12") {
+      if (e.key === "Escape") {
         e.preventDefault();
-        if (cart.length === 0) {
-          setToast("Sepet boş");
-          return;
-        }
-        setPaymentOpen(true);
+        closeModals();
         return;
       }
 
@@ -184,13 +205,17 @@ export function PosPage({
     return () => window.removeEventListener("keydown", onKey);
   }, [
     modalOpen,
-    cart.length,
     selectedLineId,
-    user,
     focusBarcode,
     increment,
     decrement,
     removeLine,
+    closeModals,
+    openProduct,
+    openCustomer,
+    openDiscount,
+    openPayment,
+    openReturn,
   ]);
 
   async function completeSale(
@@ -292,13 +317,13 @@ export function PosPage({
       </div>
 
       <footer className="flex flex-wrap gap-2 border-t border-[var(--border)] bg-white px-4 py-3 text-sm">
-        <ShortcutHint keys="F2" label="Ürün" />
-        <ShortcutHint keys="F4" label="Müşteri" />
-        <ShortcutHint keys="F6" label="İskonto" />
-        <ShortcutHint keys="F8" label="Ödeme" />
-        <ShortcutHint keys="F9" label="İade" />
-        <ShortcutHint keys="F12" label="Satış" />
-        <ShortcutHint keys="ESC" label="Kapat" />
+        <ShortcutButton keys="F2" label="Ürün" onClick={openProduct} />
+        <ShortcutButton keys="F4" label="Müşteri" onClick={openCustomer} />
+        <ShortcutButton keys="F6" label="İskonto" onClick={openDiscount} />
+        <ShortcutButton keys="F8" label="Ödeme" onClick={openPayment} />
+        <ShortcutButton keys="F9" label="İade" onClick={openReturn} />
+        <ShortcutButton keys="F12" label="Satış" onClick={openPayment} />
+        <ShortcutButton keys="ESC" label="Kapat" onClick={closeModals} />
       </footer>
 
       {toast ? <Toast message={toast} onClose={() => setToast(null)} /> : null}
@@ -369,14 +394,26 @@ export function PosPage({
   );
 }
 
-function ShortcutHint({ keys, label }: { keys: string; label: string }) {
+function ShortcutButton({
+  keys,
+  label,
+  onClick,
+}: {
+  keys: string;
+  label: string;
+  onClick: () => void;
+}) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5">
-      <kbd className="rounded bg-slate-800 px-1.5 py-0.5 text-xs font-semibold text-white">
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 transition-colors hover:bg-teal-100 hover:ring-2 hover:ring-[var(--primary)]/30 active:bg-teal-200"
+    >
+      <kbd className="pointer-events-none rounded bg-slate-800 px-1.5 py-0.5 text-xs font-semibold text-white">
         {keys}
       </kbd>
-      <span className="text-slate-600">{label}</span>
-    </span>
+      <span className="font-medium text-slate-700">{label}</span>
+    </button>
   );
 }
 

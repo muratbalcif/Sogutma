@@ -22,7 +22,8 @@ Market satış (Windows desktop). Backend source of truth: Nest API + Prisma + i
 | Yüzey | URL |
 |-------|-----|
 | Browser POS (Admin) | https://admin.furkansogutma.net/pos |
-| Windows installer | GitHub Release (`pos-v*` tags) / artifact `furkansogutma-pos-windows` |
+| Windows .exe indir | https://admin.furkansogutma.net/pos/download |
+| Windows installer | GitHub Release (`pos-v*` → `FurkanSogutma-POS-Setup.exe`) |
 | API | https://api.furkansogutma.net/api/v1 |
 
 Dokümantasyon:

@@ -50,6 +50,7 @@ export default function AdminPosSellPage() {
       <div className="flex h-screen flex-1 flex-col">
         <RegisterSelectPage
           user={posUser}
+          windowsDownloadHref="/pos/download"
           onSelected={(reg) => {
             setRegister(reg.id, `${reg.name} (${reg.code})`);
           }}

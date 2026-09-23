@@ -3,6 +3,7 @@
 Tauri 2 + React + TypeScript market satış istemcisi.
 
 **Production web POS (Admin altında):** https://admin.furkansogutma.net/pos  
+**Windows .exe indir:** https://admin.furkansogutma.net/pos/download  
 Ayrı `pos.*` domain yok. Aynı `pos/` React iş mantığı; Admin JWT ile çalışır.
 
 ## Gereksinimler

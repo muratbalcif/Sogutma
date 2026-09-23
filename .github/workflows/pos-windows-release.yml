@@ -122,6 +122,8 @@ jobs:
           fi
           mkdir -p ../out/windows
           cp -f "${NSIS_FILES[@]}" ../out/windows/
+          # Stable filename for Admin /pos/download deep link
+          cp -f "${NSIS_FILES[0]}" ../out/windows/FurkanSogutma-POS-Setup.exe
           if [[ "${#MSI_FILES[@]}" -gt 0 ]]; then
             cp -f "${MSI_FILES[@]}" ../out/windows/
           fi
@@ -165,7 +167,8 @@ jobs:
             - **Signing:** none (OV/EV code signing planned later)
             - **Auto-update:** not enabled in this phase
 
-            Browser POS: https://admin.furkansogutma.net/pos
+            Browser POS: https://admin.furkansogutma.net/pos  
+            Windows indir: https://admin.furkansogutma.net/pos/download
           files: |
             out/windows/*
         env:

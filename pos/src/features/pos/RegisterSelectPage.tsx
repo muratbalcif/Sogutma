@@ -8,10 +8,13 @@ export function RegisterSelectPage({
   user,
   onSelected,
   onLogout,
+  windowsDownloadHref,
 }: {
   user: AuthUser;
   onSelected: (register: PosRegister) => void;
   onLogout: () => void;
+  /** When set (Admin web), shows Windows installer download link. */
+  windowsDownloadHref?: string;
 }) {
   const query = useQuery({
     queryKey: ["pos-registers"],
@@ -32,6 +35,14 @@ export function RegisterSelectPage({
           <h1 className="text-2xl font-bold">Kasa Seç</h1>
         </div>
         <div className="flex items-center gap-4">
+          {windowsDownloadHref ? (
+            <a
+              href={windowsDownloadHref}
+              className="rounded-lg border border-[var(--primary)] bg-[var(--primary-light)] px-3 py-2 text-sm font-semibold text-[var(--primary-dark)] hover:bg-teal-100"
+            >
+              Windows .exe indir
+            </a>
+          ) : null}
           <span className="text-sm text-slate-600">
             {user.firstName} {user.lastName}
           </span>

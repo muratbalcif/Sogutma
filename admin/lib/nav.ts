@@ -24,6 +24,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/orders", label: "Siparişler", permission: "order.read" },
   { href: "/sales", label: "Satışlar", permission: "sale.read" },
   { href: "/pos", label: "POS · Satış", permission: "pos.sell" },
+  { href: "/pos/download", label: "POS · Windows indir", permission: "pos.sell" },
   { href: "/pos/registers", label: "POS · Kasalar", permission: "pos.read" },
   { href: "/pos/sales", label: "POS · Satışlar", permission: "pos.read" },
   { href: "/pos/reports", label: "POS · Raporlar", permission: "pos.read" },
