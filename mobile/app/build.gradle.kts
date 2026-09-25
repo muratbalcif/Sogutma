@@ -120,6 +120,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             isDebuggable = false
+            // Play Console: native .so files (Firebase and other SDKs) need symbols in the AAB.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
