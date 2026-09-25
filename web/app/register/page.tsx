@@ -17,10 +17,7 @@ const schema = z
     lastName: z.string().min(1),
     email: z.string().email(),
     phone: z.string().optional(),
-    password: z
-      .string()
-      .min(8)
-      .regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, "Harf ve rakam içermeli"),
+    password: z.string().min(8, "En az 8 karakter"),
     passwordConfirm: z.string().min(8),
     userType: z.enum(["INDIVIDUAL", "CORPORATE"]),
     companyName: z.string().optional(),
@@ -97,7 +94,10 @@ export default function RegisterPage() {
         </div>
         <Input type="email" placeholder="E-posta" {...register("email")} />
         <Input placeholder="Telefon" {...register("phone")} />
-        <Input type="password" placeholder="Şifre" {...register("password")} />
+        <Input type="password" placeholder="Şifre (en az 8 karakter)" {...register("password")} />
+        {errors.password ? (
+          <p className="text-sm text-red-600">{errors.password.message}</p>
+        ) : null}
         <Input
           type="password"
           placeholder="Şifre tekrar"

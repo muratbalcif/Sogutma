@@ -69,7 +69,7 @@ android {
                 "String",
                 "API_BASE_URL",
                 // Emulator → host machine. Physical device + prod API: set API_BASE_URL_DEV in api-urls.properties.
-                "\"${apiUrl("API_BASE_URL_DEV", "http://10.0.2.2:3000/api/v1")}\"",
+                "\"${apiUrl("API_BASE_URL_DEV", "https://furkansogutma.net/api/v1")}\"",
             )
             buildConfigField("String", "ENVIRONMENT", "\"dev\"")
         }

@@ -5,7 +5,6 @@ import {
   IsEnum,
   IsOptional,
   IsString,
-  Matches,
   MaxLength,
   MinLength,
   ValidateIf,
@@ -21,13 +20,10 @@ export class RegisterDto {
   @MaxLength(255)
   email!: string;
 
-  @ApiProperty({ example: 'Password123!', minLength: 8 })
+  @ApiProperty({ example: 'password', minLength: 8 })
   @IsString()
   @MinLength(8)
   @MaxLength(128)
-  @Matches(/^(?=.*[A-Za-z])(?=.*\d).+$/, {
-    message: 'password must contain at least one letter and one number',
-  })
   password!: string;
 
   @ApiProperty({ example: 'Murat' })
