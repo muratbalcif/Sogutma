@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { User, UserStatus, UserType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserResponseDto } from './dto/user-response.dto';
@@ -67,6 +67,60 @@ export class UsersService {
     return this.prisma.user.update({
       where: { id },
       data: { status },
+    });
+  }
+
+  /**
+   * Closes the storefront account without removing orders, invoices, or ledger rows.
+   * Personal fields are replaced so the original email can be registered again.
+   */
+  async anonymizeAccount(id: string, passwordHash: string): Promise<void> {
+    const admin = await this.prisma.adminUser.findUnique({ where: { userId: id } });
+    if (admin) {
+      throw new ForbiddenException('Yönetici hesapları buradan silinemez');
+    }
+
+    const deletedEmail = `deleted.${id}@deleted.furkansogutma.invalid`;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refreshToken.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await tx.deviceToken.deleteMany({ where: { userId: id } });
+      await tx.favorite.deleteMany({ where: { userId: id } });
+      await tx.productAlert.deleteMany({ where: { userId: id } });
+      await tx.notification.deleteMany({ where: { userId: id } });
+      await tx.notificationPreference.deleteMany({ where: { userId: id } });
+      await tx.cart.deleteMany({ where: { userId: id } });
+      await tx.address.updateMany({
+        where: { userId: id },
+        data: {
+          firstName: 'Silinmiş',
+          lastName: 'Kullanıcı',
+          phone: '0000000000',
+          addressLine: 'Silindi',
+          neighborhood: null,
+        },
+      });
+      await tx.corporateCustomer.updateMany({
+        where: { userId: id },
+        data: {
+          companyName: 'Silinmiş',
+          identityNumber: null,
+        },
+      });
+      await tx.user.update({
+        where: { id },
+        data: {
+          email: deletedEmail,
+          passwordHash,
+          firstName: 'Silinmiş',
+          lastName: 'Kullanıcı',
+          phone: null,
+          identityNumber: null,
+          status: UserStatus.INACTIVE,
+        },
+      });
     });
   }
 

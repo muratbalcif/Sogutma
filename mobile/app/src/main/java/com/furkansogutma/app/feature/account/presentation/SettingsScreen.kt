@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -102,6 +103,7 @@ fun SettingsRoute(
     val theme by vm.settings.themeMode.collectAsStateWithLifecycle(initialValue = "system")
     var prefs by remember { mutableStateOf<NotificationPreferences?>(null) }
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     LaunchedEffect(Unit) {
         when (val result = vm.notificationRepository.getPreferences()) {
             is Result.Success -> prefs = result.data
@@ -153,6 +155,17 @@ fun SettingsRoute(
                     scope.launch { vm.notificationRepository.updatePreferences(updated) }
                 }
             }
+            Spacer(Modifier.height(FurkanSpacing.lg))
+            Text(
+                "Hesabı sil",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        uriHandler.openUri("https://furkansogutma.net/hesap-silme")
+                    }
+                    .padding(vertical = FurkanSpacing.sm),
+                color = MaterialTheme.colorScheme.error,
+            )
             Spacer(Modifier.height(FurkanSpacing.lg))
             Text("Yasal", style = MaterialTheme.typography.titleLarge)
             listOf(

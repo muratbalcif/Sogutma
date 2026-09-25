@@ -10,6 +10,7 @@ describe('AuthService', () => {
     findById: jest.fn(),
     findByIdOrThrow: jest.fn(),
     updateProfile: jest.fn(),
+    anonymizeAccount: jest.fn(),
   };
 
   const passwordService = {
@@ -271,6 +272,34 @@ describe('AuthService', () => {
       phone: '+905551112233',
     });
     expect(result.firstName).toBe('Ali');
+  });
+
+  it('deleteAccount anonymizes the user and revokes sessions', async () => {
+    usersService.findByIdOrThrow.mockResolvedValue(user);
+    passwordService.verify.mockResolvedValue(true);
+    passwordService.hash.mockResolvedValue('new-hash');
+
+    await expect(service.deleteAccount(user.id, 'password12')).resolves.toEqual({
+      success: true,
+    });
+
+    expect(usersService.anonymizeAccount).toHaveBeenCalledWith(
+      user.id,
+      'new-hash',
+    );
+    expect(tokenService.revokeAllRefreshTokensForUser).toHaveBeenCalledWith(
+      user.id,
+    );
+  });
+
+  it('deleteAccount rejects a wrong password', async () => {
+    usersService.findByIdOrThrow.mockResolvedValue(user);
+    passwordService.verify.mockResolvedValue(false);
+
+    await expect(service.deleteAccount(user.id, 'password12')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(usersService.anonymizeAccount).not.toHaveBeenCalled();
   });
 
   it('updateProfile rejects empty body', async () => {

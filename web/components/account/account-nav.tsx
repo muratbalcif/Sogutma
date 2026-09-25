@@ -14,6 +14,7 @@ const links = [
   { href: "/account/current-account", label: "Cari Hesabım" },
   { href: "/account/bank-transfers", label: "Havale / EFT" },
   { href: "/account/settings", label: "Ayarlar" },
+  { href: "/hesap-silme", label: "Hesabı sil" },
 ];
 
 export function AccountNav() {

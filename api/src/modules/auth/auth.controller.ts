@@ -28,6 +28,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { JwtAccessGuard } from './guards/jwt-access.guard';
 import { AuthenticatedUser } from './types/authenticated-user.type';
 
@@ -106,5 +107,23 @@ export class AuthController {
     @Body() dto: UpdateProfileDto,
   ): Promise<UserResponseDto> {
     return this.authService.updateProfile(request.user.id, dto);
+  }
+
+  @Post('account/delete')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAccessGuard)
+  @ApiBearerAuth('access-token')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Delete the authenticated storefront account',
+    description:
+      'Anonymizes personal data and signs the user out. Orders, invoices, and ledger rows are kept.',
+  })
+  @ApiOkResponse({ schema: { example: { success: true } } })
+  deleteAccount(
+    @Req() request: Request & { user: AuthenticatedUser },
+    @Body() dto: DeleteAccountDto,
+  ): Promise<{ success: true }> {
+    return this.authService.deleteAccount(request.user.id, dto.password);
   }
 }

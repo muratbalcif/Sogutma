@@ -4,6 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UserStatus, UserType } from '@prisma/client';
@@ -173,6 +174,30 @@ export class AuthService {
     });
     const access = await this.adminService.getAccessForUser(user.id);
     return this.usersService.toResponse(user, access);
+  }
+
+  async deleteAccount(
+    userId: string,
+    password: string,
+  ): Promise<{ success: true }> {
+    const user = await this.usersService.findByIdOrThrow(userId);
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new BadRequestException('Hesap zaten silinmiş');
+    }
+    const passwordValid = await this.passwordService.verify(
+      user.passwordHash,
+      password,
+    );
+    if (!passwordValid) {
+      throw new UnauthorizedException('Şifre hatalı');
+    }
+
+    const passwordHash = await this.passwordService.hash(
+      randomBytes(32).toString('hex'),
+    );
+    await this.usersService.anonymizeAccount(userId, passwordHash);
+    await this.tokenService.revokeAllRefreshTokensForUser(userId);
+    return { success: true };
   }
 
   async buildAuthenticatedUser(userId: string): Promise<AuthenticatedUser> {

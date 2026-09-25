@@ -57,6 +57,9 @@ export function SiteFooter({
             <li>
               <Link href="/login">Giriş</Link>
             </li>
+            <li>
+              <Link href="/hesap-silme">Hesabı sil</Link>
+            </li>
           </ul>
         </div>
       </div>
