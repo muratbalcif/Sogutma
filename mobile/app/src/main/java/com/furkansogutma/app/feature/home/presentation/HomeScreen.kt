@@ -221,7 +221,6 @@ private fun CategoryRow(
         FurkanEmptyState(
             title = "Kategori yok",
             message = "Kategoriler şu an listelenemiyor.",
-            modifier = Modifier.height(160.dp),
         )
         return
     }
@@ -354,7 +353,6 @@ private fun ProductSection(
             FurkanEmptyState(
                 title = "Ürün yok",
                 message = "Bu bölümde henüz ürün bulunmuyor.",
-                modifier = Modifier.height(180.dp),
             )
         } else {
             LazyRow(
