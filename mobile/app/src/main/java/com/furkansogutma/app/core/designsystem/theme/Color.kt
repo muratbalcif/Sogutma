@@ -72,6 +72,9 @@ val BadgeRed = Color(0xFFD92D20)
 val OnPrimary = Color(0xFFFFFFFF)
 val OnAccent = Color(0xFFFFFFFF)
 
+/** Wordmark accent for “Soğutma” */
+val BrandMark = Color(0xFF0F7EA0)
+
 // ─────────────────────────────────────────────
 // Legacy aliases
 // ─────────────────────────────────────────────

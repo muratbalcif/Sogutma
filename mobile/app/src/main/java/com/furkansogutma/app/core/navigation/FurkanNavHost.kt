@@ -1,12 +1,13 @@
 package com.furkansogutma.app.core.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -21,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
@@ -112,11 +115,11 @@ fun FurkanNavHost(
     }
 
     val topLevel = listOf(
-        TopLevel(AppRoute.Home.route, "Anasayfa", Icons.Default.Home),
+        TopLevel(AppRoute.Home.route, "Anasayfa", Icons.Outlined.Home),
         TopLevel(AppRoute.Categories.route, "Kategoriler", Icons.Outlined.Category),
-        TopLevel(AppRoute.Search.route, "Ara", Icons.Default.Search),
-        TopLevel(AppRoute.Cart.route, "Sepet", Icons.Default.ShoppingCart),
-        TopLevel(AppRoute.Account.route, "Hesabım", Icons.Default.Person),
+        TopLevel(AppRoute.Search.route, "Ara", Icons.Outlined.Search),
+        TopLevel(AppRoute.Cart.route, "Sepet", Icons.Outlined.ShoppingCart),
+        TopLevel(AppRoute.Account.route, "Hesabım", Icons.Outlined.Person),
     )
     val showBottomBar = topLevel.any { it.route == current }
 
@@ -138,6 +141,9 @@ fun FurkanNavHost(
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar(
+                    modifier = Modifier
+                        .shadow(6.dp, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                        .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
                     containerColor = White,
                     tonalElevation = 0.dp,
                     windowInsets = NavigationBarDefaults.windowInsets,
