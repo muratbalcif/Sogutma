@@ -12,9 +12,11 @@ export function SiteFooter({
     <footer className="mt-16 border-t border-slate-200 bg-navy text-slate-200">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 md:grid-cols-4">
         <div>
-          <p className="font-[family-name:var(--font-display)] text-lg text-white">
-            {config.siteName}
-          </p>
+          <img
+            src="/logo.svg"
+            alt={config.siteName}
+            className="h-24 w-auto rounded-xl bg-white object-contain p-2"
+          />
           <p className="mt-2 text-sm text-slate-300">{config.address}</p>
           <p className="mt-2 text-sm">{config.supportPhone}</p>
           <p className="text-sm">{config.supportEmail}</p>

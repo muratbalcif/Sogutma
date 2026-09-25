@@ -84,11 +84,12 @@ export function SiteHeader({
   return (
     <header className="sticky top-0 z-40 bg-surface/95 shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)] backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center gap-5 px-4 py-4">
-        <Link
-          href="/"
-          className="shrink-0 font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-primary"
-        >
-          {siteName}
+        <Link href="/" className="shrink-0" aria-label={siteName}>
+          <img
+            src="/logo.svg"
+            alt={siteName}
+            className="h-24 w-auto object-contain"
+          />
         </Link>
         <div className="hidden flex-1 md:block">
           <SearchForm />

@@ -1,5 +1,6 @@
 package com.furkansogutma.app.feature.home.presentation
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,20 +47,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.furkansogutma.app.R
 import com.furkansogutma.app.core.designsystem.components.FurkanNetworkImage
 import com.furkansogutma.app.core.designsystem.components.FurkanProductCard
 import com.furkansogutma.app.core.designsystem.theme.Accent
 import com.furkansogutma.app.core.designsystem.theme.AccentSoft
-import com.furkansogutma.app.core.designsystem.theme.BrandMark
 import com.furkansogutma.app.core.designsystem.theme.FurkanSpacing
 import com.furkansogutma.app.core.designsystem.theme.OnSurface
 import com.furkansogutma.app.core.designsystem.theme.OnSurfaceMuted
@@ -90,15 +88,11 @@ internal fun HomeHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 28.sp)) {
-                            append("Furkan")
-                        }
-                        withStyle(SpanStyle(color = BrandMark, fontWeight = FontWeight.Bold, fontSize = 28.sp)) {
-                            append("Soğutma")
-                        }
-                    },
+                Image(
+                    painter = painterResource(R.drawable.ic_logo),
+                    contentDescription = "FurkanSoğutma",
+                    modifier = Modifier.height(112.dp),
+                    contentScale = ContentScale.Fit,
                 )
                 Spacer(Modifier.height(FurkanSpacing.xxs))
                 Text(

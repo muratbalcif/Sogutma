@@ -1,5 +1,6 @@
 package com.furkansogutma.app.feature.auth.presentation.login
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,12 +19,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.furkansogutma.app.R
 import com.furkansogutma.app.core.designsystem.components.FurkanButton
 import com.furkansogutma.app.core.designsystem.components.FurkanOutlinedButton
 import com.furkansogutma.app.core.designsystem.components.FurkanTextField
@@ -70,11 +74,11 @@ fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(FurkanSpacing.lg))
-        Text(
-            "FurkanSoğutma",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
+        Image(
+            painter = painterResource(R.drawable.ic_logo),
+            contentDescription = "FurkanSoğutma",
+            modifier = Modifier.height(200.dp),
+            contentScale = ContentScale.Fit,
         )
         Spacer(Modifier.height(FurkanSpacing.xs))
         Text(

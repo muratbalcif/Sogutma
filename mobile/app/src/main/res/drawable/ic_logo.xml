@@ -1,9 +1,10 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
-    android:width="1200dp"
-    android:height="1000dp"
+    android:width="108dp"
+    android:height="108dp"
     android:viewportWidth="1200"
-    android:viewportHeight="1000">
+    android:viewportHeight="1200">
+  <group android:translateY="100">
   <path
       android:pathData="M340,100C340,75 360,60 388,60L920,60L882,175L525,175C488,175 465,195 465,230L465,275L815,275L775,375L465,375L465,490C465,518 447,540 415,540L340,540Z">
     <aapt:attr name="android:fillColor">
@@ -125,4 +126,5 @@
   <path
       android:pathData="M816.3,805.4H795.1L791.8,815H778.2L797.6,762.5H813.8L833.2,815H819.6ZM798.5,795.7H812.9L805.7,774.8Z"
       android:fillColor="#12A594"/>
+  </group>
 </vector>

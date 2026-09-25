@@ -2,7 +2,7 @@ package com.furkansogutma.app.feature.home.presentation
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import com.furkansogutma.app.core.designsystem.theme.FurkanSogutmaTheme
 import com.furkansogutma.app.feature.home.domain.usecase.HomeCatalog
 import org.junit.Rule
@@ -35,6 +35,6 @@ class HomeScreenTest {
                 )
             }
         }
-        composeRule.onNodeWithText("FurkanSoğutma").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("FurkanSoğutma").assertIsDisplayed()
     }
 }
