@@ -204,6 +204,20 @@ async function upsertCategory(data: {
   });
 }
 
+async function seedChildCategories(
+  parentId: string,
+  children: readonly (readonly [name: string, slug: string])[],
+): Promise<void> {
+  for (const [index, [name, slug]] of children.entries()) {
+    await upsertCategory({
+      name,
+      slug,
+      parentId,
+      sortOrder: index + 1,
+    });
+  }
+}
+
 async function seedCatalog(): Promise<void> {
   const klima = await upsertCategory({
     name: 'Klima',
@@ -229,10 +243,40 @@ async function seedCatalog(): Promise<void> {
     sortOrder: 3,
   });
 
+  const sogutma = await upsertCategory({
+    name: 'Soğutma',
+    slug: 'sogutma',
+    sortOrder: 2,
+  });
+  await seedChildCategories(sogutma.id, [
+    ['Buzdolabı', 'buzdolabi'],
+    ['Derin Dondurucu', 'derin-dondurucu'],
+    ['Teşhir Dolabı', 'teshir-dolabi'],
+    ['Şişe Soğutucu', 'sise-sogutucu'],
+    ['Su Sebili', 'su-sebili'],
+    ['Buz Makinesi', 'buz-makinesi'],
+    ['Soğuk Oda', 'soguk-oda'],
+  ]);
+
+  const beyazEsya = await upsertCategory({
+    name: 'Beyaz Eşya',
+    slug: 'beyaz-esya',
+    sortOrder: 3,
+  });
+  await seedChildCategories(beyazEsya.id, [
+    ['Çamaşır Makinesi', 'camasir-makinesi'],
+    ['Kurutma Makinesi', 'kurutma-makinesi'],
+    ['Bulaşık Makinesi', 'bulasik-makinesi'],
+    ['Fırın', 'firin'],
+    ['Ocak', 'ocak'],
+    ['Davlumbaz', 'davlumbaz'],
+    ['Ankastre', 'ankastre'],
+  ]);
+
   const spare = await upsertCategory({
     name: 'Yedek Parça',
     slug: 'yedek-parca',
-    sortOrder: 2,
+    sortOrder: 4,
   });
   const spareParts = await upsertCategory({
     name: 'Klima Parçaları',
@@ -272,88 +316,7 @@ async function seedCatalog(): Promise<void> {
       }),
     );
   }
-
-  const arcelik = brandRecords.find((b) => b.slug === 'arcelik')!;
-  const daikin = brandRecords.find((b) => b.slug === 'daikin')!;
-  const vestel = brandRecords.find((b) => b.slug === 'vestel')!;
-
-  await seedProduct({
-    sku: 'SKU-SPLIT-12000',
-    barcode: '8690000001200',
-    name: '12.000 BTU Split Klima',
-    slug: '12000-btu-split-klima',
-    description: 'Enerji verimli split klima ünitesi.',
-    brandId: arcelik.id,
-    categoryId: split.id,
-    vatRate: 20,
-    attributes: [
-      { name: 'Soğutma Kapasitesi', value: '12000 BTU', sortOrder: 1 },
-      { name: 'Gaz Tipi', value: 'R32', sortOrder: 2 },
-      { name: 'Voltaj', value: '220V', sortOrder: 3 },
-    ],
-    images: [
-      {
-        url: 'https://cdn.furkansogutma.local/dev/split-12000-1.jpg',
-        alt: 'Split klima ön görünüm',
-        sortOrder: 1,
-        isPrimary: true,
-      },
-    ],
-    compatibility: [
-      {
-        manufacturer: 'Arçelik',
-        model: '12325',
-        modelYear: 2024,
-      },
-    ],
-  });
-
-  await seedProduct({
-    sku: 'SKU-DAIKIN-18000',
-    barcode: '8690000001800',
-    name: '18.000 BTU Daikin Split',
-    slug: '18000-btu-daikin-split',
-    description: 'Yüksek performanslı split klima.',
-    brandId: daikin.id,
-    categoryId: split.id,
-    vatRate: 20,
-    attributes: [
-      { name: 'Soğutma Kapasitesi', value: '18000 BTU', sortOrder: 1 },
-      { name: 'Gaz Tipi', value: 'R32', sortOrder: 2 },
-    ],
-    images: [
-      {
-        url: 'https://cdn.furkansogutma.local/dev/daikin-18000.jpg',
-        isPrimary: true,
-        sortOrder: 1,
-      },
-    ],
-    compatibility: [{ manufacturer: 'Daikin', model: 'FTXM50' }],
-  });
-
-  await seedProduct({
-    sku: 'SKU-FAN-001',
-    barcode: '8690000003001',
-    name: 'Klima Fan Motoru',
-    slug: 'klima-fan-motoru',
-    description: 'Evrensel fan motoru yedek parçası.',
-    brandId: vestel.id,
-    categoryId: spareParts.id,
-    vatRate: 20,
-    attributes: [{ name: 'Voltaj', value: '220V', sortOrder: 1 }],
-    images: [
-      {
-        url: 'https://cdn.furkansogutma.local/dev/fan-motor.jpg',
-        isPrimary: true,
-        sortOrder: 1,
-      },
-    ],
-    compatibility: [
-      { manufacturer: 'Vestel', model: 'XYZ123' },
-      { manufacturer: 'Beko', model: 'BKO-FAN-9' },
-    ],
-  });
-
+ 
   console.log('Catalog seed data ensured');
 }
 

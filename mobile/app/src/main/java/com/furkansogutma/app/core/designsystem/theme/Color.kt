@@ -33,9 +33,9 @@ val AccentSoft = Color(0xFFD9F4F0)
 
 val White = Color(0xFFFFFFFF)
 
-val Background = Color(0xFFF7FAFC)
+val Background = Color(0xFFFDFDFD)
 val Surface = Color(0xFFFFFFFF)
-val SurfaceSecondary = Color(0xFFF0F5F8)
+val SurfaceSecondary = Color(0xFFF7F7F8)
 val SurfaceElevated = Color(0xFFFFFFFF)
 val SurfaceVariant = SurfaceSecondary
 
