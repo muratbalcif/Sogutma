@@ -458,8 +458,11 @@ export class AccountingService {
       credit: string | null;
     }>
   > {
-    const page = query.page && query.page > 0 ? query.page : 1;
-    const limit = query.limit && query.limit > 0 ? query.limit : 20;
+    const pageNum = Math.trunc(Number(query.page));
+    const limitNum = Math.trunc(Number(query.limit));
+    const page = Number.isFinite(pageNum) && pageNum > 0 ? pageNum : 1;
+    const limit =
+      Number.isFinite(limitNum) && limitNum > 0 ? Math.min(limitNum, 100) : 20;
     const where = query.userId ? { userId: query.userId } : {};
     const total = await this.prisma.accountTransaction.count({ where });
     const items = await this.prisma.accountTransaction.findMany({

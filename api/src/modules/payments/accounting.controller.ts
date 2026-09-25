@@ -37,6 +37,13 @@ import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { AccountingService } from './accounting.service';
 import { CurrentAccountResponseDto } from './dto/payment.dto';
 
+class AdminTransactionsQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  userId?: string;
+}
+
 class ManualAccountTransactionDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
@@ -243,7 +250,7 @@ export class AccountingController {
   @Permissions('accounting.read')
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Admin list accounting transactions' })
-  adminTransactions(@Query() query: PaginationQueryDto & { userId?: string }) {
+  adminTransactions(@Query() query: AdminTransactionsQueryDto) {
     return this.accountingService.listTransactions(query);
   }
 
