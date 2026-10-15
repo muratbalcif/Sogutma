@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePermissions } from "@/hooks/use-permissions";
 import { ModulePage } from "@/components/auth/module-page";
 import { catalogService } from "@/services/admin-api.service";
 
@@ -36,6 +37,22 @@ function slugify(input: string): string {
 
 export default function NewProductPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { can } = usePermissions();
+  const [showBrandForm, setShowBrandForm] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [brandError, setBrandError] = useState<string | null>(null);
+  const createBrandMutation = useMutation({
+    mutationFn: () => catalogService.createBrand({ name: newBrandName.trim(), slug: slugify(newBrandName.trim()), active: true, sortOrder: 0 }),
+    onSuccess: async (brand) => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-brands-all"] });
+      setForm((previous) => ({ ...previous, brandId: brand.id }));
+      setShowBrandForm(false);
+      setNewBrandName("");
+      setBrandError(null);
+    },
+    onError: (err: Error) => setBrandError(err.message || "Marka eklenemedi"),
+  });
   const brands = useQuery({
     queryKey: ["admin-brands-all"],
     queryFn: () => catalogService.listBrands(1, 100),
@@ -161,24 +178,41 @@ export default function NewProductPage() {
               />
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm">
-                Marka
+              <div className="space-y-2 text-sm">
+                <label htmlFor="product-brand" className="block">Marka</label>
                 <select
+                  id="product-brand"
                   required
-                  className="mt-1 w-full rounded-md border px-3 py-2"
+                  className="w-full rounded-md border px-3 py-2"
                   value={form.brandId}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, brandId: e.target.value }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, brandId: e.target.value }))}
                 >
                   <option value="">Seçin</option>
                   {(brands.data?.items ?? []).map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
+                    <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
-              </label>
+                {can("brand.create") && (
+                  <button type="button" className="text-cyan-700 underline"
+                    onClick={() => { setShowBrandForm((open) => !open); setBrandError(null); }}>
+                    {showBrandForm ? "Vazgeç" : "+ Yeni Marka Ekle"}
+                  </button>
+                )}
+                {showBrandForm && can("brand.create") && (
+                  <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <label htmlFor="new-brand-name" className="block">Yeni marka adı</label>
+                    <input id="new-brand-name" className="w-full rounded-md border px-3 py-2"
+                      value={newBrandName} maxLength={120} placeholder="Marka adını yazın"
+                      onChange={(e) => setNewBrandName(e.target.value)} />
+                    {brandError && <p role="alert" className="text-red-700">{brandError}</p>}
+                    <button type="button" disabled={!newBrandName.trim() || !slugify(newBrandName) || createBrandMutation.isPending}
+                      className="rounded-md bg-[#0f2744] px-3 py-2 text-white disabled:opacity-50"
+                      onClick={() => createBrandMutation.mutate()}>
+                      {createBrandMutation.isPending ? "Ekleniyor…" : "Markayı Kaydet"}
+                    </button>
+                  </div>
+                )}
+              </div>
               <label className="block text-sm">
                 Kategori
                 <select
