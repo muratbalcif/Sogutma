@@ -660,6 +660,7 @@ export class ProductsService {
       this.storage.assertSafeObjectKey(dto.objectKey);
       if (this.storage.isConfigured()) {
         this.storage.assertRegisteredImageUrl(dto.url, dto.objectKey);
+        await this.storage.assertObjectExists(dto.objectKey);
       }
     } else if (this.storage.isConfigured()) {
       throw new BadRequestException(
@@ -713,8 +714,9 @@ export class ProductsService {
     await this.prisma.productImage.delete({ where: { id: imageId } });
 
     if (image.objectKey) {
+      const otherReferences = await this.prisma.productImage.count({ where: { objectKey: image.objectKey } });
       try {
-        await this.storage.deleteObject(image.objectKey);
+        if (otherReferences === 0) await this.storage.deleteObject(image.objectKey);
       } catch {
         // R2 failure after DB delete — orphan cleanup via objectKey index later
       }

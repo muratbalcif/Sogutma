@@ -33,6 +33,9 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname, ".."),
   images: {
+    // R2 custom domains may not be available at build time; let the browser
+    // load the public CDN URL directly instead of failing Next image optimization.
+    unoptimized: true,
     remotePatterns: [
       ...(r2
         ? [
