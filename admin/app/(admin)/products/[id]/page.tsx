@@ -195,6 +195,26 @@ export default function ProductDetailPage() {
     "idle" | "optimizing" | "uploading"
   >("idle");
   const [uploadSizeNote, setUploadSizeNote] = useState<string | null>(null);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [libraryCursor, setLibraryCursor] = useState<string | undefined>();
+  const [libraryItems, setLibraryItems] = useState<Array<{ objectKey: string; url: string; size: number }>>([]);
+  const libraryQuery = useQuery({
+    queryKey: ["admin-media-library", libraryCursor],
+    queryFn: () => catalogService.listMediaLibrary(libraryCursor),
+    enabled: showLibrary,
+  });
+  const libraryMutation = useMutation({
+    mutationFn: (image: { objectKey: string; url: string }) =>
+      catalogService.registerImage(id, {
+        url: image.url, objectKey: image.objectKey,
+        isPrimary: (product?.images.length ?? 0) === 0,
+      }),
+    onSuccess: () => {
+      setShowLibrary(false);
+      void queryClient.invalidateQueries({ queryKey: ["admin-product", id] });
+    },
+  });
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -229,6 +249,14 @@ export default function ProductDetailPage() {
       setUploadPhase("idle");
     },
   });
+
+  useEffect(() => {
+    if (libraryQuery.data) {
+      setLibraryItems((previous) => libraryCursor
+        ? [...previous, ...libraryQuery.data.items.filter((item) => !previous.some((old) => old.objectKey === item.objectKey))]
+        : libraryQuery.data.items);
+    }
+  }, [libraryQuery.data, libraryCursor]);
 
   const summary = useMemo(() => {
     if (!product) return null;
@@ -442,6 +470,35 @@ export default function ProductDetailPage() {
                           e.target.value = "";
                         }}
                       />
+                      <button type="button" className="rounded-md border border-cyan-700 px-3 py-2 text-sm text-cyan-800"
+                        onClick={() => { setShowLibrary((v) => !v); setLibraryCursor(undefined); setLibraryItems([]); }}>
+                        {showLibrary ? "Kitaplığı Kapat" : "Kitaplıktan Seç"}
+                      </button>
+                      {showLibrary && (
+                        <div className="space-y-3 rounded-lg border bg-slate-50 p-3">
+                          <input className="w-full rounded-md border px-3 py-2" placeholder="Görsel dosya adında ara"
+                            value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} />
+                          {libraryQuery.isError && <p role="alert" className="text-red-700">Görsel kitaplığı yüklenemedi.</p>}
+                          {libraryMutation.isError && <p role="alert" className="text-red-700">{(libraryMutation.error as Error).message}</p>}
+                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {libraryItems.filter((item) => item.objectKey.toLocaleLowerCase("tr").includes(librarySearch.toLocaleLowerCase("tr"))).map((item) => (
+                              <button type="button" key={item.objectKey} disabled={libraryMutation.isPending || product.images.some((img) => img.objectKey === item.objectKey)}
+                                onClick={() => libraryMutation.mutate(item)}
+                                className="overflow-hidden rounded border bg-white p-2 text-left text-xs disabled:opacity-40">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={item.url} alt={item.objectKey} loading="lazy" className="h-24 w-full object-contain" />
+                                <span className="mt-1 block truncate">{item.objectKey.split("/").pop()}</span>
+                              </button>
+                            ))}
+                          </div>
+                          {libraryQuery.isLoading && <p>Görseller yükleniyor…</p>}
+                          {libraryQuery.data?.nextToken && (
+                            <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => setLibraryCursor(libraryQuery.data?.nextToken)}>
+                              Daha Fazla Göster
+                            </button>
+                          )}
+                        </div>
+                      )}
                       <p className="text-xs text-slate-500">
                         Büyük görseller otomatik optimize edilir (max 1920px,
                         WebP, ≤5&nbsp;MB).
