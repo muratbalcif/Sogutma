@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -70,6 +70,12 @@ class PresignUploadResponseDto {
 @Controller('admin/uploads')
 export class AdminUploadsController {
   constructor(private readonly storage: R2StorageService) {}
+
+  @Get('library')
+  @Permissions('product.update')
+  async library(@Query('cursor') cursor?: string) {
+    return this.storage.listImages(cursor);
+  }
 
   @Post('presign')
   @Permissions('product.update')
