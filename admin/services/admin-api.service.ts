@@ -596,7 +596,7 @@ export const ordersService = {
   ) {
     return apiRequest<AdminOrder>(`/admin/orders/${id}/status`, {
       method: "PATCH",
-      body: JSON.stringify(body),
+      body: body,
     });
   },
   ship(
@@ -605,7 +605,7 @@ export const ordersService = {
   ) {
     return apiRequest<AdminOrder>(`/admin/orders/${id}/ship`, {
       method: "POST",
-      body: JSON.stringify(body),
+      body: body,
     });
   },
   deliver(id: string, body?: { note?: string }) {
@@ -992,13 +992,13 @@ export const customersAdminService = {
   updateStatus(id: string, status: string) {
     return apiRequest(`/admin/customers/${id}/status`, {
       method: "PATCH",
-      body: JSON.stringify({ status }),
+      body: { status },
     });
   },
   update(id: string, body: Record<string, unknown>) {
     return apiRequest(`/admin/customers/${id}`, {
       method: "PATCH",
-      body: JSON.stringify(body),
+      body: body,
     });
   },
   invite(body: Record<string, unknown>) {
