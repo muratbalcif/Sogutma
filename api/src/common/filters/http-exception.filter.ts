@@ -58,7 +58,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
           exception instanceof Error ? exception.stack : undefined,
         );
       } else {
-        this.logger.error(JSON.stringify(logPayload));
+        // Keep internal exception details in server logs, never in API responses.
+        // Prisma error codes are essential for diagnosing failed RBAC writes.
+        const cause = exception instanceof Error
+          ? { exceptionName: exception.name, exceptionMessage: exception.message,
+              prismaCode: 'code' in exception && typeof exception.code === 'string' ? exception.code : undefined }
+          : { exceptionType: typeof exception };
+        this.logger.error(JSON.stringify({ ...logPayload, ...cause }));
       }
     } else {
       this.logger.warn(JSON.stringify(logPayload));
