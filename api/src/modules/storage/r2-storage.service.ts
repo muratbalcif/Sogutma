@@ -7,6 +7,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   DeleteObjectCommand,
+  ListObjectsV2Command,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -241,6 +243,30 @@ export class R2StorageService {
       maxBytes: this.maxBytes,
       expiresIn: this.presignTtlSeconds,
     };
+  }
+
+  async listImages(continuationToken?: string): Promise<{ items: Array<{ objectKey: string; url: string; size: number }>; nextToken?: string }> {
+    if (!this.client || !this.bucket || !this.publicUrl) throw new ServiceUnavailableException('R2 storage unavailable');
+    const result = await this.client.send(new ListObjectsV2Command({
+      Bucket: this.bucket, Prefix: 'products/', MaxKeys: 60,
+      ContinuationToken: continuationToken || undefined,
+    }));
+    return {
+      items: (result.Contents ?? []).filter((item) => item.Key && SAFE_OBJECT_KEY.test(item.Key)).map((item) => ({
+        objectKey: item.Key!, url: this.publicUrlForKey(item.Key!), size: item.Size ?? 0,
+      })),
+      nextToken: result.NextContinuationToken,
+    };
+  }
+
+  async assertObjectExists(objectKey: string): Promise<void> {
+    this.assertSafeObjectKey(objectKey);
+    if (!this.client || !this.bucket) throw new ServiceUnavailableException('R2 storage unavailable');
+    try {
+      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: objectKey }));
+    } catch {
+      throw new BadRequestException('Image not found in storage');
+    }
   }
 
   async deleteObject(objectKey: string): Promise<void> {
