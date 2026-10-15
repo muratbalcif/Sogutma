@@ -13,7 +13,7 @@ export default function ProductsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
+  const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("true");
   const [selected, setSelected] = useState<string[]>([]);
 
   const query = useQuery({
@@ -46,11 +46,15 @@ export default function ProductsPage() {
     },
   });
 
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const deleteMutation = useMutation({
     mutationFn: (id: string) => catalogService.deleteProduct(id),
     onSuccess: () => {
+      setDeleteError(null);
+      setSelected([]);
       void queryClient.invalidateQueries({ queryKey: ["admin-products"] });
     },
+    onError: (error: Error) => setDeleteError(error.message),
   });
 
   const items = query.data?.items ?? [];
@@ -117,9 +121,9 @@ export default function ProductsPage() {
             }}
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
           >
-            <option value="">Tüm durumlar</option>
+            <option value="">Tüm ürünler (kaldırılanlar dahil)</option>
             <option value="true">Aktif</option>
-            <option value="false">Pasif</option>
+            <option value="false">Kaldırılan / pasif ürünler</option>
           </select>
           <button
             type="submit"
@@ -128,6 +132,8 @@ export default function ProductsPage() {
             Ara
           </button>
         </form>
+
+        {deleteError && <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">{deleteError}</p>}
 
         {selected.length > 0 && can("product.update") && (
           <div className="flex flex-wrap gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm">
@@ -277,18 +283,19 @@ export default function ProductsPage() {
                         {can("product.delete") && (
                           <button
                             type="button"
-                            className="text-red-700 underline"
+                            className="text-red-700 underline disabled:opacity-50"
+                            disabled={deleteMutation.isPending || !product.active}
                             onClick={() => {
                               if (
                                 confirm(
-                                  "Ürün pasifleştirilecek (hard delete yok). Devam?",
+                                  `"${product.name}" ürünü satıştan kaldırılacak ve aktif ürün listesinden gizlenecek. Sipariş geçmişi korunacak. Devam edilsin mi?`,
                                 )
                               ) {
                                 deleteMutation.mutate(product.id);
                               }
                             }}
                           >
-                            Sil
+                            {deleteMutation.isPending && deleteMutation.variables === product.id ? "Kaldırılıyor…" : "Sil"}
                           </button>
                         )}
                       </div>
