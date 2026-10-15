@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { AdminRoleCode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -253,9 +253,14 @@ export class AdminService {
     userId: string,
     roleCode: AdminRoleCode,
   ): Promise<void> {
-    const role = await this.prisma.adminRole.findUniqueOrThrow({
+    const role = await this.prisma.adminRole.findUnique({
       where: { code: roleCode },
     });
+    if (!role) {
+      throw new ServiceUnavailableException(
+        'Admin role catalog is missing. Run RBAC catalog initialization.',
+      );
+    }
 
     const adminUser = await this.prisma.adminUser.upsert({
       where: { userId },
