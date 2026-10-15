@@ -271,6 +271,11 @@ export const catalogService = {
       body: { productIds, active },
     });
   },
+  listMediaLibrary(cursor?: string) {
+    return apiRequest<{ items: Array<{ objectKey: string; url: string; size: number }>; nextToken?: string }>(
+      `/admin/uploads/library${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+    );
+  },
   presignUpload(body: {
     filename: string;
     contentType: string;
